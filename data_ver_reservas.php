@@ -152,46 +152,49 @@ if ($consulta == "busca_stock_actual") {
     } else {
         echo "<div class='callout callout-danger'><b>Aún no realizaste reservas...</b></div>";
     }
-} else if ($consulta == "guardar_reserva") {
+}else if ($consulta == "guardar_reserva") {
     $id_variedad = $_POST["id_variedad"];
     $cantidad = mysqli_real_escape_string($con, $_POST["cantidad"]);
     $comentario = mysqli_real_escape_string($con, $_POST["comentario"]);
 
     try {
-        $con_tienda = mysqli_connect($host, $user, $password, $dbpresta);
-        if (!$con_tienda) {
-            die("Connection failed: " . mysqli_connect_error());
-        }
         $errors = array();
 
+        // Verificar si ya existe una reserva del mismo cliente para la misma variedad en el día
         $query = "SELECT COUNT(*) as fechita FROM reservas_productos r WHERE r.id_cliente = $_SESSION[id_cliente] AND r.id_variedad = $id_variedad AND DATE(r.fecha) = DATE(NOW()) AND r.estado = 0";
         $val = mysqli_query($con, $query);
+        
         if (mysqli_num_rows($val) > 0) {
             $ww = mysqli_fetch_assoc($val);
             if ((int) $ww["fechita"] > 0) {
                 echo "yaexiste";
             } else {
-
+                // Obtener stock disponible y cantidad reservada
                 $query = "SELECT * FROM (
-              (SELECT IFNULL(SUM(s.cantidad),0) as cantidad_stock FROM stock_productos s
-              INNER JOIN articulospedidos p ON s.id_artpedido = p.id
-              INNER JOIN variedades_producto v ON v.id = p.id_variedad
-              WHERE p.id_variedad = $id_variedad) as q1,
-              (SELECT IFNULL(SUM(r.cantidad),0) as cantidad_reservada FROM reservas_productos r
-              INNER JOIN variedades_producto v ON v.id = r.id_variedad
-              WHERE r.id_variedad = $id_variedad AND r.estado >= 0) as q2,
-              (SELECT t.codigo, v.id_interno FROM variedades_producto v INNER JOIN tipos_producto t ON t.id = v.id_tipo WHERE v.id = $id_variedad) as q4
-            )";
+                    (SELECT IFNULL(SUM(s.cantidad),0) as cantidad_stock FROM stock_productos s
+                    INNER JOIN articulospedidos p ON s.id_artpedido = p.id
+                    INNER JOIN variedades_producto v ON v.id = p.id_variedad
+                    WHERE p.id_variedad = $id_variedad) as q1,
+                    (SELECT IFNULL(SUM(r.cantidad),0) as cantidad_reservada FROM reservas_productos r
+                    INNER JOIN variedades_producto v ON v.id = r.id_variedad
+                    WHERE r.id_variedad = $id_variedad AND r.estado >= 0) as q2,
+                    (SELECT t.codigo, v.id_interno FROM variedades_producto v 
+                    INNER JOIN tipos_producto t ON t.id = v.id_tipo 
+                    WHERE v.id = $id_variedad) as q4
+                )";
+                
                 $val = mysqli_query($con, $query);
-                //print_r(mysqli_error($con));
+                
                 if (mysqli_num_rows($val) > 0) {
                     $ww = mysqli_fetch_assoc($val);
 
                     mysqli_autocommit($con, false);
-                    mysqli_autocommit($con_tienda, false);
 
+                    // Calcular cantidad disponible
                     $disponible = ((int) $ww["cantidad_stock"] - (int) $ww["cantidad_reservada"]);
+                    
                     if ((int) $disponible >= (int) $cantidad) {
+                        // Insertar la reserva desde el panel del cliente
                         $query = "INSERT INTO reservas_productos (
                             cantidad,
                             fecha,
@@ -200,7 +203,7 @@ if ($consulta == "busca_stock_actual") {
                             comentario,
                             estado,
                             origen
-                          ) VALUES (
+                        ) VALUES (
                             $cantidad,
                             NOW(),
                             $id_variedad,
@@ -208,134 +211,104 @@ if ($consulta == "busca_stock_actual") {
                             '$comentario',
                             0,
                             'PANEL CLIENTE'
-                          )";
+                        )";
 
                         if (!mysqli_query($con, $query)) {
                             $errors[] = mysqli_error($con) . $query;
                         }
 
-                        $id_producto = $ww["codigo"] . str_pad($ww["id_interno"], 2, '0', STR_PAD_LEFT);
-                        $query = "SELECT pr.id_product, pr.reference, st.quantity, st.physical_quantity, st.reserved_quantity FROM ps_stock_available st INNER JOIN ps_product pr ON st.id_product = pr.id_product WHERE pr.reference = '$id_producto';";
-
-                        $estaEnTienda = false;
-                        $val2 = mysqli_query($con_tienda, $query);
-                        if ($val2 && mysqli_num_rows($val2)) {
-                            $vt = mysqli_fetch_assoc($val2);
-                            mysqli_autocommit($con_tienda, false);
-                            $id_product_tienda = $vt["id_product"];
-                            $query = "UPDATE ps_stock_available SET reserved_quantity = reserved_quantity + $cantidad, quantity = quantity - $cantidad WHERE id_product = $id_product_tienda;";
-                            $estaEnTienda = true;
-                            if (!mysqli_query($con_tienda, $query)) {
-                                $errors[] = mysqli_error($con_tienda).$query;
-                            }
-                        }
-
+                        // Confirmar o revertir transacción
                         if (count($errors) === 0) {
-                            if (!$estaEnTienda) {
-                                if (mysqli_commit($con)) {
-                                    echo "success";
-                                } else {
-                                    mysqli_rollback($con);
-                                }
+                            if (mysqli_commit($con)) {
+                                echo "success";
                             } else {
-                                if (mysqli_commit($con) && mysqli_commit($con_tienda)) {
-                                    echo "success";
-                                } else {
-                                    mysqli_rollback($con);
-                                    mysqli_rollback($con_tienda);
-                                }
+                                mysqli_rollback($con);
+                                echo "error: No se pudo confirmar la transacción";
                             }
                         } else {
-                            if (!$estaEnTienda) {
-                                mysqli_rollback($con);
-                            } else {
-                                mysqli_rollback($con);
-                                mysqli_rollback($con_tienda);
-                            }
-                            print_r($errors);
+                            mysqli_rollback($con);
+                            echo "error: " . implode(", ", $errors);
                         }
 
                     } else {
                         echo "max:" . ($disponible <= 0 ? "0" : $disponible);
                     }
-                } else if (!$val) {
-                    print_r(mysqli_error($con) . $query);
+                } else {
+                    echo "error: No se pudo obtener información de la variedad";
                 }
             }
+        } else {
+            echo "error: No se pudo verificar reservas existentes";
         }
+        
         mysqli_close($con);
-        mysqli_close($con_tienda);
-    } catch (\Throwable$th) {
-        echo $th;
+        
+    } catch (\Throwable $th) {
+        mysqli_rollback($con);
+        echo "error: " . $th->getMessage();
     }
+    
 } else if ($consulta == "cancelar_reserva") {
     $id_reserva = $_POST["id_reserva"];
+    
     try {
-        $con_tienda = mysqli_connect($host, $user, $password, $dbpresta);
-        if (!$con_tienda) {
-            die("Connection failed: " . mysqli_connect_error());
-        }
-
-        $query = "SELECT t.codigo, rp.id_variedad, v.id_interno, rp.cantidad FROM reservas_productos rp INNER JOIN variedades_producto v ON rp.id_variedad = v.id INNER JOIN tipos_producto t ON t.id = v.id_tipo WHERE rp.id = $id_reserva";
-        $val = mysqli_query($con, $query);
         $errors = array();
+
+        // Obtener información de la reserva y verificar que pertenezca al cliente
+        $query = "SELECT t.codigo, rp.id_variedad, v.id_interno, rp.cantidad, rp.estado, rp.id_cliente 
+                  FROM reservas_productos rp 
+                  INNER JOIN variedades_producto v ON rp.id_variedad = v.id 
+                  INNER JOIN tipos_producto t ON t.id = v.id_tipo 
+                  WHERE rp.id = $id_reserva";
+        
+        $val = mysqli_query($con, $query);
+        
         if ($val && mysqli_num_rows($val)) {
             $v = mysqli_fetch_assoc($val);
 
-            mysqli_autocommit($con, false);
-
-            $cantidad = $v["cantidad"];
-            $id_producto = $v["codigo"] . str_pad($v["id_interno"], 2, '0', STR_PAD_LEFT);
-            $query = "SELECT pr.id_product, pr.reference, st.quantity, st.physical_quantity, st.reserved_quantity FROM ps_stock_available st INNER JOIN ps_product pr ON st.id_product = pr.id_product WHERE pr.reference = '$id_producto';";
-
-            $estaEnTienda = false;
-            $val2 = mysqli_query($con_tienda, $query);
-            if ($val2 && mysqli_num_rows($val2)) {
-                $vt = mysqli_fetch_assoc($val2);
-                mysqli_autocommit($con_tienda, false);
-                $id_product_tienda = $vt["id_product"];
-                $query = "UPDATE ps_stock_available SET quantity = quantity + $cantidad, reserved_quantity = reserved_quantity - $cantidad WHERE id_product = $id_product_tienda;";
-                $estaEnTienda = true;
-                if (!mysqli_query($con_tienda, $query)) {
-                    $errors[] = mysqli_error($con_tienda);
-                }
+            // Verificar que la reserva pertenezca al cliente de la sesión
+            if ($v["id_cliente"] != $_SESSION['id_cliente']) {
+                echo "error: No tienes permisos para cancelar esta reserva";
+                mysqli_close($con);
+                return;
             }
 
+            // Verificar que la reserva no esté ya cancelada
+            if ($v["estado"] < 0) {
+                echo "error: La reserva ya está cancelada";
+                mysqli_close($con);
+                return;
+            }
+
+            mysqli_autocommit($con, false);
+
+            // Actualizar estado de la reserva a cancelada (-1)
             $query = "UPDATE reservas_productos SET estado = -1 WHERE id = $id_reserva";
             if (!mysqli_query($con, $query)) {
                 $errors[] = mysqli_error($con);
             }
 
+            // Confirmar o revertir transacción
             if (count($errors) === 0) {
-                if (!$estaEnTienda) {
-                    if (mysqli_commit($con)) {
-                        echo "success";
-                    } else {
-                        mysqli_rollback($con);
-                    }
+                if (mysqli_commit($con)) {
+                    echo "success";
                 } else {
-                    if (mysqli_commit($con) && mysqli_commit($con_tienda)) {
-                        echo "success";
-                    } else {
-                        mysqli_rollback($con);
-                        mysqli_rollback($con_tienda);
-                    }
+                    mysqli_rollback($con);
+                    echo "error: No se pudo confirmar la transacción";
                 }
             } else {
-                if (!$estaEnTienda) {
-                    mysqli_rollback($con);
-                } else {
-                    mysqli_rollback($con);
-                    mysqli_rollback($con_tienda);
-                }
-                print_r($errors);
+                mysqli_rollback($con);
+                echo "error: " . implode(", ", $errors);
             }
+            
+        } else {
+            echo "error: No se encontró la reserva";
         }
+        
         mysqli_close($con);
-        mysqli_close($con_tienda);
 
-    } catch (\Throwable$th) {
-        //throw $th;
-        echo "error: $th";
+    } catch (\Throwable $th) {
+        mysqli_rollback($con);
+        echo "error: " . $th->getMessage();
     }
 }

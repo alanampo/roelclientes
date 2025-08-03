@@ -13,8 +13,8 @@ else{
   $host = "127.0.0.1"; /* Host name */
   $user = "root"; /* User */
   $password = ""; /* Password */
-  $dbname = "roel2"; /* Database name */
-  $dbpresta = "prestashop2";
+  $dbname = "roel"; /* Database name */
+  $dbpresta = "prestashop";
 }
 
 ?>
