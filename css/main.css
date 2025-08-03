@@ -1,0 +1,590 @@
+/* Bootstrap 3.3.7 */
+@import url('bootstrap.min.css');
+/* SweetAlert2 */
+@import url('sweetalert2.css');
+/* Font Awesome 4.7.0 */
+@import url('font-awesome.min.css');
+/* AdminLTE */
+@import url('AdminLTE.css');
+
+
+html, body{
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	margin: 0;
+	font-size: 16px;
+	position: relative;
+	background-color: #ecf0f5;
+}
+
+a {
+  text-decoration: none !important;
+}
+/*=== Login ===*/
+.MainLogin{
+	width: 100%;
+	padding: 15px;
+  box-sizing: border-box;
+	margin-top: -50px !important;
+}
+.login-outer {
+  box-shadow: 0 0 5px rgba(0,0,0,.2);
+	border-top: 7px solid #2196F3;
+	background-color: #fff;
+	color: #777777;
+}
+.MainLogin button{
+	background-color: #2196F3;
+}
+.MainLogin input{
+	border-radius: 0;
+}
+/*=== Barra navegacion ===*/
+.navbar{
+	background-color: #1B1B1B;
+	height: 52px;
+}
+
+.titulo-seccion {
+	font-size:22px;
+}
+
+/* The Modal (background) */
+.modal {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+/* Modal Content/Box */
+.modal-content {
+  background-color: #fefefe;
+  margin: 0 20%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  width: 60% !important; /* Could be more or less, depending on screen size */
+  height: 95%;
+  overflow-y: auto;
+}
+
+/* Modal Content/Box */
+.modal-content2 {
+  background-color: #fefefe;
+  margin: 1% 33%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  overflow-y: auto;
+  width: 35%; /* Could be more or less, depending on screen size */
+  height: 96%;
+}
+
+.modal-usuarios {
+  background-color: #fefefe;
+  margin: 0% 40%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  overflow-y: scroll;
+  width: 30%; /* Could be more or less, depending on screen size */
+  height: 99%;
+}
+
+.modal-content3 {
+  background-color: #fefefe;
+  margin: 1% 30%; /* 15% from the top and centered */
+  /*overflow-y: auto;*/
+  padding: 10px;
+  border: 1px solid #888;
+  width: 40%; /* Could be more or less, depending on screen size */
+  height: 70%;
+}
+
+.modal-asignar-mesadas {
+  background-color: #fefefe;
+  margin: 1% 30%; /* 15% from the top and centered */
+  /*overflow-y: auto;*/
+  padding: 10px;
+  border: 1px solid #888;
+  width: 40%; /* Could be more or less, depending on screen size */
+  
+}
+
+
+.modal-tipo {
+  background-color: #fefefe;
+  margin: 1% 30%; /* 15% from the top and centered */
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #888;
+  width: 40%; /* Could be more or less, depending on screen size */
+  height: 97%;
+
+}
+
+
+
+.modal-content4 {
+  background-color: #fefefe;
+  margin: 1% 38%; /* 15% from the top and centered */
+  /*overflow-y: auto;*/
+  padding: 10px;
+  border: 1px solid #888;
+  width: 40%; /* Could be more or less, depending on screen size */
+  height: 50%;
+}
+
+.modalpago-content {
+  background-color: #fefefe;
+  margin: 1% 35%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  width: 35%; /* Could be more or less, depending on screen size */
+  height: 70%;
+}
+
+.modal-verpagos {
+  background-color: #fefefe;
+  margin: 1% 22%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  width: 60%; /* Could be more or less, depending on screen size */
+  height: 90%;
+}
+
+
+
+.modal-content-verpedido {
+  background-color: #fefefe;
+  margin: 0 5%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  overflow-y: auto;
+  width: 90%; /* Could be more or less, depending on screen size */
+  height: 99%;
+}
+
+
+.modal-content-adminpedido,.modal-reservar {
+  background-color: #fefefe;
+  margin: 5% 28%; /* 15% from the top and centered */
+  padding: 10px;
+  border: 1px solid #888;
+  width: 45%; /* Could be more or less, depending on screen size */
+  height: 60%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.modal-print {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(120,120,120); /* Fallback color */
+}
+
+/* The Close Button */
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#btn_nuevocliente {
+  text-align:center;
+  cursor: pointer;
+  border-radius: 10px;
+  background: #5bc1de;
+  color:white;
+  width: 140px;
+  height: 33px; 
+
+}
+
+
+.modal-finpedido {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 1rem 1.5rem;
+    width: 24rem;
+    border-radius: 0.5rem;
+}
+.close-button {
+    float: right;
+    width: 1.5rem;
+    line-height: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    background-color: lightgray;
+}
+.close-button:hover {
+    background-color: darkgray;
+}
+.show-modal {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1.0);
+    transition: visibility 0s linear 0s, opacity 0.25s 0s, transform 0.25s;
+}
+
+
+input[type=checkbox] {
+    transform: scale(1.5);
+}
+
+
+/* Style the tab */
+.tab {
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  margin-bottom: 10px;  
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab button {
+  background-color: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 14px 8px;
+  transition: 0.3s;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active,button.active2 {
+  background-color: #ccc;
+  font-weight: bold;
+}
+
+/* Style the tab content */
+.tabcontent {
+  display: none;
+  border-top: none;
+}
+
+
+/* Style the tab */
+.tab2 {
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  margin-bottom: 10px; 
+  display: flex;
+  flex-flow: row wrap;
+  width: 100%; 
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab2 button {
+  background-color: inherit;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 14px 8px;
+  transition: 0.3s;
+  width: 50%;
+  flex:1;
+}
+
+/* Change background color of buttons on hover */
+.tab2 button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab2 button.active,button.active2 {
+  background-color: #ccc;
+  font-weight: bold;
+}
+
+/* Style the tab content */
+.tabcontent2 {
+  display: none;
+  border-top: none;
+}
+
+
+.modal-contentcambio {
+  background-color: #fefefe;
+  margin: 1% 20%; /* 15% from the top and centered */
+  /*overflow-y: auto;*/
+  padding: 10px;
+  border: 1px solid #888;
+  width: 60%; /* Could be more or less, depending on screen size */
+  height: 70%;
+  overflow-y: scroll;
+  overflow-x: hidden;
+}
+
+.modal input{
+  text-transform: uppercase !important;
+}
+
+@media (max-width: 992px) {
+
+.modal-content,.modal-content2, .modal-usuarios, .modal-contentcambio, .modal-finpedido,
+.modal-print, .modalpago-content, .modal-content4, .modal-content3, .modal-content-verpedido,.modal-content-adminpedido
+{
+  margin: 0 0 !important; 
+  width: 100% !important; 
+  height: 100% !important;
+  overflow-y: auto !important;
+}
+
+
+/* 
+  ##Device = Tablets, Ipads (portrait)
+  ##Screen = B/w 768px to 1024px
+*/
+
+
+
+}
+
+.select-editable { position:relative; background-color:#F2F2F2; width:70px; height:18px; }
+.select-editable select { position:absolute; background-color:#F2F2F2; top:0px; left:0px; font-size:14px; width:70px; margin:0; border:none;height:2.4em; }
+.select-editable input { position:absolute; background-color:#F2F2F2;top:0px; left:0px; width:50px; padding:1px; border:none; }
+.select-editable select:focus, .select-editable input:focus { outline:none; }
+
+
+#searchclear {
+    position: absolute;
+    right: 5px;
+    top: 0;
+    bottom: 0;
+    height: 20px;
+    margin: auto;
+    font-size: 20px;
+    cursor: pointer;
+    color: #ccc;
+}
+
+.tabladatos th:nth-child(3) {
+  width: 30%;
+  max-width: 30%;
+  word-break: break-word;
+  white-space: pre-line;
+}
+
+.tabladatos td:nth-child(3) {
+  width: 30%;
+  max-width: 30%;
+  word-break: break-word;
+  white-space: pre-line;
+}
+
+.celdaproducto { 
+  padding: 5px;
+  text-align: center;
+  font-size: 1.8em;
+}
+
+
+.tabletotal td { 
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 5px;
+}
+
+.cell-normal {
+  font-size: 1.2em;
+}
+
+@media print
+{
+    #miVentana { border: none !important; outline: 0} 
+    #VentanaRemito { border: none !important; outline: 0} 
+    #mi-ventana { border: none !important; outline: 0} 
+    #ventana-remito { border: none !important; outline: 0} 
+
+    @page{
+      size:auto; 
+      margin-top:5mm;
+      margin-bottom:0mm;
+      margin-left: 5mm;
+      margin-right: 5mm;
+    }
+}
+
+.container-remito {
+    display: flex;
+}
+
+.celdaobs {
+  padding-top: 3px;
+  padding-bottom: 3px; 
+  padding-left: 5px;
+}
+
+/* PERSONALIZADO POR ALAN */
+
+.cantidadbox {
+  font-size: 1.1em !important;
+}
+
+.btn-modal-bottom{
+  font-size: 2em !important;
+}
+
+
+.btn-modal-top{
+  font-size: 1.6em !important;
+}
+
+
+.cajita {
+  border-radius:8px; 
+  border:1px solid #00000033;
+  text-align:center;
+}
+
+#miVentana {
+  height: 100%;
+  padding:5px; 
+  width: 99%; 
+  font-family:Verdana, Arial, Helvetica, sans-serif; 
+  font-size: 12px; 
+  font-weight: normal; 
+  border: #333333 2px solid; 
+  background-color: #FAFAFA; 
+  color: #000000; 
+  display:none;
+}
+
+
+.band-288 {
+  color: red !important;
+}
+
+.band-200 {
+  color: blue !important;
+}
+
+.band-162 {
+  color:  #fd20eb !important;
+}
+
+.band-128 {
+  color: #0eb9b3 !important;
+}
+
+.band-72 {
+  color: #7401DF !important;
+}
+
+.band-50 {
+  color: #18771d !important;
+}
+
+.band-25 {
+  color: #424242 !important; 
+}
+
+.band-49{
+  color: #04B45F !important;
+}
+
+.logo-print img {
+  max-width: 160px !important;
+}
+
+.header-subtitle {
+  font-size:14px;font-weight:normal !important;
+}
+
+#ctxmenu {
+  position: fixed;
+  background:ghostwhite;
+  color: black;
+  cursor: pointer;
+  border: 1px black solid;
+  z-index: 99999;
+}
+
+#ctxmenu > p {
+  padding: 0 1rem;
+  margin: 0
+}
+
+#ctxmenu > p:hover {
+  background: black;
+  color: ghostwhite
+}
+
+.mesabox {
+  border: 1px solid #00000033;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.active2 { border:5px solid #F00 ; }
+
+
+
+@media only screen and (max-width: 992px){ 
+  #img-portada {
+    display:none;
+  }
+  .MainLogin {
+    margin-top: 0 !important;
+  }
+  
+}
+
+.calendar-month-wrapper{
+  width:100%;
+  min-height:400px;
+  background:rgb(230, 244, 248);
+  border-radius: 20px;
+  border: 1px solid #d4e6f1da;
+  margin-bottom: 20px;
+  display: flex;
+  flex: 1 1 auto;            /*  changed, flex row item need the grow value
+                                          to be 1 to fill its parent's width  */
+  flex-direction: column;
+}
+.enero,.febrero,.marzo,.abril,.mayo,.junio,.julio,.agosto,.septiembre,.octubre,.noviembre,.diciembre{
+  display:flex;
+  flex: 1 1 auto;
+  padding: 10px;
+  justify-content: center;
+  align-items: center;
+}
+
+.calendar-month-label {
+  background: #d4e6f1;
+  border-top-left-radius: 20px; 
+  border-top-right-radius: 20px;
+}
+
+
