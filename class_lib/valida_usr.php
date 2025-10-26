@@ -17,10 +17,26 @@ $password = test_input($_POST['pass']);
 
 mysqli_query($con, "SET NAMES 'utf8'");
 
-$val = mysqli_query($con, "SELECT u.nombre, u.password, u.id, u.id_cliente, u.inhabilitado FROM usuarios u WHERE u.nombre='$usuario' AND BINARY u.password='$password' AND u.tipo_usuario = 0");
+// Primero buscar el usuario sin validar contraseña
+$val = mysqli_query($con, "SELECT u.nombre, u.password, u.id, u.id_cliente, u.inhabilitado FROM usuarios u WHERE u.nombre='$usuario' AND u.tipo_usuario = 0");
+
+$passwordValid = false;
+$r = null;
+
 if (mysqli_num_rows($val) > 0) {
     $r = mysqli_fetch_assoc($val);
-    if ($r["nombre"] != null) {
+
+    // Verificar contraseña: primero texto plano (legacy), luego bcrypt (nuevo)
+    if ($r['password'] === $password) {
+        // Contraseña en texto plano (legacy)
+        $passwordValid = true;
+    } elseif (strlen($r['password']) >= 60 && password_verify($password, $r['password'])) {
+        // Contraseña hasheada con bcrypt (nuevo desde la API)
+        $passwordValid = true;
+    }
+}
+
+if ($passwordValid && $r && $r["nombre"] != null) {
         if ($r["inhabilitado"] != 1) {
             $_SESSION['nombre_de_usuario'] = $r['nombre'];
             $_SESSION['clave'] = $r['password'];
@@ -63,16 +79,3 @@ if (mysqli_num_rows($val) > 0) {
             setcookie("roel-clientes-token", NULL, time()-3600, '/');
             setcookie("roel-clientes-id", NULL, time()-3600, '/');
     }
-
-} else {
-    echo "<script>
-        swal(
-          'Nombre o contraseña inválidos',
-          'Por favor verifique sus datos e intente nuevamente',
-          'error'
-        );
-      </script>";
-      setcookie("roel-clientes-usuario", NULL, time()-3600, '/');
-            setcookie("roel-clientes-token", NULL, time()-3600, '/');
-            setcookie("roel-clientes-id", NULL, time()-3600, '/');
-}
