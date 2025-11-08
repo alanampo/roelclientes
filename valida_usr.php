@@ -48,6 +48,30 @@ if ($passwordValid && $r && $r["nombre"] != null) {
             setcookie("roel-clientes-token", $token, time() + (60 * 60 * 24 * 30), '/');
             setcookie("roel-clientes-id", $r['id_cliente'], time() + (60 * 60 * 24 * 30), '/');
 
+            // Login en la API para obtener access_token
+            $apiLoginUrl = 'https://control.roelplant.cl/api/login.php';
+            $apiCredentials = json_encode(['username' => $usuario, 'password' => $password]);
+
+            $ch = curl_init($apiLoginUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $apiCredentials);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+            $apiResponse = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $apiResponse) {
+                $apiData = json_decode($apiResponse, true);
+                if (isset($apiData['status']) && $apiData['status'] === 'ok' && isset($apiData['tokens']['access_token'])) {
+                    $_SESSION['api_access_token'] = $apiData['tokens']['access_token'];
+                    $_SESSION['api_refresh_token'] = $apiData['tokens']['refresh_token'];
+                    $_SESSION['api_token_expires_at'] = $apiData['tokens']['access_expires_at'];
+                }
+            }
+
             echo "
         <script>
           document.location.href = 'inicio.php';

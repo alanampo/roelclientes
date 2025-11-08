@@ -67,6 +67,14 @@ function normalizaListado(array $j, ?string $tipoFiltroNorm = null): array {
     return [ 'status'=>'ok', 'count'=>count($out), 'items'=>$out ];
 }
 
+session_start();
+
+// Verificar token de API
+if (!isset($_SESSION['api_access_token'])) {
+    http_response_code(401);
+    echo json_encode(['status'=>'error','error'=>'No autorizado - falta token de API']); exit;
+}
+
 $tipo = $_GET['tipo'] ?? null;
 if (!$tipo) {
     $raw = file_get_contents('php://input') ?: '';
@@ -74,10 +82,79 @@ if (!$tipo) {
 }
 $tipoNorm = $tipo ? norm((string)$tipo) : null;
 
-$api  = 'https://roelplant.cl/bot-Rg5y5r3MMs/api_ia/disponibles.php';
-$res  = http_get_json($api);
-if (!$res['ok']) {
-    http_response_code(502);
-    echo json_encode(['status'=>'error','error'=>$res['error']]); exit;
+// Construir URL con parámetros
+$apiUrl = 'https://control.roelplant.cl/api/disponibles.php';
+if ($tipo) {
+    $apiUrl .= '?tipo=' . rawurlencode($tipo);
 }
+
+$token = $_SESSION['api_access_token'];
+
+$ch = curl_init($apiUrl);
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 15,
+    CURLOPT_HTTPHEADER     => [
+        'Authorization: Bearer ' . $token,
+        'Accept: application/json'
+    ],
+]);
+
+$response = curl_exec($ch);
+$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$err = curl_error($ch);
+curl_close($ch);
+
+// Si el token expiró, intentar renovar
+if ($httpCode === 401 && isset($_SESSION['api_refresh_token'])) {
+    $refreshUrl = 'https://control.roelplant.cl/api/refresh.php';
+    $refreshData = json_encode(['refresh_token' => $_SESSION['api_refresh_token']]);
+
+    $ch2 = curl_init($refreshUrl);
+    curl_setopt_array($ch2, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $refreshData,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 10,
+    ]);
+
+    $refreshResponse = curl_exec($ch2);
+    $refreshHttpCode = (int)curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+    curl_close($ch2);
+
+    if ($refreshHttpCode === 200 && $refreshResponse) {
+        $refreshData = json_decode($refreshResponse, true);
+        if (isset($refreshData['tokens']['access_token'])) {
+            $_SESSION['api_access_token'] = $refreshData['tokens']['access_token'];
+            $_SESSION['api_token_expires_at'] = $refreshData['tokens']['access_expires_at'];
+
+            // Reintentar con nuevo token
+            $ch3 = curl_init($apiUrl);
+            curl_setopt_array($ch3, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_HTTPHEADER     => [
+                    'Authorization: Bearer ' . $_SESSION['api_access_token'],
+                    'Accept: application/json'
+                ],
+            ]);
+            $response = curl_exec($ch3);
+            $httpCode = (int)curl_getinfo($ch3, CURLINFO_HTTP_CODE);
+            curl_close($ch3);
+        }
+    }
+}
+
+if ($httpCode !== 200 || !$response) {
+    http_response_code(502);
+    echo json_encode(['status'=>'error','error'=> $err ?: 'Error al consultar API']); exit;
+}
+
+$res = json_decode($response, true);
+if (!is_array($res)) {
+    http_response_code(502);
+    echo json_encode(['status'=>'error','error'=>'Respuesta inválida de la API']); exit;
+}
+
 echo json_encode(normalizaListado($res, $tipoNorm), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);

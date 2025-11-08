@@ -291,21 +291,7 @@ function resolve_product_by_name(string $name): ?array
         }
     }
 
-    $ext = try_http_json_get(
-        'https://roelplant.cl/bot-Rg5y5r3MMs/api_ia/producto.php?nombre=' . urlencode($name),
-        5
-    );
-    if (is_array($ext) && ($ext['status'] ?? '') === 'ok') {
-        return [
-            'name'  => $ext['variedad'] ?? $name,
-            'code'  => $ext['referencia'] ?? '',
-            'unit'  => $ext['unidad'] ?? ($ext['unidad_medida'] ?? 'plantines'),
-            'image' => $ext['imagen'] ?? '',
-            'pm'    => (int)preg_replace('/[^\d]/', '', (string)($ext['precio'] ?? 0)),
-            'pd'    => (int)preg_replace('/[^\d]/', '', (string)($ext['precio_detalle'] ?? 0)),
-        ];
-    }
-
+    // Si tool_producto.php no responde, no hay producto
     return null;
 }
 
