@@ -1,0 +1,54 @@
+2025-11-07 16:54:06 - Saving cart:
+{
+    "user_id": null,
+    "cart_key": "cart",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "33alulbhk63m3e4kpk9md0n52i"
+}
+
+2025-11-07 16:54:34 - Saving cart:
+{
+    "user_id": null,
+    "cart_key": "cart",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "33alulbhk63m3e4kpk9md0n52i"
+}
+
+2025-11-07 17:01:21 - Saving cart:
+{
+    "user_id": 11,
+    "cart_key": "cart_user_11",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "33alulbhk63m3e4kpk9md0n52i"
+}
+
+2025-11-07 17:01:35 - Saving cart:
+{
+    "user_id": 11,
+    "cart_key": "cart_user_11",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "33alulbhk63m3e4kpk9md0n52i"
+}
+
+2025-11-07 17:08:01 - Saving cart:
+{
+    "user_id": 11,
+    "cart_key": "cart_user_11",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "48u6tf8t9rbrrthvnknq36vv6l"
+}
+
+2025-11-07 17:08:45 - Saving cart:
+{
+    "user_id": 11,
+    "cart_key": "cart_user_11",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "48u6tf8t9rbrrthvnknq36vv6l"
+}
+

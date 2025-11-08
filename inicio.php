@@ -7,15 +7,16 @@
     <?php include "./class_lib/scripts.php"; ?>
     
     <script>
-      
+
        $(document).ready(function(){
         pone_pedidos();
           pone_planificacionpedidos();
           pone_tendencias();
-          pone_reservas()
+          pone_reservas();
+          pone_agente();
        })
-          
-       
+
+
     </script>
   </head>
   <body>
@@ -61,6 +62,9 @@
             </div>
 
             <div class="col-6 col-md-3 col-reservas d-none">
+            </div>
+
+            <div class="col-6 col-md-3 col-agente d-none">
             </div>
           </div>
           

@@ -25,10 +25,10 @@ if ($consulta == "busca_stock_actual") {
   v.id as id_variedad,
   SUM(s.cantidad) as cantidad,
   (SELECT IFNULL(SUM(r.cantidad),0) FROM reservas_productos r
-        WHERE r.id_variedad = v.id AND r.estado >= 0) as cantidad_reservada,
+        WHERE r.id_variedad = v.id AND (r.estado = 0 OR r.estado = 1)) as cantidad_reservada,
   (SELECT IFNULL(SUM(e.cantidad),0) FROM entregas_stock e
         INNER JOIN reservas_productos r ON e.id_reserva = r.id
-        WHERE r.id_variedad = v.id AND r.estado >= 0) as cantidad_entregada
+        WHERE r.id_variedad = v.id AND r.estado = 2) as cantidad_entregada
   FROM stock_productos s
   INNER JOIN articulospedidos ap
   ON s.id_artpedido = ap.id
@@ -174,12 +174,15 @@ if ($consulta == "busca_stock_actual") {
                     (SELECT IFNULL(SUM(s.cantidad),0) as cantidad_stock FROM stock_productos s
                     INNER JOIN articulospedidos p ON s.id_artpedido = p.id
                     INNER JOIN variedades_producto v ON v.id = p.id_variedad
-                    WHERE p.id_variedad = $id_variedad) as q1,
+                    WHERE p.id_variedad = $id_variedad AND p.estado >= 8) as q1,
                     (SELECT IFNULL(SUM(r.cantidad),0) as cantidad_reservada FROM reservas_productos r
                     INNER JOIN variedades_producto v ON v.id = r.id_variedad
-                    WHERE r.id_variedad = $id_variedad AND r.estado >= 0) as q2,
-                    (SELECT t.codigo, v.id_interno FROM variedades_producto v 
-                    INNER JOIN tipos_producto t ON t.id = v.id_tipo 
+                    WHERE r.id_variedad = $id_variedad AND (r.estado = 0 OR r.estado = 1)) as q2,
+                    (SELECT IFNULL(SUM(e.cantidad),0) as cantidad_entregada FROM entregas_stock e
+                    INNER JOIN reservas_productos r ON e.id_reserva = r.id
+                    WHERE r.id_variedad = $id_variedad AND r.estado = 2) as q3,
+                    (SELECT t.codigo, v.id_interno FROM variedades_producto v
+                    INNER JOIN tipos_producto t ON t.id = v.id_tipo
                     WHERE v.id = $id_variedad) as q4
                 )";
                 
@@ -191,7 +194,7 @@ if ($consulta == "busca_stock_actual") {
                     mysqli_autocommit($con, false);
 
                     // Calcular cantidad disponible
-                    $disponible = ((int) $ww["cantidad_stock"] - (int) $ww["cantidad_reservada"]);
+                    $disponible = ((int) $ww["cantidad_stock"] - (int) $ww["cantidad_reservada"] - (int) $ww["cantidad_entregada"]);
                     
                     if ((int) $disponible >= (int) $cantidad) {
                         // Insertar la reserva desde el panel del cliente

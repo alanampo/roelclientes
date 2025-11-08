@@ -74,14 +74,34 @@ function pone_tendencias() {
       .html(
       `
         <a href="ver_reservas.php">
-        <div class="small-box" style="background-color:#01DF3A"> 
-          <div class="inner"  style="height:7.3em;">    
+        <div class="small-box" style="background-color:#01DF3A">
+          <div class="inner"  style="height:7.3em;">
           <p style='color:black'>Reservar Productos</p>
           </div>
           <div class="icon">
           <i style="color:rgba(0, 0, 0, 0.15);" class="fa fa-shopping-basket"></i>
           </div>
           <span class="small-box-footer" style="background-color:rgba(0, 0, 0, 0.1);">Reservar <i class="fa fa-arrow-circle-right"></i></span>
+        </div>
+        </a>
+      `
+      )
+      .removeClass("d-none");
+    }
+
+  function pone_agente() {
+    $(".col-agente")
+      .html(
+      `
+        <a href="agente-ai.php">
+        <div class="small-box" style="background-color:#9333EA">
+          <div class="inner"  style="height:7.3em;">
+          <p style='color:white'>Agente AI</p>
+          </div>
+          <div class="icon">
+          <i style="color:rgba(255, 255, 255, 0.15);" class="fa fa-comments"></i>
+          </div>
+          <span class="small-box-footer" style="background-color:rgba(0, 0, 0, 0.1); color:white;">Abrir Agente <i class="fa fa-arrow-circle-right"></i></span>
         </div>
         </a>
       `
