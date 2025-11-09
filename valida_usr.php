@@ -50,7 +50,7 @@ if ($passwordValid && $r && $r["nombre"] != null) {
 
             // Login en la API de ERP para obtener access_token
             $apiLoginUrl = 'https://erp.roelplant.cl/api/cliente/login';
-            $apiCredentials = json_encode(['username' => $usuario, 'password' => $password]);
+            $apiCredentials = json_encode(['email' => $usuario, 'password' => $password]);
 
             $ch = curl_init($apiLoginUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -65,9 +65,9 @@ if ($passwordValid && $r && $r["nombre"] != null) {
 
             if ($httpCode === 200 && $apiResponse) {
                 $apiData = json_decode($apiResponse, true);
-                if (isset($apiData['status']) && $apiData['status'] === 'success' && isset($apiData['data']['token'])) {
-                    $_SESSION['api_access_token'] = $apiData['data']['token'];
-                    $_SESSION['api_token_expires_at'] = $apiData['data']['expires_at'] ?? null;
+                if (isset($apiData['status']) && $apiData['status'] === 'success' && isset($apiData['data']['access_token'])) {
+                    $_SESSION['api_access_token'] = $apiData['data']['access_token'];
+                    $_SESSION['api_token_expires_at'] = $apiData['data']['expires_in'] ?? null;
                 }
             }
 
