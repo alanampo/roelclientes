@@ -5,7 +5,10 @@ include "./class_lib/sesionSecurity.php";
 $usuarioSesion = [
     'id' => $_SESSION['id_usuario'] ?? null,
     'username' => $_SESSION['nombre_de_usuario'] ?? null,
-    'id_cliente' => $_SESSION['id_cliente'] ?? null
+    'nombre_real' => $_SESSION['nombre_real'] ?? $_SESSION['nombre_de_usuario'] ?? null,
+    'email' => $_SESSION['email'] ?? null,
+    'id_cliente' => $_SESSION['id_cliente'] ?? null,
+    'api_token' => $_SESSION['api_access_token'] ?? null
 ];
 ?>
 <!doctype html>
@@ -479,7 +482,10 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
 
   // Expose functions globally for bot to use
   window.roelAuth = {
-    getAccessToken: () => null, // Not used with PHP session
+    getAccessToken: () => {
+      const user = getUser();
+      return user?.api_token || null;
+    },
     getUser,
     isAuthenticated: () => !!getUser(),
     refreshToken: () => Promise.resolve(false) // Not needed with PHP session
