@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
 session_start();
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -88,18 +91,30 @@ try {
                 WHERE id_cliente = ?";
 
             $stmt = mysqli_prepare($con, $sql);
+
+            // Preparar variables (mysqli_stmt_bind_param requiere variables, no expresiones)
+            $nombre = $data['nombre'];
+            $rut = $data['rut'] ?? '';
+            $mail = $data['mail'] ?? '';
+            $telefono = $data['telefono'] ?? '';
+            $domicilio = $data['domicilio'] ?? '';
+            $domicilio2 = $data['domicilio2'] ?? '';
+            $region = $data['region'] ?? '';
+            $provincia = $data['provincia'] ?? '';
+            $comuna = $data['comuna'] ?? 0;
+
             mysqli_stmt_bind_param(
                 $stmt,
                 'ssssssssii',
-                $data['nombre'],
-                $data['rut'] ?? '',
-                $data['mail'] ?? '',
-                $data['telefono'] ?? '',
-                $data['domicilio'] ?? '',
-                $data['domicilio2'] ?? '',
-                $data['region'] ?? '',
-                $data['provincia'] ?? '',
-                $data['comuna'] ?? 0,
+                $nombre,
+                $rut,
+                $mail,
+                $telefono,
+                $domicilio,
+                $domicilio2,
+                $region,
+                $provincia,
+                $comuna,
                 $id_cliente
             );
 
@@ -119,18 +134,30 @@ try {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
 
             $stmt = mysqli_prepare($con, $sql);
+
+            // Preparar variables (mysqli_stmt_bind_param requiere variables, no expresiones)
+            $nombre = $data['nombre'];
+            $rut = $data['rut'] ?? '';
+            $mail = $data['mail'] ?? '';
+            $telefono = $data['telefono'] ?? '';
+            $domicilio = $data['domicilio'] ?? '';
+            $domicilio2 = $data['domicilio2'] ?? '';
+            $region = $data['region'] ?? '';
+            $provincia = $data['provincia'] ?? '';
+            $comuna = $data['comuna'] ?? 0;
+
             mysqli_stmt_bind_param(
                 $stmt,
                 'ssssssssi',
-                $data['nombre'],
-                $data['rut'] ?? '',
-                $data['mail'] ?? '',
-                $data['telefono'] ?? '',
-                $data['domicilio'] ?? '',
-                $data['domicilio2'] ?? '',
-                $data['region'] ?? '',
-                $data['provincia'] ?? '',
-                $data['comuna'] ?? 0
+                $nombre,
+                $rut,
+                $mail,
+                $telefono,
+                $domicilio,
+                $domicilio2,
+                $region,
+                $provincia,
+                $comuna
             );
 
             if (!mysqli_stmt_execute($stmt)) {
@@ -179,5 +206,10 @@ try {
     echo json_encode(['status' => 'error', 'message' => 'Método no permitido']);
 
 } catch (\Throwable $th) {
-    die($th->getMessage()." ".$th->getTraceAsString());
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Error del servidor: ' . $th->getMessage(),
+        'trace' => $th->getTraceAsString()
+    ]);
 }
