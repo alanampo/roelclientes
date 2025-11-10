@@ -64,12 +64,8 @@
             <div class="col-6 col-md-3 col-reservas d-none">
             </div>
 
-            <?php
-                if (!str_contains(mb_strtolower($_SESSION['nombre_de_usuario']), "alanampo")){
-                  echo '<div class="col-6 col-md-3 col-agente d-none">
-                  </div>';
-                }
-            ?>
+            <div class="col-6 col-md-3 col-agente d-none">
+            </div>
           </div>
           
           </div>
