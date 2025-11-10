@@ -7,8 +7,7 @@ $usuarioSesion = [
     'username' => $_SESSION['nombre_de_usuario'] ?? null,
     'nombre_real' => $_SESSION['nombre_real'] ?? $_SESSION['nombre_de_usuario'] ?? null,
     'email' => $_SESSION['email'] ?? null,
-    'id_cliente' => $_SESSION['id_cliente'] ?? null,
-    'api_token' => $_SESSION['api_access_token'] ?? null
+    'id_cliente' => $_SESSION['id_cliente'] ?? null
 ];
 ?>
 <!doctype html>
@@ -482,10 +481,7 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
 
   // Expose functions globally for bot to use
   window.roelAuth = {
-    getAccessToken: () => {
-      const user = getUser();
-      return user?.api_token || null;
-    },
+    getAccessToken: () => null, // Not used with PHP session
     getUser,
     isAuthenticated: () => !!getUser(),
     refreshToken: () => Promise.resolve(false) // Not needed with PHP session
@@ -496,7 +492,9 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
 <script>
 // ========== CLIENT PROFILE SYSTEM ==========
 (function initClientProfile(){
-  const CLIENTES_API = 'https://erp.roelplant.cl/api/clientes';
+  const CLIENTES_API = './server/cliente_data.php';
+  const REGIONES_API = './server/regiones.php';
+  const COMUNAS_API = './server/comunas.php';
 
   // UI Elements
   const profileModal = document.getElementById('profileModal');
@@ -527,30 +525,27 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
 
   // Load regiones and comunas from API
   async function loadRegionesYComunas() {
-    const token = window.roelAuth?.getAccessToken();
-    if(!token) return;
-
     try {
       // Load regiones
-      const regionesResp = await fetch(`${CLIENTES_API}/regiones`, {
-        headers: {'Authorization': `Bearer ${token}`}
+      const regionesResp = await fetch(REGIONES_API, {
+        credentials: 'same-origin' // Enviar cookies de sesión
       });
       const regionesData = await regionesResp.json();
       if(regionesData.status === 'success') {
-        regiones = regionesData.data.regiones;
+        regiones = regionesData.data.regiones; // Array de strings
         inputs.region.innerHTML = '<option value="">Selecciona región</option>' +
-          regiones.map(r => `<option value="${r.nombre}">${r.nombre}</option>`).join('');
+          regiones.map(r => `<option value="${r}">${r}</option>`).join('');
       }
 
       // Load comunas
-      const comunasResp = await fetch(`${CLIENTES_API}/comunas`, {
-        headers: {'Authorization': `Bearer ${token}`}
+      const comunasResp = await fetch(COMUNAS_API, {
+        credentials: 'same-origin' // Enviar cookies de sesión
       });
       const comunasData = await comunasResp.json();
       if(comunasData.status === 'success') {
         comunas = comunasData.data.comunas;
         inputs.comuna.innerHTML = '<option value="">Selecciona comuna</option>' +
-          comunas.map(c => `<option value="${c.id}">${c.nombre} (${c.ciudad})</option>`).join('');
+          comunas.map(c => `<option value="${c.id}">${c.nombre} (${c.region})</option>`).join('');
       }
     } catch(error) {
       console.error('Error loading regiones/comunas:', error);
@@ -580,14 +575,13 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
   // Get client data from API
   async function getClientData() {
     const user = window.roelAuth?.getUser();
-    const token = window.roelAuth?.getAccessToken();
-
-    if(!user || !token) return null;
+    if(!user) return null;
 
     try {
-      const response = await fetch(`${CLIENTES_API}/usuario/${user.id}`, {
+      const response = await fetch(CLIENTES_API, {
+        method: 'GET',
+        credentials: 'same-origin', // Enviar cookies de sesión
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -606,134 +600,38 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
     }
   }
 
-  // Create new client via API
-  async function createClientData(formData) {
+  // Save client data (create or update)
+  async function saveClientData(formData) {
     const user = window.roelAuth?.getUser();
-    const token = window.roelAuth?.getAccessToken();
 
-    console.log('[PROFILE] createClientData - User:', user?.id, user?.username);
-    console.log('[PROFILE] createClientData - Token exists:', !!token);
-    console.log('[PROFILE] createClientData - Token preview:', token ? token.substring(0, 20) + '...' : 'MISSING');
+    console.log('[PROFILE] saveClientData - User:', user?.id, user?.username);
+    console.log('[PROFILE] saveClientData - FormData:', formData);
 
-    if(!user || !token) {
+    if(!user) {
       throw new Error('No autenticado. Por favor recarga la página e intenta nuevamente.');
     }
 
     try {
-      // 0. Primero desasociar cualquier cliente existente (por si el usuario ya tiene uno)
-      // Esto resuelve el problema de usuarios trabajadores/admin que ya tienen un id_cliente
-      console.log('[PROFILE] Desasociando cliente existente si hay uno...');
-      try {
-        await fetch(`${CLIENTES_API}/desasociar-usuario/${user.id}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('[PROFILE] Desasociación completada (o no había cliente)');
-      } catch(e) {
-        // Ignorar error si no había cliente asociado
-        console.log('[PROFILE] No había cliente para desasociar:', e.message);
-      }
-
-      // 1. Crear el cliente
-      console.log('[PROFILE] POST', CLIENTES_API, formData);
-      const createResponse = await fetch(`${CLIENTES_API}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const createData = await createResponse.json();
-      console.log('[PROFILE] CREATE response status:', createResponse.status);
-      console.log('[PROFILE] CREATE response data:', createData);
-
-      if(createData.status !== 'success' || !createData.data?.cliente?.id_cliente) {
-        throw new Error(createData.message || 'Error al crear cliente');
-      }
-
-      const clienteId = createData.data.cliente.id_cliente;
-
-      // 2. Asociar el usuario al cliente
-      console.log('[PROFILE] POST', `${CLIENTES_API}/${clienteId}/asociar-usuario`, {id_usuario: user.id});
-      const asociarResponse = await fetch(`${CLIENTES_API}/${clienteId}/asociar-usuario`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          id_usuario: user.id
-        })
-      });
-
-      const asociarData = await asociarResponse.json();
-      console.log('[PROFILE] ASOCIAR response status:', asociarResponse.status);
-      console.log('[PROFILE] ASOCIAR response data:', asociarData);
-
-      if(asociarData.status !== 'success') {
-        throw new Error(asociarData.message || 'Error al asociar usuario');
-      }
-
-      // 3. Retornar el cliente creado
-      clientData = createData.data.cliente;
-      return { success: true, data: clientData };
-
-    } catch(error) {
-      throw error;
-    }
-  }
-
-  // Update client data via API
-  async function updateClientData(formData) {
-    const user = window.roelAuth?.getUser();
-    const token = window.roelAuth?.getAccessToken();
-
-    console.log('[PROFILE] updateClientData - User:', user?.id, user?.username);
-    console.log('[PROFILE] updateClientData - Token exists:', !!token);
-    console.log('[PROFILE] updateClientData - Token preview:', token ? token.substring(0, 20) + '...' : 'MISSING');
-
-    if(!user || !token) {
-      throw new Error('No autenticado. Por favor recarga la página e intenta nuevamente.');
-    }
-
-    try {
-      // Intentar actualizar cliente existente
-      console.log('[PROFILE] PUT', `${CLIENTES_API}/usuario/${user.id}`, formData);
-      const response = await fetch(`${CLIENTES_API}/usuario/${user.id}`, {
+      const response = await fetch(CLIENTES_API, {
         method: 'PUT',
+        credentials: 'same-origin', // Enviar cookies de sesión
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(formData)
       });
 
       const data = await response.json();
-      console.log('[PROFILE] UPDATE response status:', response.status);
-      console.log('[PROFILE] UPDATE response data:', data);
+      console.log('[PROFILE] SAVE response status:', response.status);
+      console.log('[PROFILE] SAVE response data:', data);
 
       if(data.status === 'success') {
         clientData = data.data?.cliente || clientData;
         return { success: true, data: clientData };
       }
 
-      // Si el error es que no existe cliente, crearlo
-      if(response.status === 404 || data.message?.includes('no encontrado') || data.message?.includes('No se encontró')) {
-        console.log('Cliente no existe, creando nuevo...');
-        return await createClientData(formData);
-      }
-
-      throw new Error(data.message || 'Error al actualizar perfil');
+      throw new Error(data.message || 'Error al guardar perfil');
     } catch(error) {
-      // Si es error de red o 404, intentar crear
-      if(error.message?.includes('404') || error.message?.includes('no encontrado')) {
-        return await createClientData(formData);
-      }
       throw error;
     }
   }
@@ -901,7 +799,7 @@ window.PHP_SESSION_USER = <?php echo json_encode($usuarioSesion); ?>;
       profileSaveBtn.disabled = true;
       profileSaveBtn.textContent = 'Guardando...';
 
-      await updateClientData(formData);
+      await saveClientData(formData);
 
       console.log('[PROFILE] Data saved successfully');
       console.log('[PROFILE] pendingCheckout:', pendingCheckout);

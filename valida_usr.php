@@ -48,29 +48,6 @@ if ($passwordValid && $r && $r["nombre"] != null) {
             setcookie("roel-clientes-token", $token, time() + (60 * 60 * 24 * 30), '/');
             setcookie("roel-clientes-id", $r['id_cliente'], time() + (60 * 60 * 24 * 30), '/');
 
-            // Login en la API de ERP para obtener access_token
-            $apiLoginUrl = 'https://erp.roelplant.cl/api/cliente/login';
-            $apiCredentials = json_encode(['email' => $usuario, 'password' => $password]);
-
-            $ch = curl_init($apiLoginUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $apiCredentials);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-            $apiResponse = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode === 200 && $apiResponse) {
-                $apiData = json_decode($apiResponse, true);
-                if (isset($apiData['status']) && $apiData['status'] === 'success' && isset($apiData['data']['access_token'])) {
-                    $_SESSION['api_access_token'] = $apiData['data']['access_token'];
-                    $_SESSION['api_token_expires_at'] = $apiData['data']['expires_in'] ?? null;
-                }
-            }
-
             echo "
         <script>
           document.location.href = 'inicio.php';
