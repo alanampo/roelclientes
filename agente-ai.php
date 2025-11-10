@@ -1,6 +1,6 @@
 <?php
 include "./class_lib/sesionSecurity.php";
-if (!str_contains(mb_strtolower($_SESSION['nombre_de_usuario']), "alanampo")){
+if (!str_contains($_SESSION['nombre_de_usuario'], "alanampo")){
     header("Location: index.php");
 }
 // Obtener datos del usuario de la sesión
