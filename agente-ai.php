@@ -1,8 +1,13 @@
 <?php
-include "./class_lib/sesionSecurity.php";
+try {
+  include "./class_lib/sesionSecurity.php";
 if (!str_contains($_SESSION['nombre_de_usuario'], "alanampo")){
     header("Location: index.php");
 }
+} catch (\Throwable $th) {
+  echo $th->getMessage()." ".$th->getTraceAsString();die;
+}
+
 // Obtener datos del usuario de la sesión
 $usuarioSesion = [
     'id' => $_SESSION['id_usuario'] ?? null,
