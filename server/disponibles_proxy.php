@@ -1,160 +1,138 @@
 <?php
 declare(strict_types=1);
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type');
 
-function http_get_json(string $url, int $timeout = 8): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => $timeout,
-        CURLOPT_TIMEOUT        => $timeout,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-        CURLOPT_USERAGENT      => 'roelplant-proxy/1.1',
-    ]);
-    $resp = curl_exec($ch);
-    $err  = curl_error($ch);
-    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($resp === false || $code >= 400) {
-        return ['ok'=>false, 'error' => $err ?: ("HTTP ".$code)];
+try {
+    // Verificar sesión
+    if (!isset($_SESSION['id_usuario']) || !$_SESSION['id_usuario']) {
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'error' => 'No autenticado']);
+        exit;
     }
-    $j = json_decode($resp, true);
-    if (!is_array($j)) return ['ok'=>false, 'error'=>'Respuesta no JSON del servicio'];
-    $j['ok'] = true;
-    return $j;
-}
 
-function norm(string $s): string {
-    $s = mb_strtolower(trim($s), 'UTF-8');
-    $s = iconv('UTF-8','ASCII//TRANSLIT//IGNORE',$s);
-    $s = preg_replace('/[^a-z0-9\/\s-]+/',' ',$s);
-    $s = preg_replace('/\s+/',' ',$s);
-    return trim($s);
-}
+    require_once __DIR__ . '/../class_lib/class_conecta_mysql.php';
 
-function normalizaListado(array $j, ?string $tipoFiltroNorm = null): array {
-    $items = $j['items'] ?? [];
-    $out = [];
-    foreach ($items as $p) {
-        $tipoPlanta = $p['tipo_planta'] ?? '';
-        if ($tipoFiltroNorm) {
-            $tp = norm((string)$tipoPlanta);
-            if ($tp === '' || strpos($tp, $tipoFiltroNorm) === false) continue;
+    $con = mysqli_connect($host, $user, $password, $dbname);
+    if (!$con) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'error' => 'Error de conexión a BD']);
+        exit;
+    }
+    mysqli_query($con, "SET NAMES 'utf8'");
+
+    // Leer parámetro de tipo
+    $tipo = $_GET['tipo'] ?? null;
+    if (!$tipo) {
+        $raw = file_get_contents('php://input') ?: '';
+        if ($raw) {
+            $j = json_decode($raw, true);
+            if (is_array($j)) $tipo = $j['tipo'] ?? null;
         }
-        $precios = $p['precios'] ?? [];
-        $detalle = $precios['detalle']['bruto']   ?? ($precios['detalle_bruto']   ?? null);
-        $mayor   = $precios['mayorista']['bruto'] ?? ($precios['mayorista_bruto'] ?? null);
-        $out[] = [
-            'status'         => 'ok',
-            'id_variedad'    => $p['id_variedad'] ?? null,
-            'variedad'       => $p['nombre'] ?? null,
-            'referencia'     => $p['referencia'] ?? null,
-            'tipo_planta'    => $tipoPlanta ?: null,
-            'precio'         => $mayor,
-            'precio_detalle' => $detalle,
-            'stock'          => $p['stock'] ?? null,
-            'disponible_para_reservar' => $p['stock'] ?? null,
-            'unidad'         => 'plantines',
-            'imagen'         => $p['imagen_url'] ?? null,
-            'descripcion'    => $p['descripcion'] ?? null,
-            '_raw'           => $p,
+    }
+
+    $ivaPct = 0.19;
+
+    // Construir consulta con filtro opcional por tipo
+    $whereExtra = '';
+    $params = [];
+    $types = '';
+
+    if ($tipo) {
+        $tipoNorm = '%' . strtoupper(trim($tipo)) . '%';
+        $whereExtra = ' AND (av.valor LIKE ? OR t.nombre LIKE ?)';
+        $params = [$tipoNorm, $tipoNorm];
+        $types = 'ss';
+    }
+
+    $sql = "SELECT
+                v.id AS id_variedad,
+                v.nombre AS nombre,
+                CONCAT(t.codigo, LPAD(v.id_interno, 2, '0')) AS referencia,
+                t.nombre AS tipo_producto,
+                MAX(av.valor) AS tipo_planta,
+                MAX(v.descripcion) AS descripcion,
+                v.precio AS precio_mayorista_sin_iva,
+                v.precio_detalle AS precio_detalle_sin_iva,
+                (
+                    IFNULL(SUM(s.cantidad), 0) -
+                    IFNULL((SELECT SUM(r.cantidad) FROM reservas_productos r
+                            WHERE r.id_variedad = v.id AND (r.estado = 0 OR r.estado = 1)), 0) -
+                    IFNULL((SELECT SUM(e.cantidad) FROM entregas_stock e
+                            JOIN reservas_productos r2 ON r2.id = e.id_reserva
+                            WHERE r2.id_variedad = v.id AND r2.estado = 2), 0)
+                ) AS disponible_para_reservar,
+                (
+                    SELECT CONCAT('https://control.roelplant.cl/uploads/variedades/variedad_', v.id, '_', iv.nombre_archivo, '.jpeg')
+                    FROM imagenes_variedades iv
+                    WHERE iv.id_variedad = v.id
+                    ORDER BY iv.id DESC
+                    LIMIT 1
+                ) AS imagen_url
+            FROM stock_productos s
+            JOIN articulospedidos ap ON ap.id = s.id_artpedido
+            JOIN variedades_producto v ON v.id = ap.id_variedad
+            JOIN tipos_producto t ON t.id = v.id_tipo
+            LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = v.id
+            LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
+            LEFT JOIN atributos a ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
+            WHERE ap.estado >= 8
+              AND (v.eliminada IS NULL OR v.eliminada = 0)
+              $whereExtra
+            GROUP BY v.id, v.nombre, v.id_interno, v.precio, v.precio_detalle, t.codigo, t.nombre
+            HAVING disponible_para_reservar > 0
+            ORDER BY disponible_para_reservar DESC, v.nombre ASC
+            LIMIT 200";
+
+    $stmt = mysqli_prepare($con, $sql);
+
+    if ($tipo) {
+        mysqli_stmt_bind_param($stmt, $types, ...$params);
+    }
+
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    $items = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $detalleNeto = (float)($row['precio_detalle_sin_iva'] ?? 0);
+        $mayorNeto = (float)($row['precio_mayorista_sin_iva'] ?? 0);
+
+        $items[] = [
+            'status' => 'ok',
+            'id_variedad' => (int)$row['id_variedad'],
+            'variedad' => $row['nombre'],
+            'referencia' => $row['referencia'],
+            'tipo_planta' => $row['tipo_planta'] ?: $row['tipo_producto'],
+            'precio' => (int)round($mayorNeto * (1 + $ivaPct)),
+            'precio_detalle' => (int)round($detalleNeto * (1 + $ivaPct)),
+            'stock' => max(0, (int)$row['disponible_para_reservar']),
+            'disponible_para_reservar' => max(0, (int)$row['disponible_para_reservar']),
+            'unidad' => 'plantines',
+            'imagen' => $row['imagen_url'] ?? null,
+            'descripcion' => $row['descripcion'] !== null ? trim((string)$row['descripcion']) : null
         ];
     }
-    return [ 'status'=>'ok', 'count'=>count($out), 'items'=>$out ];
-}
 
-session_start();
+    mysqli_stmt_close($stmt);
+    mysqli_close($con);
 
-// Verificar token de API
-if (!isset($_SESSION['api_access_token'])) {
-    http_response_code(401);
-    echo json_encode(['status'=>'error','error'=>'No autorizado - falta token de API']); exit;
-}
+    echo json_encode([
+        'status' => 'ok',
+        'count' => count($items),
+        'items' => $items
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-$tipo = $_GET['tipo'] ?? null;
-if (!$tipo) {
-    $raw = file_get_contents('php://input') ?: '';
-    if ($raw) { $j = json_decode($raw, true); if (is_array($j)) $tipo = $j['tipo'] ?? null; }
-}
-$tipoNorm = $tipo ? norm((string)$tipo) : null;
-
-// Construir URL con parámetros
-$apiUrl = 'https://control.roelplant.cl/api/disponibles.php';
-if ($tipo) {
-    $apiUrl .= '?tipo=' . rawurlencode($tipo);
-}
-
-$token = $_SESSION['api_access_token'];
-
-$ch = curl_init($apiUrl);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT        => 15,
-    CURLOPT_HTTPHEADER     => [
-        'Authorization: Bearer ' . $token,
-        'Accept: application/json'
-    ],
-]);
-
-$response = curl_exec($ch);
-$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$err = curl_error($ch);
-curl_close($ch);
-
-// Si el token expiró, intentar renovar
-if ($httpCode === 401 && isset($_SESSION['api_refresh_token'])) {
-    $refreshUrl = 'https://control.roelplant.cl/api/refresh.php';
-    $refreshData = json_encode(['refresh_token' => $_SESSION['api_refresh_token']]);
-
-    $ch2 = curl_init($refreshUrl);
-    curl_setopt_array($ch2, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $refreshData,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_TIMEOUT => 10,
+} catch (\Throwable $th) {
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'error' => 'Error del servidor: ' . $th->getMessage(),
+        'trace' => $th->getTraceAsString()
     ]);
-
-    $refreshResponse = curl_exec($ch2);
-    $refreshHttpCode = (int)curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-    curl_close($ch2);
-
-    if ($refreshHttpCode === 200 && $refreshResponse) {
-        $refreshData = json_decode($refreshResponse, true);
-        if (isset($refreshData['tokens']['access_token'])) {
-            $_SESSION['api_access_token'] = $refreshData['tokens']['access_token'];
-            $_SESSION['api_token_expires_at'] = $refreshData['tokens']['access_expires_at'];
-
-            // Reintentar con nuevo token
-            $ch3 = curl_init($apiUrl);
-            curl_setopt_array($ch3, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 15,
-                CURLOPT_HTTPHEADER     => [
-                    'Authorization: Bearer ' . $_SESSION['api_access_token'],
-                    'Accept: application/json'
-                ],
-            ]);
-            $response = curl_exec($ch3);
-            $httpCode = (int)curl_getinfo($ch3, CURLINFO_HTTP_CODE);
-            curl_close($ch3);
-        }
-    }
 }
-
-if ($httpCode !== 200 || !$response) {
-    http_response_code(502);
-    echo json_encode(['status'=>'error','error'=> $err ?: 'Error al consultar API']); exit;
-}
-
-$res = json_decode($response, true);
-if (!is_array($res)) {
-    http_response_code(502);
-    echo json_encode(['status'=>'error','error'=>'Respuesta inválida de la API']); exit;
-}
-
-echo json_encode(normalizaListado($res, $tipoNorm), JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
