@@ -1,10 +1,7 @@
 <?php
 include "./class_lib/sesionSecurity.php";
-var_dump($_SESSION);die;
 if (!str_contains(mb_strtolower($_SESSION['nombre_de_usuario']), "alanampo")){
-    http_response_code(403);
-    echo "Acceso denegado.";
-    exit;
+    header("Location: index.php");
 }
 // Obtener datos del usuario de la sesión
 $usuarioSesion = [
