@@ -58,7 +58,7 @@ try {
                             WHERE r2.id_variedad = v.id AND r2.estado = 2), 0)
                 ) AS disponible_para_reservar,
                 (
-                    SELECT CONCAT('https://control.roelplant.cl/uploads/variedades/variedad_', v.id, '_', iv.nombre_archivo, '.jpeg')
+                    SELECT CONCAT('https://control.roelplant.cl/uploads/variedades/', iv.nombre_archivo)
                     FROM imagenes_variedades iv
                     WHERE iv.id_variedad = v.id
                     ORDER BY iv.id DESC
