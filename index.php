@@ -57,21 +57,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               <input class="form-control" name="pass" id="Pass" type="password" maxlength="30" required="">
             </div>
             <p class="text-center">
-                <button type="submit" class="btn btn-primary btn-block  mt-4">Ingresar</button>        
+                <button type="submit" class="btn btn-primary btn-block  mt-4">Ingresar</button>
+                <a href="registro.php" class="btn btn-link">No tengo cuenta, registrarme</a>
             </p>
           </form>
         
 </div> <!-- cierre de login-outer -->
 
-<div class="mt-4 text-center" style="font-size:14px; line-height:1.5; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; padding:10px;">
-  <p>
-    Para registrarte como cliente, contacta a nuestro equipo de ventas:<br>
-    Telefonos: <a href="tel:+56984226651">+56 9 8422 6651</a> /
-    <a href="tel:+56933217944">+56 9 3321 7944</a><br>
-    Correos: <a href="mailto:ventas@roelplant.cl">ventas@roelplant.cl</a> /
-    <a href="mailto:contacto@roelplant.cl">contacto@roelplant.cl</a>
-  </p>
-</div>
 
         
         

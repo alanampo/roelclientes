@@ -1,15 +1,8 @@
 <?php
 declare(strict_types=1);
-session_start();
 header('Content-Type: application/json; charset=UTF-8');
 
-// Verificar sesión
-if (!isset($_SESSION['id_usuario']) || !$_SESSION['id_usuario']) {
-    http_response_code(401);
-    echo json_encode(['status' => 'error', 'message' => 'No autenticado']);
-    exit;
-}
-
+// No requiere autenticación - endpoint público para registro y uso general
 require_once __DIR__ . '/../class_lib/class_conecta_mysql.php';
 
 $con = mysqli_connect($host, $user, $password, $dbname);
@@ -36,6 +29,6 @@ while ($row = mysqli_fetch_assoc($result)) {
 mysqli_close($con);
 
 echo json_encode([
-    'status' => 'success',
-    'data' => ['comunas' => $comunas]
+    'success' => true,
+    'comunas' => $comunas
 ]);
