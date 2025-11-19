@@ -44,7 +44,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           <img id="img-portada" src="dist/img/portada1.jpg" style="width:100%;max-height:93vh"/>
         </div>
         <div class="col-md-5">
-          <div class="h-100 d-flex align-items-center login-outer">
+          <div class="h-100 d-flex align-items-center login-outer" style="justify-content: center;">
           <form class="AjaxForms MainRegister" id="registerform" data-type-form="register" method="post" autocomplete="off">
           <h3 class="text-center mt-4 mb-4 font-weight-bold">REGISTRO DE CLIENTE</h3>
             <div align="center" class="mb-4"><img src="dist/img/roel.jpg" style="width: 150px;height:85px;"/></div>
