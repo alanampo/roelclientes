@@ -104,7 +104,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </div>
 
             <div class="form-group">
-              <label class="control-label" for="Ciudad">Ciudad / Región <span class="text-danger">*</span></label>
+              <label class="control-label" for="Ciudad">Ciudad <span class="text-danger">*</span></label>
               <input class="form-control" name="ciudad" id="Ciudad" type="text" maxlength="100" required>
             </div>
 
