@@ -58,7 +58,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </div>
             <p class="text-center">
                 <button type="submit" class="btn btn-primary btn-block  mt-4">Ingresar</button>
-                <a href="registro.php" class="btn btn-link">No tengo cuenta, registrarme</a>
+                <!--<a href="registro.php" class="btn btn-link">No tengo cuenta, registrarme</a>-->
             </p>
           </form>
         
