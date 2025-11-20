@@ -1,10 +1,10 @@
 <?php
 
 include "./class_lib/sesionSecurity.php";
-if (strpos($_SESSION['nombre_de_usuario'], "alanampo") === false) {
-  header("Location: index.php");
-  exit;
-}
+// if (strpos($_SESSION['nombre_de_usuario'], "alanampo") === false) {
+//   header("Location: index.php");
+//   exit;
+// }
 
 // Obtener datos del usuario de la sesión
 $usuarioSesion = [
@@ -22,7 +22,7 @@ $usuarioSesion = [
   <meta charset="utf-8">
   <meta name="viewport"
     content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <title>Roelplant · Agente AI</title>
+  <title>Roelplant · Agente de Ventas</title>
   <style>
     :root {
       --bg: #04070c;

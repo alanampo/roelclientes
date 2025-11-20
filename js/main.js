@@ -96,7 +96,7 @@ function pone_tendencias() {
         <a href="agente-ai.php">
         <div class="small-box" style="background-color:#9333EA">
           <div class="inner"  style="height:7.3em;">
-          <p style='color:white'>Agente AI</p>
+          <p style='color:white'>Agente de Ventas</p>
           </div>
           <div class="icon">
           <i style="color:rgba(255, 255, 255, 0.15);" class="fa fa-comments"></i>
