@@ -48,7 +48,7 @@
 <body>
 
 
-  <div class="container w-75 p-4">
+  <div class="container p-4">
     <div class="row">
       <div class="col-md-7">
         <img id="img-portada" src="dist/img/portada1.jpg" style="width:100%;max-height:93vh" />
