@@ -2,6 +2,36 @@ $(document).ready(function() {
     // Cargar comunas al iniciar
     loadComunas();
 
+    // Inicializar selectpickers
+    $('.selectpicker').selectpicker();
+
+    // Filtrar provincias cuando se selecciona una región
+    $('#Region').on('change', function() {
+        const regionSeleccionada = $(this).val();
+        const provinciaSelect = $('#Provincia');
+
+        if (regionSeleccionada) {
+            // Ocultar todas las opciones excepto las de la región seleccionada
+            provinciaSelect.find('optgroup').hide();
+            provinciaSelect.find('option').prop('disabled', true);
+
+            // Mostrar solo el optgroup de la región seleccionada
+            provinciaSelect.find('optgroup[label="' + regionSeleccionada + '"]').show();
+            provinciaSelect.find('option[data-region="' + regionSeleccionada + '"]').prop('disabled', false);
+
+            // Resetear el valor
+            provinciaSelect.val('');
+        } else {
+            // Mostrar todas las provincias si no hay región seleccionada
+            provinciaSelect.find('optgroup').show();
+            provinciaSelect.find('option').prop('disabled', false);
+            provinciaSelect.val('');
+        }
+
+        // Refresh selectpicker
+        provinciaSelect.selectpicker('refresh');
+    });
+
     // Validación de email en tiempo real
     $('#Email').on('blur', function() {
         const email = $(this).val().trim();
