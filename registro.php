@@ -112,7 +112,7 @@
 
             <div class="form-group">
               <label class="control-label" for="Comuna">Comuna <span class="text-danger">*</span></label>
-              <select class="form-control selectpicker" name="comuna" id="Comuna" data-live-search="true" required>
+              <select class="form-control selectpicker" name="comuna" id="Comuna" data-live-search="true" data-none-selected-text="Selecciona una comuna" required>
                 <option value="">Seleccione una comuna...</option>
               </select>
             </div>
@@ -124,7 +124,7 @@
 
             <div class="form-group">
               <label class="control-label" for="Region">Región</label>
-              <select class="form-control selectpicker" name="region" id="Region" data-live-search="true">
+              <select class="form-control selectpicker" name="region" id="Region" data-live-search="true" data-none-selected-text="Selecciona una región">
                 <option value="">Seleccione una región...</option>
                 <option value="Arica y Parinacota">Arica y Parinacota</option>
                 <option value="Tarapacá">Tarapacá</option>
@@ -147,7 +147,7 @@
 
             <div class="form-group">
               <label class="control-label" for="Provincia">Provincia</label>
-              <select class="form-control selectpicker" name="provincia" id="Provincia" data-live-search="true">
+              <select class="form-control selectpicker" name="provincia" id="Provincia" data-live-search="true" data-none-selected-text="Selecciona una provincia">
                 <option value="">Seleccione una provincia...</option>
                 <optgroup label="Arica y Parinacota">
                   <option value="Arica" data-region="Arica y Parinacota">Arica</option>
