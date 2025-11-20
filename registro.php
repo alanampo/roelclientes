@@ -1,53 +1,64 @@
 <!DOCTYPE html>
 <html>
-  <head>
-<meta charset="UTF-8">
 
-<!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-PZ58VTFF');</script>
-<!-- End Google Tag Manager -->
+<head>
+  <meta charset="UTF-8">
+
+  <!-- Google Tag Manager -->
+  <script>(function (w, d, s, l, i) {
+      w[l] = w[l] || []; w[l].push({
+        'gtm.start':
+          new Date().getTime(), event: 'gtm.js'
+      }); var f = d.getElementsByTagName(s)[0],
+        j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+          'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-PZ58VTFF');</script>
+  <!-- End Google Tag Manager -->
 
 
-    <title>Roelplant - Registro de Cliente</title>
-    <?php include "./class_lib/scripts.php"; ?>
-    <?php include "./class_lib/links.php"; ?>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
-    <script src="dist/js/registro.js?v=2"></script>
-    <?php
-      session_start();
-      if (
-        isset($_SESSION) &&
-        isset($_SESSION["roel-clientes-token"]) &&
-        isset($_COOKIE["roel-clientes-token"]) &&
-        ($_SESSION["roel-clientes-token"] == $_COOKIE["roel-clientes-token"]) &&
-        isset($_SESSION["id_cliente"]) &&
-        isset($_COOKIE["roel-clientes-id"]) &&
-        ($_SESSION["id_cliente"] == $_COOKIE["roel-clientes-id"])
-      ){
-        echo "<script>
+  <title>Roelplant - Registro de Cliente</title>
+  <?php include "./class_lib/scripts.php"; ?>
+  <?php include "./class_lib/links.php"; ?>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
+  <script src="dist/js/registro.js?v=2"></script>
+  <?php
+  session_start();
+  if (
+    isset($_SESSION) &&
+    isset($_SESSION["roel-clientes-token"]) &&
+    isset($_COOKIE["roel-clientes-token"]) &&
+    ($_SESSION["roel-clientes-token"] == $_COOKIE["roel-clientes-token"]) &&
+    isset($_SESSION["id_cliente"]) &&
+    isset($_COOKIE["roel-clientes-id"]) &&
+    ($_SESSION["id_cliente"] == $_COOKIE["roel-clientes-id"])
+  ) {
+    echo "<script>
                 document.location.href = 'inicio.php';
               </script>
         ";
-      }
-    ?>
-  </head>
-  <body>
+  }
+  ?>
+  <style type="text/css">
+    html {
+      background: #fff;
+    }
+  </style>
+</head>
+
+<body>
 
 
-    <div class="container w-75 p-4">
-      <div class="row">
-        <div class="col-md-7">
-          <img id="img-portada" src="dist/img/portada1.jpg" style="width:100%;max-height:93vh"/>
-        </div>
-        <div class="col-md-5">
-          <div class="h-100 d-flex align-items-center login-outer" style="justify-content: center;">
-          <form class="AjaxForms MainRegister" id="registerform" data-type-form="register" method="post" autocomplete="off">
-          <h3 class="text-center mt-4 mb-4 font-weight-bold">REGISTRO DE CLIENTE</h3>
-            <div align="center" class="mb-4"><img src="dist/img/roel.jpg" style="width: 150px;height:85px;"/></div>
+  <div class="container w-75 p-4">
+    <div class="row">
+      <div class="col-md-7">
+        <img id="img-portada" src="dist/img/portada1.jpg" style="width:100%;max-height:93vh" />
+      </div>
+      <div class="col-md-5">
+        <div class="h-100 d-flex align-items-center login-outer" style="justify-content: center;">
+          <form class="AjaxForms MainRegister" id="registerform" data-type-form="register" method="post"
+            autocomplete="off">
+            <h3 class="text-center mt-4 mb-4 font-weight-bold">REGISTRO DE CLIENTE</h3>
+            <div align="center" class="mb-4"><img src="dist/img/roel.jpg" style="width: 150px;height:85px;" /></div>
 
             <div class="form-group">
               <label class="control-label" for="Email">E-Mail <span class="text-danger">*</span></label>
@@ -61,8 +72,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </div>
 
             <div class="form-group">
-              <label class="control-label" for="PasswordConfirm">Repetir Contraseña <span class="text-danger">*</span></label>
-              <input class="form-control" name="password_confirm" id="PasswordConfirm" type="password" maxlength="50" required>
+              <label class="control-label" for="PasswordConfirm">Repetir Contraseña <span
+                  class="text-danger">*</span></label>
+              <input class="form-control" name="password_confirm" id="PasswordConfirm" type="password" maxlength="50"
+                required>
               <small class="form-text text-danger" id="password-error" style="display:none;"></small>
             </div>
 
@@ -77,7 +90,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             <div class="form-group">
               <label class="control-label" for="RUT">RUT <span class="text-danger">*</span></label>
-              <input class="form-control" name="rut" id="RUT" type="text" maxlength="12" placeholder="12.345.678-9" required>
+              <input class="form-control" name="rut" id="RUT" type="text" maxlength="12" placeholder="12.345.678-9"
+                required>
               <small class="form-text text-danger" id="rut-error" style="display:none;"></small>
             </div>
 
@@ -218,42 +232,45 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                   <option value="Capitán Prat" data-region="Aysén">Capitán Prat</option>
                 </optgroup>
                 <optgroup label="Magallanes y de la Antártica Chilena">
-                  <option value="Última Esperanza" data-region="Magallanes y de la Antártica Chilena">Última Esperanza</option>
+                  <option value="Última Esperanza" data-region="Magallanes y de la Antártica Chilena">Última Esperanza
+                  </option>
                   <option value="Magallanes" data-region="Magallanes y de la Antártica Chilena">Magallanes</option>
-                  <option value="Tierra del Fuego" data-region="Magallanes y de la Antártica Chilena">Tierra del Fuego</option>
-                  <option value="Antártica Chilena" data-region="Magallanes y de la Antártica Chilena">Antártica Chilena</option>
+                  <option value="Tierra del Fuego" data-region="Magallanes y de la Antártica Chilena">Tierra del Fuego
+                  </option>
+                  <option value="Antártica Chilena" data-region="Magallanes y de la Antártica Chilena">Antártica Chilena
+                  </option>
                 </optgroup>
               </select>
             </div>
 
             <p class="text-center">
-                <button type="submit" class="btn btn-primary btn-block mt-4">Registrarse</button>
-                <a href="index.php" class="btn btn-link">Ya tengo cuenta, iniciar sesión</a>
+              <button type="submit" class="btn btn-primary btn-block mt-4">Registrarse</button>
+              <a href="index.php" class="btn btn-link">Ya tengo cuenta, iniciar sesión</a>
             </p>
           </form>
 
-</div> <!-- cierre de login-outer -->
+        </div> <!-- cierre de login-outer -->
 
 
 
 
-
-        </div>
 
       </div>
+
     </div>
+  </div>
 
 
-    <div class="contenedor"></div>
+  <div class="contenedor"></div>
 
-<!-- Google Tag Manager (noscript) -->
-<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PZ58VTFF"
-height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-<!-- End Google Tag Manager (noscript) -->
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PZ58VTFF" height="0" width="0"
+      style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
 
-<!-- Bootstrap Select JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
+  <!-- Bootstrap Select JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
 
-  </body>
+</body>
 
 </html>
