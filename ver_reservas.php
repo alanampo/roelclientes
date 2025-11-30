@@ -68,34 +68,54 @@
       <div class="modal-reservar">
         <div class='box box-primary'>
           <div class='box-header with-border'>
-            <h3 class='box-title'>Reservar Producto</h3>
+            <h3 class='box-title'>Crear Reserva</h3>
             <button type="button" class="close mt-2 mt-lg-0" data-dismiss="modal" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
           </div>
         </div>
         <div class='box-body'>
-
           <div class="row">
-            <div class="col-md-4 form-group">
-              <label class="col-form-label" for="input-cantidad">Cantidad a Reservar:</label>
-              <input type="search" placeholder="Plantas" autocomplete="off" class="form-control" name="input-cantidad"
-                id="input-cantidad" maxlength="20" />
+            <div class="col-md-5 form-group">
+                <label class="col-form-label" for="select-producto-reserva">Producto:</label>
+                <select id="select-producto-reserva" data-size="10" data-live-search="true" title="Producto" class="selectpicker" data-style="btn-primary" data-width="100%">
+                </select>
             </div>
-            <div class="col-md-4">
-
+            <div class="col-md-3 form-group">
+              <label class="col-form-label" for="input-cantidad-reserva">Cantidad a Reservar:</label>
+              <input type="number" placeholder="Plantas" autocomplete="off" class="form-control" name="input-cantidad"
+                id="input-cantidad-reserva" maxlength="20" />
             </div>
-            <div class="col-md-4 form-group">
-              <label class="col-form-label text-primary" for="input-cantidad-disponible">Cantidad Disponible:</label>
-              <input type="search" autocomplete="off" class="form-control font-weight-bold"
-                name="input-cantidad-disponible" id="input-cantidad-disponible" maxlength="20" readonly />
+            <div class="col-md-2 form-group">
+                <label class="col-form-label text-primary" for="input-cantidad-disponible2">Disponible:</label>
+                <input type="text" autocomplete="off" class="form-control font-weight-bold"
+                           name="input-cantidad-disponible2" id="input-cantidad-disponible2" maxlength="20" readonly />
+            </div>
+            <div class="col-md-2">
+                <label class="col-form-label">&nbsp;</label>
+                <button onclick="agregarProductoReserva()" class="btn btn-primary btn-block"><i class="fa fa-plus"></i> AÑADIR</button>
+            </div>
+          </div>
+          <hr>
+          <div class="row">
+            <div class="col-md-12">
+                <table id="tabla-productos-reserva" class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
             </div>
           </div>
           <div class="row">
             <div class="col-md-12 form-group">
-              <label class="col-form-label" for="input-comentario">Comentario:</label>
-              <input type="search" autocomplete="off" class="form-control" name="input-comentario" id="input-comentario"
-                maxlength="100" />
+              <label class="col-form-label" for="input-comentario-reserva">Observaciones:</label>
+              <textarea class="form-control" name="input-comentario-reserva" id="input-comentario-reserva" rows="3"></textarea>
             </div>
           </div>
           <div class="row mt-2">
