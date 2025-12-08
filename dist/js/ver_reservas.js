@@ -65,11 +65,11 @@ function busca_entradas(tabName) {
                 pageLength: 50,
                 order: [tabName == "reservas" ? [1, "desc"] : [0, "asc"]],
                 language: {
-                    lengthMenu: `Mostrando _MENU_ ${tipo} por página`,
-                    zeroRecords: `No hay ${tipo}`,
+                    lengthMenu: `Mostrando _MENU_ registros por página`,
+                    zeroRecords: `No hay registros`,
                     info: "Página _PAGE_ de _PAGES_",
-                    infoEmpty: `No hay ${tipo}`,
-                    infoFiltered: `(filtrado de _MAX_ ${tipo} en total)`,
+                    infoEmpty: `No hay registros`,
+                    infoFiltered: `(filtrado de _MAX_ registros en total)`,
                     search: "Buscar:",
                     paginate: {
                         first: "Primera",
