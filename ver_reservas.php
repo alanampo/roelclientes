@@ -49,7 +49,7 @@
               <div class="tab">
                 <button id="defaultOpen" class="tablinks" onclick="abrirTab(event, 'actual');">PRODUCTOS EN
                   STOCK</button>
-                <button class="tablinks" onclick="abrirTab(event, 'reservas');">MIS RESERVAS</button>
+                <button class="tablinks" onclick="abrirTab(event, 'reservas');">MIS COMPRAS</button>
               </div>
             </div>
           </div>
@@ -121,7 +121,7 @@
           <div class="row mt-2">
             <div class="col">
               <button onclick="guardarReserva()" class="btn btn-success pull-right"><i class="fa fa-save"></i> CONFIRMAR
-                RESERVA</button>
+                COMPRA</button>
             </div>
           </div>
 
