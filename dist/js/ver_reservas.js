@@ -256,9 +256,9 @@ function refrescarTablaProductosReserva() {
     if (cartButton.length) {
         let count = productosReserva.length; // Count of distinct items
         if (count > 0) {
-            cartButton.html(`<i class='fa fa-shopping-cart'></i> CARRITO (${count})`);
+            cartButton.html(`<i class='fa fa-shopping-cart'></i> VER CARRITO (${count})`);
         } else {
-            cartButton.html(`<i class='fa fa-shopping-cart'></i> CARRITO`);
+            cartButton.html(`<i class='fa fa-shopping-cart'></i> VER CARRITO`);
         }
     }
 }
