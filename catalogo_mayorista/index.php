@@ -64,7 +64,7 @@ function render_catalogo($productos) {
             <p><strong>Precio Mayorista:</strong> $<?= $precio_mayorista ?>  Imp. Incl.</p>
             <?php if ($precio_detalle): ?>
             <?php endif; ?>
-            <button onclick="window.location.href='https://clientes.roelplant.cl/'">Reservar</button>
+            <button onclick="window.location.href='https://clientes.roelplant.cl/'">Comprar</button>
         </div>
         <?php
     }

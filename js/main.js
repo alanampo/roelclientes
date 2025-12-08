@@ -76,12 +76,12 @@ function pone_tendencias() {
         <a href="ver_reservas.php">
         <div class="small-box" style="background-color:#01DF3A">
           <div class="inner"  style="height:7.3em;">
-          <p style='color:black'>Reservar Productos</p>
+          <p style='color:black'>Comprar Productos</p>
           </div>
           <div class="icon">
           <i style="color:rgba(0, 0, 0, 0.15);" class="fa fa-shopping-basket"></i>
           </div>
-          <span class="small-box-footer" style="background-color:rgba(0, 0, 0, 0.1);">Reservar <i class="fa fa-arrow-circle-right"></i></span>
+          <span class="small-box-footer" style="background-color:rgba(0, 0, 0, 0.1);">Comprar <i class="fa fa-arrow-circle-right"></i></span>
         </div>
         </a>
       `

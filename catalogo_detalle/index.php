@@ -80,7 +80,7 @@ function render_catalogo($productos) {
             <?php if ($precio_detalle): ?>
                 <p><strong>Precio Detalle:</strong> $<?= $precio_detalle ?>  Imp. Incl.</p>
             <?php endif; ?>
-            <button onclick="window.location.href='https://clientes.roelplant.cl/'">Reservar</button>
+            <button onclick="window.location.href='https://clientes.roelplant.cl/'">Comprar</button>
         </div>
         <?php
     }

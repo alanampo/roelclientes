@@ -21,7 +21,7 @@ if ($consulta == "busca_stock_actual") {
   t.id as id_tipo,
   t.codigo,
   v.id_interno,
-  v.precio,
+  v.precio_detalle as precio,
   v.id as id_variedad,
   SUM(s.cantidad) as cantidad,
   (SELECT IFNULL(SUM(r.cantidad),0) FROM reservas_productos r
@@ -36,7 +36,7 @@ if ($consulta == "busca_stock_actual") {
   ON v.id = ap.id_variedad
   INNER JOIN tipos_producto t
   ON t.id = v.id_tipo
-  WHERE ap.estado >= 8
+  WHERE ap.estado >= 8 AND v.precio_detalle IS NOT NULL AND v.precio_detalle > 0
   GROUP BY v.id;
           ";
 
@@ -123,7 +123,7 @@ if ($consulta == "busca_stock_actual") {
 
         echo "<div class='box box-primary'>";
         echo "<div class='box-header with-border'>";
-        echo "<h3 class='box-title'>Mis Reservas</h3>";
+        echo "<h3 class='box-title'>Mis Compras</h3>";
         echo "</div>";
         echo "<div class='box-body'>";
         echo "<table id='tabla-reservas' class='table table-bordered table-responsive w-100 d-block d-md-table'>";
@@ -166,7 +166,7 @@ if ($consulta == "busca_stock_actual") {
             $productos_html .= "</ul>";
 
             $estado_general = boxEstadoReserva($ww["estado"], true);
-            $btn_cancelar = ($ww["estado"] == 0 ? "<button onclick='cancelarReserva($id_reserva)' class='btn btn-danger btn-sm mb-2' title='Cancelar Reserva'><i class='fa fa-ban'></i></button>" : "");
+            $btn_cancelar = ($ww["estado"] == 0 ? "<button onclick='cancelarReserva($id_reserva)' class='btn btn-danger btn-sm mb-2' title='Cancelar Compra'><i class='fa fa-ban'></i></button>" : "");
 
             echo "
             <tr class='text-center'>
@@ -238,7 +238,7 @@ if ($consulta == "busca_stock_actual") {
             $id_usuario_for_productos_table = $user_row['id']; // Also use for productos if found
         } else {
             // No user found linked to this client, so for 'reservas' table, we error out as per user's request.
-            $errors[] = "No se encontró un usuario asociado al cliente para crear la reserva principal. La reserva no puede ser creada.";
+            $errors[] = "No se encontró un usuario asociado al cliente para crear la compra. La compra no puede ser creada.";
         }
 
         if (count($errors) > 0) {
@@ -263,7 +263,7 @@ if ($consulta == "busca_stock_actual") {
                 $query_producto = "INSERT INTO reservas_productos (id_reserva, id_variedad, cantidad, comentario, estado, origen, id_usuario) VALUES ($id_reserva, $id_variedad, $cantidad, '$comentario', 0, 'PANEL CLIENTE', $id_usuario_for_productos_table)";
 
                 if (!mysqli_query($con, $query_producto)) {
-                    $errors[] = "Error al reservar producto ID $id_variedad: " . mysqli_error($con);
+                    $errors[] = "Error al comprar producto ID $id_variedad: " . mysqli_error($con);
                 }
             }
         }
@@ -294,7 +294,7 @@ if ($consulta == "busca_stock_actual") {
         mysqli_autocommit($con, false);
         $errors = array();
 
-        // Verificar que la reserva pertenezca al cliente de la sesión
+        // Verificar que la compra pertenezca al cliente de la sesión
         $query_check_owner = "SELECT id_cliente FROM reservas WHERE id = $id_reserva";
         $res_check_owner = mysqli_query($con, $query_check_owner);
         if(mysqli_num_rows($res_check_owner) > 0){
@@ -311,7 +311,7 @@ if ($consulta == "busca_stock_actual") {
             $query_check = "SELECT * FROM reservas_productos WHERE id_reserva = $id_reserva AND estado >= 2";
             $res_check = mysqli_query($con, $query_check);
             if (mysqli_num_rows($res_check) > 0) {
-                $errors[] = "La reserva contiene productos que ya fueron procesados, no se puede cancelar.";
+                $errors[] = "La compra contiene productos que ya fueron procesados, no se puede cancelar.";
             }
         }
 

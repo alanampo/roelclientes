@@ -3,7 +3,7 @@
 <html>
 
 <head>
-  <title>Reservar Productos</title>
+  <title>Comprar Productos</title>
   <?php include "./class_lib/links.php"; ?>
   <?php include "./class_lib/scripts.php"; ?>
   <script src="dist/js/ver_reservas.js?v=<?php echo $version ?>"></script>
@@ -33,11 +33,11 @@
         <!-- Content Header (Page header) -->
         <section class="content-header">
           <h1>
-            Reservar Productos
+            Comprar Productos
           </h1>
           <ol class="breadcrumb">
             <li><a href="inicio.php"> Inicio</a></li>
-            <li class="active">Reservar Productos</li>
+            <li class="active">Comprar Productos</li>
           </ol>
         </section>
         <!-- Main content -->
@@ -68,7 +68,7 @@
       <div class="modal-reservar">
         <div class='box box-primary'>
           <div class='box-header with-border'>
-            <h3 class='box-title'>Crear Reserva</h3>
+            <h3 class='box-title'>Comprar</h3>
             <button type="button" class="close mt-2 mt-lg-0" data-dismiss="modal" aria-label="Close">
               <span aria-hidden="true">&times;</span>
             </button>
@@ -82,7 +82,7 @@
                 </select>
             </div>
             <div class="col-md-3 form-group">
-              <label class="col-form-label" for="input-cantidad-reserva">Cantidad a Reservar:</label>
+              <label class="col-form-label" for="input-cantidad-reserva">Cantidad a Comprar:</label>
               <input type="number" placeholder="Plantas" autocomplete="off" class="form-control" name="input-cantidad"
                 id="input-cantidad-reserva" maxlength="20" />
             </div>

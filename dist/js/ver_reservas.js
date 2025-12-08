@@ -89,7 +89,7 @@ function busca_entradas(tabName) {
 }
 
 function cancelarReserva(id_reserva) {
-    swal("Estás seguro/a de CANCELAR la Reserva?", "", {
+    swal("Estás seguro/a de CANCELAR la Compra?", "", {
         icon: "warning",
         buttons: {
             cancel: "NO",
@@ -106,7 +106,7 @@ function cancelarReserva(id_reserva) {
                 data: { consulta: "cancelar_reserva", id_reserva: id_reserva },
                 success: function (data) {
                     if (data.trim() == "success") {
-                        swal("Cancelaste la Reserva correctamente!", "", "success");
+                        swal("Cancelaste la Compra correctamente!", "", "success");
                         busca_entradas(currentTab);
                     } else {
                         swal("Ocurrió un error al cancelar la Reserva", data, "error");
@@ -121,7 +121,7 @@ function modalReservar() {
     productosReserva = [];
     refrescarTablaProductosReserva();
     pone_productos_reserva();
-    $("#modal-reservar .box-title").html(`Crear Reserva`);
+    $("#modal-reservar .box-title").html(`Comprar`);
     $("#modal-reservar").modal("show");
     $("#input-cantidad-reserva").focus();
 }
@@ -157,7 +157,7 @@ function agregarProductoReserva() {
         return;
     }
     if (cantidad > disponible) {
-        swal("Error", "La cantidad a reservar no puede ser mayor al stock disponible.", "error");
+        swal("Error", "La cantidad a comprar no puede ser mayor al stock disponible.", "error");
         return;
     }
 
@@ -240,10 +240,10 @@ function guardarReserva() {
         success: function (x) {
             console.log(x)
             if (x.trim() == "success") {
-                swal("Éxito", "La reserva se ha guardado correctamente.", "success");
+                swal("Éxito", "La Compra se ha guardado correctamente.", "success");
                 busca_entradas(currentTab);
             } else {
-                swal("Ocurrió un error al guardar la Reserva", x, "error");
+                swal("Ocurrió un error al guardar la Compra", x, "error");
                 $("#modal-reservar").modal("show");
             }
         },
