@@ -53,14 +53,14 @@ if ($consulta == "busca_stock_actual") {
         echo "<div class='box-header with-border'>";
         echo "<h3 class='box-title'>Stock Actual</h3>";
         echo "<div class='box-tools pull-right'>";
-        echo "<button class='btn btn-success' onclick='modalReservar()'><i class='fa fa-shopping-basket'></i> COMPRAR</button>";
+        echo "<button class='btn btn-success' id='btn-ver-carrito' onclick='modalReservar()'><i class='fa fa-shopping-cart'></i> CARRITO</button>";
         echo "</div>";
         echo "</div>";
         echo "<div class='box-body'>";
         echo "<table id='tabla' class='table table-bordered table-responsive w-100 d-block d-md-table'>";
         echo "<thead>";
         echo "<tr>";
-        echo "<th></th><th>Producto</th><th>Precio Unitario</th><th>Cant. Disponible Plantas</th>";
+        echo "<th></th><th>Producto</th><th>Precio Unitario</th><th>Cant. Disponible Plantas</th><th></th>";
         echo "</tr>";
         echo "</thead>";
         echo "<tbody>";
@@ -74,12 +74,22 @@ if ($consulta == "busca_stock_actual") {
                 $thumbnail = "<img src='$imageUrl' style='max-width: 80px; border-radius: 4px;' onerror='this.onerror=null;this.src=\"$placeholder\";' />";
                 
                 $cantidad = ($disponible <= 50 ? "<span class='text-danger font-weight-bold'>$disponible</span>" : "<span class='font-weight-bold'>$disponible</span>");
+                $nombre_producto_escaped = htmlspecialchars("$ww[nombre_variedad] ($ww[codigo]$ww[id_interno])", ENT_QUOTES);
+                
                 echo "
-                  <tr class='text-center' style='cursor:pointer'>
+                  <tr class='text-center' style='vertical-align: middle;'>
                     <td>$thumbnail</td>
                     <td>$ww[nombre_variedad] ($ww[codigo]$ww[id_interno])</td>
                     <td>$" . number_format($ww["precio"], 0, ',', '.') . "</td>
                     <td>$cantidad</td>
+                    <td>
+                        <div class='d-flex flex-row justify-content-center' style='gap: 5px;'>
+                            <input type='number' class='form-control' style='width: 80px;' value='1' min='1' id='cantidad-tabla-$ww[id_variedad]'>
+                            <button class='btn btn-primary' onclick='agregarAlCarritoDesdeTabla($ww[id_variedad], \"$nombre_producto_escaped\", $disponible, \"cantidad-tabla-$ww[id_variedad]\")' title='Añadir al carrito'>
+                                <i class='fa fa-cart-plus'></i>
+                            </button>
+                        </div>
+                    </td>
                   </tr>";
             }
         }

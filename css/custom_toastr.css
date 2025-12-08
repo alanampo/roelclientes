@@ -1,0 +1,10 @@
+.toast-success {
+    background-color: #5cb85c !important; /* Solid green */
+    opacity: 1 !important; /* Ensure solid background */
+}
+
+/* Custom position to add top margin */
+.toast-top-right {
+    top: 12px;
+    right: 12px;
+}

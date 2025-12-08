@@ -1,10 +1,28 @@
 let currentTab;
 let max = null;
 let currentReserva = null;
-let productosReserva = [];
+let productosReserva = []; // This array now acts as the shopping cart
 let productosParaReserva = [];
 
 let phpFile = "data_ver_reservas.php";
+
+toastr.options = {
+  "closeButton": true,
+  "debug": false,
+  "newestOnTop": false,
+  "progressBar": true,
+  "positionClass": "toast-top-right",
+  "preventDuplicates": false,
+  "onclick": null,
+  "showDuration": "300",
+  "hideDuration": "1000",
+  "timeOut": "5000",
+  "extendedTimeOut": "1000",
+  "showEasing": "swing",
+  "hideEasing": "linear",
+  "showMethod": "fadeIn",
+  "hideMethod": "fadeOut"
+}
 
 $(document).ready(function () {
     $("#input-cantidad-reserva").on("propertychange input", function (e) {
@@ -79,6 +97,8 @@ function busca_entradas(tabName) {
                     },
                 },
             });
+            // After table is drawn, update cart button display
+            refrescarTablaProductosReserva();
         },
         error: function (jqXHR, estado, error) {
             $("#tabla_entradas").html(
@@ -86,6 +106,38 @@ function busca_entradas(tabName) {
             );
         },
     });
+}
+
+function agregarAlCarritoDesdeTabla(id_variedad, nombre_producto, disponible, inputId) {
+    const cantidad = parseInt($(`#${inputId}`).val());
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+        toastr.error("La cantidad debe ser un número mayor a cero.");
+        return;
+    }
+    if (cantidad > disponible) {
+        toastr.error("La cantidad a reservar no puede ser mayor al stock disponible.");
+        return;
+    }
+
+    let producto_existente = productosReserva.find(p => p.id_variedad == id_variedad);
+    if (producto_existente) {
+        if (producto_existente.cantidad + cantidad > disponible) {
+            toastr.error(`No puedes agregar más de ${disponible} unidades de este producto. Ya tienes ${producto_existente.cantidad} en el carrito.`);
+            return;
+        }
+        producto_existente.cantidad += cantidad;
+    } else {
+        productosReserva.push({
+            id_variedad: id_variedad,
+            nombre: nombre_producto,
+            cantidad: cantidad,
+            disponible: disponible
+        });
+    }
+
+    toastr.success(`Se agregaron ${cantidad} unidad(es) de ${nombre_producto} al carrito.`);
+    refrescarTablaProductosReserva();
 }
 
 function cancelarReserva(id_reserva) {
@@ -106,10 +158,10 @@ function cancelarReserva(id_reserva) {
                 data: { consulta: "cancelar_reserva", id_reserva: id_reserva },
                 success: function (data) {
                     if (data.trim() == "success") {
-                        swal("Cancelaste la Compra correctamente!", "", "success");
+                    toastr.success("Cancelaste la Compra correctamente!");
                         busca_entradas(currentTab);
                     } else {
-                        swal("Ocurrió un error al cancelar la Reserva", data, "error");
+                        toastr.error("Ocurrió un error al cancelar la Reserva", data);
                     }
                 },
             });
@@ -118,10 +170,11 @@ function cancelarReserva(id_reserva) {
 }
 
 function modalReservar() {
-    productosReserva = [];
+    // This function now just opens the modal. 
+    // The table inside is refreshed by refrescarTablaProductosReserva()
+    pone_productos_reserva(); // We still need to populate the dropdown for adding more items
     refrescarTablaProductosReserva();
-    pone_productos_reserva();
-    $("#modal-reservar .box-title").html(`Comprar`);
+    $("#modal-reservar .box-title").html(`Mi Carrito`);
     $("#modal-reservar").modal("show");
     $("#input-cantidad-reserva").focus();
 }
@@ -146,43 +199,39 @@ function pone_productos_reserva() {
 function agregarProductoReserva() {
     let id_variedad = $("#select-producto-reserva").val();
     let cantidad = parseInt($("#input-cantidad-reserva").val());
-    let disponible = parseInt($("#input-cantidad-disponible2").val());
-
-    if (!id_variedad) {
-        swal("Error", "Debes seleccionar un producto.", "error");
+    let producto_maestro = productosParaReserva.find(p => p.id_variedad == id_variedad);
+    
+    if (!id_variedad || !producto_maestro) {
+        toastr.error("Debes seleccionar un producto.");
         return;
     }
     if (isNaN(cantidad) || cantidad <= 0) {
-        swal("Error", "La cantidad debe ser mayor a cero.", "error");
+        toastr.error("La cantidad debe ser mayor a cero.");
         return;
     }
-    if (cantidad > disponible) {
-        swal("Error", "La cantidad a comprar no puede ser mayor al stock disponible.", "error");
+    
+    let producto_existente = productosReserva.find(p => p.id_variedad == id_variedad);
+    let cantidad_ya_en_carrito = producto_existente ? producto_existente.cantidad : 0;
+
+    if (cantidad + cantidad_ya_en_carrito > producto_maestro.disponible) {
+        toastr.error(`No puedes agregar más de ${producto_maestro.disponible} unidades. Ya tienes ${cantidad_ya_en_carrito} en el carrito.`);
         return;
     }
 
-    let producto_existente = productosReserva.find(p => p.id_variedad == id_variedad);
     if (producto_existente) {
         producto_existente.cantidad += cantidad;
     } else {
-        let nombre_producto = $("#select-producto-reserva option:selected").text();
         productosReserva.push({
             id_variedad: id_variedad,
-            nombre: nombre_producto.split('-')[0].trim(),
+            nombre: producto_maestro.nombre_variedad + " (" + producto_maestro.codigo + producto_maestro.id_interno + ")",
             cantidad: cantidad,
-            disponible: disponible
+            disponible: producto_maestro.disponible
         });
     }
     
-    // Actualizar disponible en el selector
-    let producto_maestro = productosParaReserva.find(p => p.id_variedad == id_variedad);
-    producto_maestro.disponible -= cantidad;
-    $('#select-producto-reserva option[value="' + id_variedad + '"]').data('disponible', producto_maestro.disponible);
-    $('#select-producto-reserva option[value="' + id_variedad + '"]').text(`${producto_maestro.nombre_variedad} (${producto_maestro.codigo}${producto_maestro.id_interno}) - Disp: ${producto_maestro.disponible}`);
-    $("#select-producto-reserva").selectpicker("refresh");
     refrescarTablaProductosReserva();
     
-    // Resetear controles
+    // Resetear controles del modal
     $("#select-producto-reserva").val('').selectpicker('refresh');
     $("#input-cantidad-reserva").val('');
     $("#input-cantidad-disponible2").val('');
@@ -191,7 +240,9 @@ function agregarProductoReserva() {
 function refrescarTablaProductosReserva() {
     let tablaBody = $("#tabla-productos-reserva tbody");
     tablaBody.empty();
+    let totalItems = 0;
     productosReserva.forEach((p, index) => {
+        totalItems += p.cantidad;
         let row = `<tr>
             <td>${p.nombre}</td>
             <td>${p.cantidad}</td>
@@ -199,23 +250,21 @@ function refrescarTablaProductosReserva() {
         </tr>`;
         tablaBody.append(row);
     });
+
+    // Update cart button
+    let cartButton = $("#btn-ver-carrito");
+    if (cartButton.length) {
+        let count = productosReserva.length; // Count of distinct items
+        if (count > 0) {
+            cartButton.html(`<i class='fa fa-shopping-cart'></i> CARRITO (${count})`);
+        } else {
+            cartButton.html(`<i class='fa fa-shopping-cart'></i> CARRITO`);
+        }
+    }
 }
 
 function eliminarProductoReserva(index) {
-    let producto_eliminado = productosReserva.splice(index, 1)[0];
-    
-    // Devolver stock al selector
-    let producto_maestro = productosParaReserva.find(p => p.id_variedad == producto_eliminado.id_variedad);
-    producto_maestro.disponible = parseInt(producto_maestro.disponible) + parseInt(producto_eliminado.cantidad);
-    let nombre_maestro = producto_maestro.nombre_variedad + " (" + producto_maestro.codigo + producto_maestro.id_interno + ")";
-    $('#select-producto-reserva option[value="' + producto_eliminado.id_variedad + '"]').data('disponible', producto_maestro.disponible);
-     $('#select-producto-reserva option[value="' + producto_eliminado.id_variedad + '"]').text(`${nombre_maestro} - Disp: ${producto_maestro.disponible}`);
-    $("#select-producto-reserva").selectpicker("refresh");
-    
-    if($("#select-producto-reserva").val() == producto_eliminado.id_variedad){
-        $("#input-cantidad-disponible2").val(producto_maestro.disponible);
-    }
-    
+    productosReserva.splice(index, 1);
     refrescarTablaProductosReserva();
 }
 
@@ -223,7 +272,7 @@ function guardarReserva() {
     const observaciones = $("#input-comentario-reserva").val().trim();
 
     if (productosReserva.length === 0) {
-        swal("Error", "Debes agregar al menos un producto a la reserva.", "error");
+        toastr.error("Debes agregar al menos un producto a la Compra.");
         return;
     }
 
@@ -240,15 +289,16 @@ function guardarReserva() {
         success: function (x) {
             console.log(x)
             if (x.trim() == "success") {
-                swal("Éxito", "La Compra se ha guardado correctamente.", "success");
-                busca_entradas(currentTab);
+                toastr.success("La Compra se ha guardado correctamente.");
+                productosReserva = []; // Clear the cart
+                busca_entradas(currentTab); // Refreshes the view, which will also update the cart button
             } else {
-                swal("Ocurrió un error al guardar la Compra", x, "error");
+                toastr.error("Ocurrió un error al guardar la Compra", x);
                 $("#modal-reservar").modal("show");
             }
         },
         error: function(){
-            swal("Error de conexión", "No se pudo conectar con el servidor", "error");
+            toastr.error("Error de conexión", "No se pudo conectar con el servidor");
             $("#modal-reservar").modal("show");
         }
     });

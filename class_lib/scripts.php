@@ -5,6 +5,7 @@
 <script src="./js/popper.min.js"></script>
 <script src="./js/bootstrap/bootstrap.min.js"></script>
 <script src="./js/bootstrap-select.min.js"></script>
+<script src="node_modules/toastr/build/toastr.min.js"></script>
 <script src="./js/jquery.dataTables.min.js" type="text/javascript"></script>
 <script src="./js/dataTables.bootstrap4.min.js" type="text/javascript"></script>
 <script src="./js/dataTables.responsive.min.js" type="text/javascript"></script>

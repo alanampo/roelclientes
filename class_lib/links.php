@@ -11,6 +11,9 @@
 <link rel="stylesheet" href="css/jquery-ui.css">
 <link rel="stylesheet" href="css/bootstrap-select.min.css">
 
+<link rel="stylesheet" href="node_modules/toastr/build/toastr.min.css">
+<link rel="stylesheet" href="css/custom_toastr.css">
+
 <link rel="stylesheet" href="dist/css/bootstrap-datepicker.css">
 <link rel="stylesheet" type="text/css" href="css/dataTables.bootstrap4.min.css">
 
