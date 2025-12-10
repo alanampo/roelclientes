@@ -18,7 +18,7 @@ $sql = "SELECT
             v.precio_detalle,
             (
               SUM(s.cantidad)
-              - IFNULL((SELECT SUM(e.cantidad) FROM entregas_stock e JOIN reservas_productos r2 ON e.id_reserva = r2.id WHERE r2.id_variedad = v.id AND r2.estado >= 0), 0)
+              - IFNULL((SELECT SUM(e.cantidad) FROM entregas_stock e JOIN reservas_productos r2 ON e.id_reserva_producto = r2.id WHERE r2.id_variedad = v.id AND r2.estado >= 0), 0)
               - IFNULL((SELECT SUM(r.cantidad) FROM reservas_productos r WHERE r.id_variedad = v.id AND r.estado >= 0), 0)
             ) AS disponible_para_reservar,
             ANY_VALUE(av.valor) AS tipo_planta
@@ -174,7 +174,7 @@ $resultado = mysqli_query($link, $sql);
     </table>
 </div>
 
-<!-- Bot¨®n para ver Catalogo -->
+<!-- Botï¿½ï¿½n para ver Catalogo -->
 <button class="ver-catalogo" onclick="window.location.href='index.php'">
     Ver Catalogo
 </button>

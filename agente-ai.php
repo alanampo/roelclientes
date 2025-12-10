@@ -1386,18 +1386,28 @@ SILENT MODE:
 - This tool makes the bot stop responding until user says keywords like "price", "cart", "precio", "carrito", etc.
 
 CART - TOOL USAGE:
-1. When customer asks to add to cart ("agregar al carrito", "add to cart", "aggiungi al carrello", "додати до кошика"):
-   - Use tool "carrito_operar" with action="add_by_name"
+1. When customer asks to ADD to cart ("agregar al carrito", "add to cart", "aggiungi al carrello", "додати до кошика"):
+   - ALWAYS use action="add_by_name" (never use update_qty for adding!)
    - Include: name (product name), qty (quantity, default 1), tier ("retail" or "wholesale")
    - Example: If they asked price of "Monstera" and say "add it", call carrito_operar with {action:"add_by_name", name:"Monstera Deliciosa", qty:1, tier:"retail"}
+   - The system automatically handles if product already exists in cart - it will increment the quantity
 
-2. To view cart: use carrito_operar with action="summary"
+2. When customer asks to CHANGE quantity of existing item:
+   - Use action="update_qty"
+   - Include: name or code, qty (new quantity, not increment)
+   - Example: {action:"update_qty", name:"Monstera Deliciosa", qty:5}
 
-3. IMPORTANT: After any add/update/remove, the function auto-calls summary. DO NOT call it again yourself.
+3. To view cart: use action="summary"
 
-4. Never invent totals or quantities. The tool calculates everything.
+4. To remove item: use action="remove" with name or code
 
-5. If customer says "add it" without prior context, ask which product they want to add.
+5. To clear entire cart: use action="clear"
+
+6. IMPORTANT: After any add/update/remove, the function auto-calls summary. DO NOT call it again yourself.
+
+7. Never invent totals or quantities. The tool calculates everything.
+
+8. If customer says "add it" without prior context, ask which product they want to add.
 
 QUERIES:
 - For price/stock: use consultar_precio_producto_roelplant
@@ -2100,7 +2110,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         } else if (a === 'add') {
           payload = { action: 'add', code: args.code, name: args.name, qty: args.qty, tier: mapTier(args.tier || 'retail'), unit: args.unit, price: args.price, image: args.image };
         } else if (a === 'update_qty') {
-          payload = { action: 'update_qty', code: args.code, qty: args.qty };
+          payload = { action: 'update_qty', code: args.code, name: args.name, qty: args.qty };
         } else if (a === 'remove') {
           payload = { action: 'remove', code: args.code, name: args.name };
         } else if (a === 'clear') {

@@ -405,15 +405,16 @@ switch ($action) {
 
     case 'update_qty': {
         $code = trim((string)($in['code'] ?? ''));
+        $name = trim((string)($in['name'] ?? ''));
         $qty  = (int)($in['qty'] ?? 0);
 
-        if (!$code) {
+        if (!$code && !$name) {
             http_response_code(400);
-            echo json_encode(['status' => 'error', 'error' => 'code_required']);
+            echo json_encode(['status' => 'error', 'error' => 'code_or_name_required']);
             break;
         }
 
-        $idx = find_index_by_code_or_name($cart['items'], $code, null);
+        $idx = find_index_by_code_or_name($cart['items'], $code ?: null, $name ?: null);
         if ($idx < 0) {
             http_response_code(404);
             echo json_encode(['status' => 'error', 'error' => 'item_not_found']);
