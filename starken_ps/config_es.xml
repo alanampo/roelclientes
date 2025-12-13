@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>swastarkencl</name>
+    <displayName><![CDATA[Transportista Starken]]></displayName>
+    <version><![CDATA[3.6.1]]></version>
+    <description><![CDATA[Tus env&iacute;os a cualquier lugar de Chile]]></description>
+    <author><![CDATA[Softwareagil]]></author>
+    <tab><![CDATA[shipping_logistics]]></tab>
+	<confirmUninstall><![CDATA[¿Está seguro de que desea desinstalar este módulo?]]></confirmUninstall>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+	<limited_countries></limited_countries>
+</module>

@@ -1,0 +1,53 @@
+2025-12-10 21:58:44 - RAW INPUT:
+{
+    "input_data": {
+        "email": "pepito@gmail.com",
+        "rut": "12.343.213-4",
+        "user_id": "56"
+    },
+    "session_id": "jaul8eee5mgpi33kafi2la233v",
+    "session_keys": [
+        "nombre_de_usuario",
+        "clave",
+        "id_usuario",
+        "id_cliente",
+        "roel-clientes-token",
+        "cart_user_56"
+    ]
+}
+
+2025-12-10 21:58:44 - Reading cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "cart_items_count": 1,
+    "session_id": "jaul8eee5mgpi33kafi2la233v",
+    "all_session_keys": [
+        "nombre_de_usuario",
+        "clave",
+        "id_usuario",
+        "id_cliente",
+        "roel-clientes-token",
+        "cart_user_56",
+        "user_email",
+        "client_rut"
+    ]
+}
+
+2025-12-10 21:58:44 - Sending to Flow:
+{
+    "params": {
+        "commerceOrder": "ROEL-20251210215844-EB7856",
+        "subject": "Pedido Roelplant - 1 productos",
+        "currency": "CLP",
+        "amount": 5355,
+        "email": "pepito@gmail.com",
+        "paymentMethod": 9,
+        "urlConfirmation": "https:\/\/plantinera.cl\/bot-alan\/public\/cart\/flow_confirm.php",
+        "urlReturn": "https:\/\/plantinera.cl\/bot-alan\/public\/cart\/flow_return.php",
+        "optional": "{\"rut\":\"12.343.213-4\"}"
+    },
+    "api_key": "29FCFEE8-A...",
+    "sandbox": false
+}
+

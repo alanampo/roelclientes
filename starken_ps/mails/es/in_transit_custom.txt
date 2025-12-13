@@ -1,0 +1,19 @@
+ 
+
+{shop_url}
+
+Hola {firstname} {lastname},
+
+ID de Pedido {order_name} - En Transito
+
+Su pedido con la referencia {order_name} está en camino.
+
+Puede rastrear su paquete usando el siguiente enlace: {followup_link}
+
+Siga su pedido y descargue su factura en nuestra tienda, vaya a la sección [Historial y detalles del pedido]({history_url}) de su cuenta de cliente.
+
+Si tiene una cuenta de invitado, puede seguir su pedido a través de la sección [Guest Tracking]({guest_tracking_url}) en nuestra tienda.
+
+[{shop_name}]({shop_url})
+
+Powered by [PrestaShop](https://www.prestashop.com/?utm_source=marchandprestashop&utm_medium=e-mail&utm_campaign=footer_1-7)

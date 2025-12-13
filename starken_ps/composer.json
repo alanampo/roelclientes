@@ -1,0 +1,18 @@
+{
+    "require": {
+        "php-curl-class/php-curl-class": "^8.8"
+    },
+    "autoload": {
+        "files": [
+            "classes/SwastarkenclState.php",
+            "classes/SwastarkenclDocumentType.php",
+            "classes/SwastarkenclDeliveryType.php",
+            "classes/SwastarkenclServiceType.php",
+            "classes/SwastarkenclPaymentType.php",
+            "classes/SwastarkenclCarrier.php",
+            "classes/SwastarkenclEmision.php",
+            "classes/SwastarkenclCustomersAgency.php",
+            "classes/SwastarkenclLogs.php"
+        ]
+    }
+}

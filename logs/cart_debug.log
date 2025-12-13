@@ -52,3 +52,144 @@
     "session_id": "48u6tf8t9rbrrthvnknq36vv6l"
 }
 
+2025-12-10 21:28:21 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:38:05 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:38:30 - ADD OPERATION:
+{
+    "user_id": 56,
+    "name": "MONSTERA DELICIOSA",
+    "code": "S27",
+    "qty": 1,
+    "price": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v",
+    "current_cart_items_count": 0
+}
+
+2025-12-10 21:38:30 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:38:30 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:38:31 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:57:55 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:02 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:02 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:12 - ADD OPERATION:
+{
+    "user_id": 56,
+    "name": "MONSTERA DELICIOSA",
+    "code": "S27",
+    "qty": 2,
+    "price": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v",
+    "current_cart_items_count": 0
+}
+
+2025-12-10 21:58:12 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 3570,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:12 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 3570,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:26 - ADD OPERATION:
+{
+    "user_id": 56,
+    "name": "MONSTERA DELICIOSA",
+    "code": "S27",
+    "qty": 1,
+    "price": 1785,
+    "session_id": "jaul8eee5mgpi33kafi2la233v",
+    "current_cart_items_count": 1
+}
+
+2025-12-10 21:58:26 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 5355,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
+2025-12-10 21:58:26 - Saving cart:
+{
+    "user_id": 56,
+    "cart_key": "cart_user_56",
+    "items_count": 1,
+    "total": 5355,
+    "session_id": "jaul8eee5mgpi33kafi2la233v"
+}
+
