@@ -25,7 +25,8 @@
   const sumTotal = $('sumTotal');
 
   const customerBox = $('customerBox');
-const notesEl = $('notes');
+  const notesEl = $('notes');
+  const btnMakeReservation = $('btnMakeReservation');
   const btnCreateOrder = $('btnCreateOrder');
   const orderResult = $('orderResult');
 
@@ -175,6 +176,66 @@ const notesEl = $('notes');
     `;
   }
 
+  async function makeReservation() {
+    hideAlert();
+    orderResult.classList.add('hidden');
+    orderResult.textContent = '';
+
+    if (!state.me) {
+      showAlert('Debes iniciar sesión para hacer la compra.', 'danger');
+      return;
+    }
+
+    if (!state.csrf) await refreshMe();
+
+    // Obtener el carrito actual desde la BD
+    const cartResp = await fetchJson(buildApiUrl('cart/get.php'), { method: 'GET' });
+    const cart = cartResp.cart || {};
+    const items = cart.items || [];
+
+    if (items.length === 0) {
+      showAlert('Tu carrito está vacío.', 'warning');
+      return;
+    }
+
+    // Preparar payload para la reserva
+    const reservationItems = items.map(it => ({
+      id_variedad: it.id_variedad || 0,
+      qty: it.qty || 0,
+      nombre: it.nombre || '',
+      referencia: it.referencia || '',
+      unit_price_clp: it.unit_price_clp || 0,
+      comentario: ''
+    }));
+
+    const notes = notesEl ? String(notesEl.value || '').trim() : '';
+
+    try {
+      const j = await fetchJson(buildApiUrl('order/create_reservation.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify({
+          items: reservationItems,
+          notes,
+          t: Date.now(),
+        }),
+      });
+
+      showAlert('✓ Compra registrada correctamente. Tu reserva ha sido creada y el stock ha sido actualizado.', 'success');
+
+      // Refrescar carrito (debería quedar vacío)
+      await loadCart();
+
+      // Limpiar notas
+      if (notesEl) notesEl.value = '';
+    } catch (e) {
+      showAlert(`Error al procesar compra: ${String(e.message || e)}`, 'danger');
+    }
+  }
+
   async function createOrder() {
     hideAlert();
     orderResult.classList.add('hidden');
@@ -233,6 +294,13 @@ const notesEl = $('notes');
     });
 
     btnLogout?.addEventListener('click', () => logout().catch((e) => showAlert(String(e.message || e), 'danger')));
+
+    btnMakeReservation?.addEventListener('click', () => {
+      btnMakeReservation.disabled = true;
+      makeReservation()
+        .catch((e) => showAlert(String(e.message || e), 'danger'))
+        .finally(() => { btnMakeReservation.disabled = false; });
+    });
 
     btnCreateOrder?.addEventListener('click', () => {
       btnCreateOrder.disabled = true;

@@ -167,8 +167,12 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
   $st->bind_param('i', $customerId);
   $st->execute();
   $res = $st->get_result();
-  if ($row = $res->fetch_assoc()) return (int)$row['id'];
+  $row = $res->fetch_assoc();
   $st->close();
+
+  if ($row) {
+    return (int)$row['id'];
+  }
 
   // 2) crear
   $q2 = "INSERT INTO " . CART_TABLE . " (id_cliente, status) VALUES (?, 'open')";
@@ -177,8 +181,9 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
   if (!$st2->execute()) {
     json_out(['ok'=>false,'error'=>'No se pudo crear carrito'], 500);
   }
+  $insertId = (int)$st2->insert_id;
   $st2->close();
-  return (int)$st2->insert_id;
+  return $insertId;
 }
 
 

@@ -3,6 +3,7 @@
 // Checkout: genera pedido interno y abre WhatsApp con el detalle.
 // Ajustado para calzar con assets/checkout.js + assets/checkout.css.
 
+require __DIR__ . '/config/routes.php';
 require __DIR__ . '/api/_bootstrap.php';
 header_remove('Content-Type');
 header('Content-Type: text/html; charset=utf-8');
@@ -14,7 +15,7 @@ $customerName = '';
 if ($logged) {
   $db = db();
   $cid = (int)$_SESSION['customer_id'];
-  $stmt = $db->prepare('SELECT nombre FROM customers WHERE id = ? LIMIT 1');
+  $stmt = $db->prepare('SELECT nombre FROM clientes WHERE id_cliente = ? LIMIT 1');
   if ($stmt) {
     $stmt->bind_param('i', $cid);
     $stmt->execute();
@@ -31,7 +32,7 @@ if ($logged) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Checkout - Roelplant</title>
   <!-- checkout.css incluye layout propio, evitamos styles.css del catálogo para no romper el diseño -->
-  <link rel="stylesheet" href="assets/checkout.css" />
+  <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/checkout.css'), ENT_QUOTES, 'UTF-8'); ?>" />
 </head>
 <body>
 
@@ -100,6 +101,7 @@ if ($logged) {
         <textarea id="notes" rows="4" placeholder="Ej: dejar en portería / horario de retiro / etc."></textarea>
 
         <div class="footer-actions">
+          <button id="btnMakeReservation" class="btn btn-success" type="button">Pagar</button>
           <button id="btnCreateOrder" class="btn btn-primary" type="button">Enviar pedido por WhatsApp</button>
         </div>
 
@@ -115,6 +117,6 @@ if ($logged) {
       customer_name: <?= json_encode($customerName, JSON_UNESCAPED_UNICODE) ?>
     };
   </script>
-  <script src="assets/checkout.js?v=4.5"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/checkout.js?v=4.5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>
