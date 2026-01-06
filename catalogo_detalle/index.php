@@ -1,4 +1,5 @@
 <?php
+// catalogo_detalle/index.php
 // ===== No cache =====
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
@@ -8,12 +9,28 @@ ini_set('display_errors',1);
 ini_set('display_startup_errors',1);
 error_reporting(E_ALL);
 
-require __DIR__ . '/../class_lib/class_conecta_mysql.php';
+// BD STOCK (NO SE MODIFICA)
+$conectaPaths = [
+  __DIR__ . '/../class_lib/class_conecta_mysql.php',
+  __DIR__ . '/../../class_lib/class_conecta_mysql.php',
+  __DIR__ . '/../../../class_lib/class_conecta_mysql.php',
+];
+$found = false;
+foreach ($conectaPaths as $p) {
+  if (is_file($p)) { require $p; $found = true; break; }
+}
+if (!$found) {
+  http_response_code(500);
+  die("No se encontró class_lib/class_conecta_mysql.php. Revisa la ruta relativa.");
+}
 $link = mysqli_connect($host,$user,$password,$dbname);
 if(!$link) die("Error conexión: ".mysqli_connect_error());
 mysqli_set_charset($link,'utf8');
 
-/* -------- Query: IGUAL a la del mayorista, pero usada para catálogo detalle -------- */
+/* ====== CONFIG OGIMG (cambia este secreto por uno largo y aleatorio) ====== */
+const OGIMG_SECRET = 'CAMBIA-ESTO-POR-UN-SECRETO-LARGO-Y-ALEATORIO-32+CHARS';
+
+/* -------- Query: catálogo detalle (solo lectura a tu BD stock) -------- */
 $sql = "
 SELECT
   sv.id_variedad,
@@ -28,7 +45,6 @@ SELECT
   ANY_VALUE(v.descripcion)      AS descripcion
 FROM
 (
-  /* === RESUMEN POR VARIEDAD, ADAPTADO A LA NUEVA BD (id_reserva_producto) === */
   SELECT
     v.id                                           AS id_variedad,
     t.nombre                                       AS tipo,
@@ -38,7 +54,6 @@ FROM
     v.precio_detalle,
     SUM(s.cantidad)                                AS cantidad,
 
-    /* reservas pendientes: estados 0 y 1 */
     IFNULL((
       SELECT SUM(r.cantidad)
       FROM reservas_productos r
@@ -46,7 +61,6 @@ FROM
         AND (r.estado = 0 OR r.estado = 1)
     ),0) AS cantidad_reservada,
 
-    /* entregado: estado 2, usando la nueva columna id_reserva_producto */
     IFNULL((
       SELECT SUM(e.cantidad)
       FROM entregas_stock e
@@ -55,7 +69,6 @@ FROM
         AND r2.estado = 2
     ),0) AS cantidad_entregada,
 
-    /* DISPONIBLE = cantidad - reservada(0,1) - entregada(2) */
     (
       SUM(s.cantidad)
       - IFNULL((
@@ -85,10 +98,7 @@ LEFT JOIN imagenes_variedades img  ON img.id_variedad = sv.id_variedad
 LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = sv.id_variedad
 LEFT JOIN atributos_valores av     ON av.id = avv.id_atributo_valor
 LEFT JOIN atributos a              ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
-
-/* Solo productos con algo disponible para reservar */
 WHERE sv.disponible_para_reservar > 0
-
 GROUP BY sv.id_variedad
 ORDER BY sv.disponible_para_reservar DESC
 LIMIT 200
@@ -130,11 +140,69 @@ $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' :
 $baseUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 $priceValidUntil = (new DateTime('+14 days'))->format('Y-m-d');
 
+/* -------- OpenGraph dinámico por ?ref= (con proxy ogimg.php) -------- */
+$refParam = isset($_GET['ref']) ? trim((string)$_GET['ref']) : '';
+$ogTitle = 'Catálogo de Plantines al Detalle | Roelplant';
+$ogDesc  = 'Plantines ornamentales al detalle con envío a todo Chile. Interior, exterior y más.';
+$ogUrl   = $catalogoBase;
+$canonicalUrl = $catalogoBase;
+$ogImage = 'https://roelplant.cl/assets/images/logo-fondo-negroV2.png';
+
+if($refParam !== ''){
+  $refParamClean = $refParam;
+  $refParamUrl   = rawurlencode($refParamClean);
+  $ogUrl = $catalogoBase.'?ref='.$refParamUrl;
+  $canonicalUrl = $ogUrl;
+
+  $allForRef = array_merge(
+    $interior,$exterior,$cubre_suelos,$hierbas,$arboles,
+    $packs_interior,$packs_exterior,$invitro_interior,$semillas
+  );
+  $found = null;
+  foreach($allForRef as $pp){
+    if((string)$pp['referencia'] === $refParamClean){ $found = $pp; break; }
+  }
+
+  if($found){
+    $nameOg  = (string)($found['variedad'] ?? '');
+    $stockOg = (int)($found['disponible_para_reservar'] ?? 0);
+    $pdOg = isset($found['precio_detalle']) ? number_format(((float)$found['precio_detalle'])*1.19,0,',','.') : '';
+    $pmOg = number_format(((float)($found['precio'] ?? 0))*1.19,0,',','.');
+    $precioVisibleOg = $pdOg ? ('$'.$pdOg.' (Detalle, imp. incl.)') : ('$'.$pmOg.' (Mayorista, imp. incl.)');
+    $descOg = trim((string)($found['descripcion'] ?? ''));
+    $descOg = $descOg ? truncar($descOg, 140) : '';
+
+    $ogTitle = ($nameOg !== '' ? ($nameOg.' | Roelplant') : $ogTitle);
+
+    $parts = [];
+    if($precioVisibleOg) $parts[] = 'Precio: '.$precioVisibleOg;
+    $parts[] = 'Stock: '.$stockOg;
+    $parts[] = 'Ref: '.$refParamClean;
+    if($descOg) $parts[] = $descOg;
+    $ogDesc = truncar(implode(' · ', $parts), 240);
+
+    $sig = hash_hmac('sha256', $refParamClean, OGIMG_SECRET);
+    $ogImage = 'https://clientes.roelplant.cl/ogimg.php?ref='.$refParamUrl.'&sig='.$sig;
+  }
+}
+
+$ogTitleH = htmlspecialchars($ogTitle, ENT_QUOTES, 'UTF-8');
+$ogDescH  = htmlspecialchars($ogDesc, ENT_QUOTES, 'UTF-8');
+$ogUrlH   = htmlspecialchars($ogUrl, ENT_QUOTES, 'UTF-8');
+$canonicalH = htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8');
+$ogImageH = htmlspecialchars($ogImage, ENT_QUOTES, 'UTF-8');
+
 /* -------- Render Cards -------- */
 function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil):void{
   foreach($ps as $p){
-    $pd = isset($p['precio_detalle']) ? number_format(((float)$p['precio_detalle'])*1.19,0,',','.') : '';
-    $pm = number_format(((float)$p['precio'])*1.19,0,',','.');
+    $pdNum = isset($p['precio_detalle']) ? (float)$p['precio_detalle'] : 0;
+    $pmNum = isset($p['precio']) ? (float)$p['precio'] : 0;
+
+    $pd = $pdNum>0 ? number_format($pdNum*1.19,0,',','.') : '';
+    $pm = number_format($pmNum*1.19,0,',','.');
+
+    $unitPriceClpInt = (int)round(($pdNum>0?$pdNum:$pmNum)*1.19);
+
     $imgFile = !empty($p['imagen'])? htmlspecialchars($p['imagen'],ENT_QUOTES,'UTF-8') : '';
     $img = $imgFile ? "https://control.roelplant.cl/uploads/variedades/{$imgFile}" : "https://via.placeholder.com/600x400?text=Imagen+pendiente";
     $imgCb = $img.(strpos($img,'?')===false?'?v=':'&v=').time();
@@ -149,16 +217,26 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 
     $name  = htmlspecialchars($p['variedad'],ENT_QUOTES,'UTF-8');
     $stock = (int)$p['disponible_para_reservar'];
+    $idVar = (int)$p['id_variedad'];
+
     $prodUrl = $catalogoBase.'?ref='.$refUrl;
+    $prodUrlAttr = htmlspecialchars($prodUrl, ENT_QUOTES, 'UTF-8');
+
+    $precioVisibleTxt = $pd ? ('$'.$pd.' (Detalle, imp. incl.)') : ('$'.$pm.' (Mayorista, imp. incl.)');
+    $precioVisibleAttr = htmlspecialchars($precioVisibleTxt, ENT_QUOTES, 'UTF-8');
     ?>
     <div class="producto" role="button" tabindex="0"
          aria-label="Ver detalle <?= $name ?>"
+         data-idvariedad="<?= (int)$idVar ?>"
          data-nombre="<?= $name ?>"
          data-ref="<?= $ref ?>"
          data-stock="<?= $stock ?>"
          data-preciodetalle="<?= $pd ?>"
          data-preciomayorista="<?= $pm ?>"
-         data-imagen="<?= $img ?>"
+         data-unitpriceclp="<?= (int)$unitPriceClpInt ?>"
+         data-preciovisible="<?= $precioVisibleAttr ?>"
+         data-imagen="<?= htmlspecialchars($img,ENT_QUOTES,'UTF-8') ?>"
+         data-url="<?= $prodUrlAttr ?>"
          data-descripcion="<?= $dAttr ?>"
          onclick="openProductoModal(this)"
          onkeypress="if(event.key==='Enter'){openProductoModal(this);}">
@@ -177,10 +255,9 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 
       <div class="acciones">
         <button class="btn-detalle" onclick="event.stopPropagation(); openProductoModal(this.closest('.producto'));">Ver detalle</button>
-        <button class="btn-reservar" onclick="event.stopPropagation(); window.location.href='https://clientes.roelplant.cl/';">Reservar</button>
+        <button class="btn-reservar" onclick="event.stopPropagation(); addToCartFromCard(this.closest('.producto'), 1);">Agregar al carrito</button>
       </div>
 
-      <!-- JSON-LD por producto -->
       <script type="application/ld+json">
       {
         "@context":"https://schema.org",
@@ -196,7 +273,7 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
           "@type":"Offer",
           "url": <?= json_encode($prodUrl) ?>,
           "priceCurrency":"CLP",
-          "price": <?= json_encode($pd ?: $pm) ?>,
+          "price": <?= json_encode($unitPriceClpInt) ?>,
           "availability": "https://schema.org/<?= $stock>0?'InStock':'OutOfStock' ?>",
           "itemCondition":"https://schema.org/NewCondition",
           "priceValidUntil": <?= json_encode($priceValidUntil) ?>,
@@ -211,6 +288,25 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '8850593125018234');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=8850593125018234&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
+
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-B13EZZR4R7"></script>
 <script>
@@ -233,7 +329,7 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 <link rel="icon" type="image/png" sizes="32x32" href="https://roelplant.cl/assets/images/favicon-128x128.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://roelplant.cl/assets/images/favicon-128x128.png">
 
-<link rel="canonical" href="https://clientes.roelplant.cl/catalogo_detalle/">
+<link rel="canonical" href="<?= $canonicalH ?>">
 
 <title>Catálogo de Plantines al Detalle | Roelplant</title>
 <meta name="description" content="Plantines ornamentales al detalle: interior, exterior, cubresuelos y más. Despacho a todo Chile. Compra mínima 5 plantines. Vivero y plantinera en Quillota.">
@@ -243,17 +339,19 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Catálogo de Plantines al Detalle | Roelplant">
-<meta property="og:description" content="Plantines ornamentales al detalle con envío a todo Chile. Interior, exterior y más.">
-<meta property="og:url" content="https://clientes.roelplant.cl/catalogo_detalle/">
+<meta property="og:title" content="<?= $ogTitleH ?>">
+<meta property="og:description" content="<?= $ogDescH ?>">
+<meta property="og:url" content="<?= $ogUrlH ?>">
 <meta property="og:site_name" content="Roelplant">
-<meta property="og:image" content="https://roelplant.cl/assets/images/logo-fondo-negroV2.png">
+<meta property="og:image" content="<?= $ogImageH ?>">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="800">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Catálogo de Plantines al Detalle | Roelplant">
-<meta name="twitter:description" content="Plantines ornamentales al detalle con despacho a todo Chile.">
-<meta name="twitter:image" content="https://roelplant.cl/assets/images/logo-fondo-negroV2.png">
+<meta name="twitter:title" content="<?= $ogTitleH ?>">
+<meta name="twitter:description" content="<?= $ogDescH ?>">
+<meta name="twitter:image" content="<?= $ogImageH ?>">
 
 <!-- JSON-LD (Organization + WebSite) -->
 <script type="application/ld+json">
@@ -311,119 +409,27 @@ foreach($all as $p){
 }
 </script>
 
-<style>
-:root{--brand:#27ae60;--ink:#2c3e50;--menu:#1f7a4e}
-*{box-sizing:border-box}
-body{font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;background:#f4f4f4;padding:20px}
-h1{text-align:center;color:var(--ink);font-size:2.2em;margin:12px 0 30px}
-h2{text-align:center;color:var(--ink);margin:40px 0 20px;scroll-margin-top:96px}
-
-/* Grid */
-.catalogo{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;max-width:1400px;margin:0 auto}
-@media (min-width:1200px){.catalogo{grid-template-columns:repeat(4,minmax(0,1fr))}}
-
-/* Card flex */
-.producto{display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.08);padding:16px;text-align:center;transition:transform .18s ease,box-shadow .18s ease;border-top:5px solid var(--brand);cursor:pointer;min-height:420px;overflow:hidden}
-.producto:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.12)}
-.img-wrap{background:#f7f7f7;border-radius:10px;overflow:hidden;padding:6px;margin-bottom:12px}
-.producto img{width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;display:block}
-.contenido{display:flex;flex-direction:column;gap:6px}
-.variedad{text-transform:uppercase;font-weight:800;color:var(--brand);margin:4px 0 6px;font-size:1.06em;line-height:1.2;min-height:2.6em}
-.producto p{color:#555;margin:0}
-.descripcion-snippet{font-size:.95em;color:#3e3e3e}
-
-/* Acciones */
-.acciones{margin-top:auto;display:flex;gap:12px;justify-content:space-between;padding:12px 10px 0;flex-wrap:wrap}
-.btn-detalle,.btn-reservar{background:var(--brand);color:#fff;padding:10px 14px;border:0;border-radius:10px;cursor:pointer;min-width:120px;height:40px;display:inline-flex;align-items:center;justify-content:center}
-.btn-detalle{background:#2d6fb6}.btn-detalle:hover{background:#1f6690}.btn-reservar:hover{background:#1e8a4c}
-@media (min-width:981px){
-  .btn-detalle,.btn-reservar{
-    flex:0 0 46%;max-width:46%;min-width:auto;height:36px;padding:8px 0;font-size:14px
-  }
-}
-
-/* Ver listado */
-.ver-listado{display:block;width:fit-content;margin:32px auto 8px;padding:12px 20px;background:#2d6fb6;color:#fff;border:0;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.12)}
-.ver-listado:hover{background:#1f6690}
-
-/* Modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:10000;padding:20px}
-.modal.open{display:flex}
-.modal-content{background:#fff;border-radius:14px;max-width:920px;width:100%;padding:20px;position:relative;display:grid;grid-template-columns:1fr 1.2fr;gap:20px}
-.modal-close{position:absolute;top:8px;right:10px;font-size:28px;line-height:28px;border:0;background:transparent;cursor:pointer}
-.modal img{width:100%;border-radius:10px;object-fit:contain;aspect-ratio:4/3;background:#f7f7f7;padding:6px}
-.modal h3{margin:0 0 6px;color:#2c3e50}.modal p{margin:6px 0;color:#333}
-.modal .modal-desc{white-space:pre-wrap;border-top:1px dashed #ddd;margin-top:10px;padding-top:10px;color:#444}
-.modal .acciones-modal{margin-top:12px;display:flex;gap:8px}
-@media (max-width:720px){
-  .modal{padding:12px}
-  .modal-content{grid-template-columns:1fr;width:92vw;max-height:88vh;overflow:auto;padding:16px;gap:12px}
-  .modal img{aspect-ratio:1/1;max-height:36vh;padding:4px}
-  .modal .acciones-modal{
-    position:sticky;bottom:0;background:#fff;padding-top:8px;margin-top:12px;
-    box-shadow:0 -6px 12px rgba(0,0,0,.06);gap:10px;flex-direction:column
-  }
-  .modal .acciones-modal .btn-reservar,
-  .modal .acciones-modal .btn-detalle{width:100%}
-}
-
-/* Burbujas */
-.whatsapp-bubble,.ig-bubble{
-  position:fixed;bottom:20px;width:56px;height:56px;display:flex;
-  align-items:center;justify-content:center;border-radius:50%;cursor:pointer;
-  z-index:9000;box-shadow:0 4px 8px rgba(0,0,0,.3)
-}
-.whatsapp-bubble{background:#25D366;left:20px}
-.whatsapp-bubble img{width:32px;height:32px}
-.ig-bubble{
-  right:20px;
-  background:linear-gradient(45deg,#f58529,#dd2a7b,#8134af,#515bd4)
-}
-.ig-bubble img{width:28px;height:28px}
-@media (max-width:980px){.whatsapp-bubble{bottom:84px;left:20px}}
-@media (min-width:981px){
-  .whatsapp-bubble{left:auto;right:20px;bottom:20px}
-  .ig-bubble{right:20px;bottom:90px}
-}
-
-/* Menú lateral + móvil */
-.tech-menu{
-  position:fixed;top:88px;left:20px;width:260px;background:#fff;
-  border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.08);
-  padding:12px;z-index:9500
-}
-.tech-menu h3{margin:6px 8px 8px;font-size:16px;color:var(--ink)}
-.tech-menu ul{list-style:none;margin:0;padding:0;max-height:70vh;overflow:auto}
-.tech-menu a{
-  display:block;padding:10px 12px;text-decoration:none;color:#334155;border-radius:10px
-}
-.tech-menu a.active,.tech-menu a:hover{background:#eaf7f0;color:var(--menu)}
-.tech-menu .divider{border-top:1px solid #eee;margin:8px 0}
-body{padding-left:300px}
-@media (max-width:980px){
-  body{padding-left:0}
-  h2{scroll-margin-top:76px}
-  .catalogo{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-  .menu-toggle{
-    position:sticky;top:8px;z-index:9600;margin:0 auto 10px;display:flex;
-    gap:8px;align-items:center;justify-content:center;background:#1f7a4e;
-    color:#fff;border:0;border-radius:999px;padding:10px 16px;font-weight:600;
-    box-shadow:0 6px 16px rgba(0,0,0,.12)
-  }
-  .menu-toggle svg{width:18px;height:18px}
-  .tech-menu{
-    position:fixed;left:12px;right:12px;top:64px;width:auto;margin:0;
-    border-radius:14px;transform:translateY(-130%);transition:transform .25s ease;
-    max-height:72vh;overflow:auto
-  }
-  .tech-menu.open{transform:translateY(0)}
-}
-@media (prefers-reduced-motion:reduce){
-  *{transition:none!important;scroll-behavior:auto!important}
-}
-</style>
+<link rel="stylesheet" href="assets/styles.css?v=4">
 </head>
 <body>
+
+<!-- Topbar -->
+<div class="topbar" role="banner">
+  <div class="brand">
+    <img src="https://roelplant.cl/assets/images/favicon-128x128.png" alt="Roelplant">
+    <strong>Roelplant · Catálogo detalle</strong>
+  </div>
+  <div class="actions">
+    <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
+      Carrito <span class="badge" id="cartCount">0</span>
+    </button>
+    <a class="btn-top" id="btnAccount" href="profile.php" style="display:none">Mi perfil</a>
+    <a class="btn-top" id="btnOrders" href="my_orders.php" style="display:none">Mis pedidos</a>
+    <button class="btn-top primary" id="btnAuth" type="button" onclick="openAuthModal()">Ingresar / Registrarse</button>
+    <button class="btn-top danger" id="btnLogout" type="button" style="display:none" onclick="doLogout()">Salir</button>
+  </div>
+</div>
+
 <h1>Catálogo Al detalle Roelplant</h1>
 
 <button class="menu-toggle" id="menuToggle" aria-controls="techMenu" aria-expanded="false" style="display:none">
@@ -432,10 +438,6 @@ body{padding-left:300px}
   </svg>
   Filtros
 </button>
-
-<div class="whatsapp-bubble" onclick="window.open('https://wa.me/56933217944?text=Estoy%20viendo%20el%20cat%C3%A1logo%20de%20stock%20semanal%20y%20me%20gustar%C3%ADa%20realizar%20un%20pedido','_blank')">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
-</div>
 
 <?php
 $secciones=[
@@ -469,21 +471,17 @@ $secciones=[
 
 <button class="ver-listado" onclick="window.location.href='catalogo_tabla.php?v=<?php echo time(); ?>'">Ver listado</button>
 
-<!-- Nota Final -->
+<!-- Nota Final (sin cambios) -->
 <div style="max-width: 900px; margin: 24px auto 40px; padding: 20px; background-color: #fffbe6; border: 2px dashed #f39c12; border-radius: 10px; color: #555;">
   <h3 style="color: #d35400; margin: 0 0 10px;">📌 Nota Importante sobre los Pedidos</h3>
-
-  <p><strong>🌿 Catálogo Detalle:</strong> Desde 5 plantines. Envíos disponibles a todo Chile con Starken y otros couriers. Todos los envíos deben ser previamente cancelados.
+  <p><strong>🌿 Catálogo Detalle:</strong> Desde 5 plantines. Envíos disponibles a todo Chile con Starken y otros couriers. Todos los envíos deben ser previamente cancelados. Los envíos son todos por pagar al courier seleccionado.
     <a href="https://roelplant.cl/terminos/" target="_blank" rel="noopener">Revisa nuestros Términos y Condiciones</a>.
   </p>
-
   <p><strong>📦 Catálogo Mayorista:</strong> A partir de 100 plantines accedes al precio mayorista. Envíos a todo Chile con Starken y otros operadores logísticos. Todos los envíos deben ser previamente cancelados.
     Para pedidos de producción, el cliente debe respetar la fecha de retiro o recepción comprometida.
     <a href="https://clientes.roelplant.cl/catalogo_mayorista/" target="_blank" rel="noopener">Ver Catálogo Mayorista</a>.
   </p>
-
   <hr style="border:0;border-top:1px dashed #f39c12; margin:16px 0">
-
   <h4 style="color:#b24c00; margin: 12px 0 6px;">🧪 Raíz en plantines: control de calidad y garantía</h4>
   <ul style="margin:0 0 10px 18px; padding:0;">
     <li><strong>Control de salida:</strong> Todos los plantines se revisan; deben presentar raíz funcional (blanca o parda sana). Algunas especies tienen raíces finas o cortas por fisiología.</li>
@@ -491,14 +489,12 @@ $secciones=[
     <li><strong>Garantía DOA 24 h:</strong> Si un plantín llega <em>sin raíz viable</em>, reporta dentro de 24 horas desde la entrega con evidencia. Opciones: <u>reposición</u> en la próxima salida o <u>nota de crédito</u> por la unidad observada.</li>
     <li><strong>Exclusiones:</strong> Daños por apertura tardía, riego inapropiado, estrés térmico del destinatario, o manipulación posterior al arribo.</li>
   </ul>
-
   <h4 style="color:#b24c00; margin: 12px 0 6px;">🧫 Plantines in vitro: tamaño y etapa de aclimatación</h4>
   <ul style="margin:0 0 10px 18px; padding:0;">
     <li><strong>Tamaño comercial:</strong> In vitro se entregan típicamente entre <strong>2–6 cm</strong> según especie y lote. Son <em>etapa juvenil</em> y requieren aclimatación.</li>
     <li><strong>Aclimatación recomendada (2–4 semanas):</strong> Sombra 50–60%, riego suave/nebulizado, sustrato aireado. Sin fertilizar la primera semana; luego dosis bajas.</li>
     <li><strong>Alternativas de tamaño:</strong> Si necesitas mayor tamaño, podemos programar <em>precrecimiento</em> bajo pedido. <strong>Lead time estimado: 6–10 semanas</strong> sujeto a especie y cupo.</li>
   </ul>
-
   <h4 style="color:#b24c00; margin: 12px 0 6px;">📷 Procedimiento de recepción</h4>
   <ol style="margin:0 0 10px 18px; padding:0;">
     <li>Abrir cajas al recibir. No dejar en vehículo o sol directo.</li>
@@ -506,16 +502,12 @@ $secciones=[
     <li>Hidratar y estabilizar a sombra liviana.</li>
     <li>Reportar incidencias con evidencia dentro de <strong>24 h</strong>.</li>
   </ol>
-
   <p style="margin:10px 0 0 0; font-size: 13px; color:#6a5a00;">
     <strong>Nota técnica:</strong> Tamaño y masa radicular pueden variar por especie, temporada y lote. El enraizamiento continúa y se expande tras el trasplante si se siguen las recomendaciones de aclimatación.
   </p>
 </div>
 
-<div class="ig-bubble" onclick="window.open('https://instagram.com/roelplant','_blank')">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="IG">
-</div>
-
+<!-- MODAL DETALLE PRODUCTO -->
 <div id="productoModal" class="modal" aria-hidden="true">
   <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <button class="modal-close" onclick="closeProductoModal()" aria-label="Cerrar">×</button>
@@ -528,95 +520,87 @@ $secciones=[
       <p id="mPrecioMayorista"></p>
       <div id="mDesc" class="modal-desc"></div>
       <div class="acciones-modal">
-        <button class="btn-reservar" onclick="window.location.href='https://clientes.roelplant.cl/';">Reservar</button>
+        <div class="qty-ctl">
+          <button type="button" onclick="chgModalQty(-1)">−</button>
+          <input class="inp" id="mQty" type="number" min="1" value="1">
+          <button type="button" onclick="chgModalQty(1)">+</button>
+        </div>
+        <button class="btn-reservar" onclick="addToCartCurrent()">Agregar al carrito</button>
         <button class="btn-detalle" onclick="closeProductoModal()">Cerrar</button>
+      </div>
+      <div class="notice">Para agregar al carrito debes iniciar sesión con tu correo.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AUTH -->
+<div id="authModal" class="modal" aria-hidden="true">
+  <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <button class="modal-close" onclick="closeAuthModal()" aria-label="Cerrar">×</button>
+    <h3 id="authTitle" style="margin:0 0 10px;color:#111827">Ingresar / Registrarse</h3>
+    <div class="tabs">
+      <button class="tab-btn active" id="tabLogin" onclick="setAuthTab('login')">Ingresar</button>
+      <button class="tab-btn" id="tabRegister" onclick="setAuthTab('register')">Registrarse</button>
+    </div>
+
+    <div id="authErr" class="err" style="display:none"></div>
+
+    <div id="paneLogin">
+      <div class="form-grid">
+        <input class="inp" id="loginEmail" type="email" placeholder="Email (correo@dominio.com)">
+        <input class="inp" id="loginPass" type="password" placeholder="Contraseña">
+      </div>
+      <div class="form-actions">
+        <button class="btn-top primary" type="button" onclick="doLogin()">Ingresar</button>
+      </div>
+      <div class="notice">Ingresa con tu email. (El RUT se solicita al registrarte.)</div>
+    </div>
+
+    <div id="paneRegister" style="display:none">
+      <div class="form-grid">
+        <input class="inp" id="regRut" placeholder="RUT (12.345.678-5)">
+        <input class="inp" id="regEmail" type="email" placeholder="Email (correo@dominio.com)">
+
+        <input class="inp" id="regNombre" placeholder="Nombre">
+        <input class="inp" id="regTelefono" placeholder="Teléfono">
+
+        <select class="inp" id="regRegion" aria-label="Región"><option value="">Selecciona Región</option></select>
+        <select class="inp" id="regComuna" aria-label="Comuna" disabled><option value="">Selecciona Comuna</option></select>
+
+        <input class="inp span2" id="regPass" type="password" placeholder="Contraseña (mín 8)">
+      </div>
+      <div class="form-actions">
+        <button class="btn-top primary" type="button" onclick="doRegister()">Crear cuenta</button>
       </div>
     </div>
   </div>
 </div>
 
-<script>
-const mq=window.matchMedia('(max-width:980px)');
-const btn=document.getElementById('menuToggle');
-const menu=document.getElementById('techMenu');
-function upd(){btn.style.display=mq.matches?'flex':'none'}
-(mq.addEventListener?mq.addEventListener('change',upd):mq.addListener(upd));upd();
-btn?.addEventListener('click',()=>{
-  const open=menu.classList.toggle('open');
-  btn.setAttribute('aria-expanded',open?'true':'false')
-});
+<!-- MODAL CARRITO -->
+<div id="cartModal" class="modal" aria-hidden="true">
+  <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+    <button class="modal-close" onclick="closeCartModal()" aria-label="Cerrar">×</button>
+    <h3 id="cartTitle" style="margin:0 0 10px;color:#111827">Tu carrito</h3>
 
-document.querySelectorAll('.tech-menu a[href^="#"]').forEach(a=>{
-  a.addEventListener('click',e=>{
-    const t=document.querySelector(a.getAttribute('href'));
-    if(t){
-      e.preventDefault();
-      if(menu.classList.contains('open'))menu.classList.remove('open');
-      t.scrollIntoView({behavior:'smooth',block:'start'})
-    }
-  });
-});
+    <div id="cartErr" class="err" style="display:none"></div>
+    <div id="cartList" class="cart-list"></div>
 
-const links2=[...document.querySelectorAll('.tech-menu a[href^="#"]')];
-const secs=links2.map(l=>document.querySelector(l.getAttribute('href'))).filter(Boolean);
-const io=new IntersectionObserver(es=>{
-  es.forEach(en=>{
-    if(en.isIntersecting){
-      links2.forEach(l=>l.classList.toggle('active',l.getAttribute('href')===('#'+en.target.id)))
-    }
-  })
-},{rootMargin:'-55% 0px -40% 0px',threshold:0});
-secs.forEach(s=>io.observe(s));
+    <div class="cart-total">
+      <div>Total</div>
+      <div id="cartTotal">$0</div>
+    </div>
+    <div class="form-actions" style="justify-content:flex-end;gap:10px;margin-top:12px;">
+  <button class="btn-top primary" type="button" id="btnGoCheckout">Generar compra</button>
+</div>
+<div class="small" style="margin-top:6px;color:#6b7280;">
+  Revisa tu carrito y luego genera tu compra para enviar el pedido por WhatsApp.
+</div>
+  </div>
+</div>
 
-function openProductoModal(card){
-  const m=document.getElementById('productoModal');
-  document.getElementById('mImagen').src=card.dataset.imagen||'';
-  document.getElementById('modalTitle').textContent=card.dataset.nombre||'';
-  document.getElementById('mRef').textContent='Referencia: '+(card.dataset.ref||'');
-  document.getElementById('mStock').textContent='Stock disponible: '+(card.dataset.stock||'');
-  const pd=card.dataset.preciodetalle||'';
-  const pm=card.dataset.preciomayorista||'';
-  const pdEl=document.getElementById('mPrecioDetalle');
-  const pmEl=document.getElementById('mPrecioMayorista');
-  if(pd){
-    pdEl.textContent='Precio detalle: $'+pd+' Imp. incl.';
-    pdEl.style.display='block';
-  }else{
-    pdEl.style.display='none';
-  }
-  pmEl.textContent=pm?('Precio mayorista: $'+pm+' Imp. incl.'):'';  
-  document.getElementById('mDesc').textContent=card.dataset.descripcion||'Sin descripción';
-  m.classList.add('open');
-  m.setAttribute('aria-hidden','false');
-  document.body.style.overflow='hidden';
-}
-function closeProductoModal(){
-  const m=document.getElementById('productoModal');
-  m.classList.remove('open');
-  m.setAttribute('aria-hidden','true');
-  document.body.style.overflow='';
-}
-document.getElementById('productoModal').addEventListener('click',e=>{
-  if(e.target===e.currentTarget)closeProductoModal();
-});
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeProductoModal();
-});
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-(function(){
-  const params=new URLSearchParams(location.search);
-  const ref=params.get('ref');
-  if(!ref) return;
-  if(typeof CSS==='undefined' || typeof CSS.escape!=='function'){
-    window.CSS = window.CSS || {};
-    CSS.escape = function(s){return (s+'').replace(/"/g,'\\"').replace(/'/g,"\\'");};
-  }
-  const card=document.querySelector('.producto[data-ref="'+CSS.escape(ref)+'"]');
-  if(card){
-    openProductoModal(card);
-    card.scrollIntoView({behavior:'smooth',block:'center'});
-  }
-})();
-</script>
+  <script src="assets/locations_cl.js?v=1"></script>
+  <script src="assets/app.js?v=5"></script>
 </body>
 </html>

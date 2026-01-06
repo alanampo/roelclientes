@@ -201,7 +201,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <!-- Burbuja WhatsApp -->
 <div class="whatsapp-bubble"
-     onclick="window.open('https://wa.me/56933217944?text=Estoy%20viendo%20el%20cat%C3%A1logo%20de%20stock%20semanal%20y%20me%20gustar%C3%ADa%20realizar%20un%20pedido','_blank')">
+     onclick="window.open('https://wa.me/56984226651?text=Estoy%20viendo%20el%20cat%C3%A1logo%20de%20stock%20semanal%20y%20me%20gustar%C3%ADa%20realizar%20un%20pedido','_blank')">
   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
 </div>    
     

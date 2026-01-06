@@ -6,6 +6,7 @@
   <title>Comprar Productos</title>
   <?php include "./class_lib/links.php"; ?>
   <?php include "./class_lib/scripts.php"; ?>
+  <script src="dist/js/packing_calculator.js?v=<?php echo $version ?>"></script>
   <script src="dist/js/ver_reservas.js?v=<?php echo $version ?>"></script>
 </head>
 
@@ -103,15 +104,27 @@
                     <thead>
                         <tr>
                             <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Acciones</th>
+                            <th class="text-center">Cantidad</th>
+                            <th class="text-right">Precio Unit.</th>
+                            <th class="text-right">Subtotal</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
+                        <!-- Product rows will be injected here -->
                     </tbody>
+                    <tfoot>
+                        <!-- Packing row will be injected here -->
+                    </tfoot>
                 </table>
+                <div class="row">
+                    <div class="col-md-12 text-right">
+                        <h4 id="grand-total-display" style="margin-right: 15px;">Total a Pagar: $0.00</h4>
+                    </div>
+                </div>
             </div>
           </div>
+          <hr>
           <div class="row">
             <div class="col-md-12 form-group">
               <label class="col-form-label" for="input-comentario-reserva">Observaciones:</label>

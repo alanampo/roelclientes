@@ -15,6 +15,9 @@ if (!$link) {
 }
 mysqli_set_charset($link, 'utf8');
 
+/* ====== CONFIG OGIMG (MISMO secreto que en detalle/ogimg.php) ====== */
+const OGIMG_SECRET = 'CAMBIA-ESTO-POR-UN-SECRETO-LARGO-Y-ALEATORIO-32+CHARS';
+
 /* -------- Query: resumen por variedad (misma lógica que backend) -------- */
 $sql = "
 SELECT
@@ -156,11 +159,76 @@ $scheme        = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'h
 $catalogoBase  = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF']; // p.ej. /catalogo_mayorista/index.php
 $priceValidUntil = (new DateTime('+14 days'))->format('Y-m-d');
 
+/* -------- OpenGraph dinámico por ?ref= (con proxy ogimg.php) -------- */
+$refParam = isset($_GET['ref']) ? trim((string)$_GET['ref']) : '';
+
+$ogTitle = 'Catálogo Mayorista de Plantines | Roelplant';
+$ogDesc  = 'Mayorista de plantines con envíos a todo Chile. Interior, exterior, cubre suelos y más.';
+$ogUrl   = $catalogoBase;
+$canonicalUrl = $catalogoBase;
+
+// Por defecto: logo
+$ogImage = 'https://roelplant.cl/assets/images/logo-fondo-negroV2.png';
+
+if ($refParam !== '') {
+    $refParamClean = $refParam;
+    $refParamUrl   = rawurlencode($refParamClean);
+    $ogUrl         = $catalogoBase . (strpos($catalogoBase, '?') === false ? '?' : '&') . 'ref=' . $refParamUrl;
+    $canonicalUrl  = $ogUrl;
+
+    $allForRef = array_merge(
+        $interior,
+        $exterior,
+        $cubre_suelos,
+        $hierbas,
+        $arboles,
+        $packs_interior,
+        $packs_exterior,
+        $invitro_interior
+    );
+
+    $found = null;
+    foreach ($allForRef as $pp) {
+        if ((string)$pp['referencia'] === $refParamClean) {
+            $found = $pp;
+            break;
+        }
+    }
+
+    if ($found) {
+        $nameOg  = (string)($found['variedad'] ?? '');
+        $stockOg = (int)($found['disponible_para_reservar'] ?? 0);
+
+        $pmOg = number_format(((float)($found['precio'] ?? 0)) * 1.19, 0, ',', '.');
+        $precioVisibleOg = '$' . $pmOg . ' (Mayorista, imp. incl.)';
+
+        $descOg = trim((string)($found['descripcion'] ?? ''));
+        $descOg = $descOg ? truncar($descOg, 140) : '';
+
+        $ogTitle = ($nameOg !== '' ? ($nameOg . ' | Roelplant') : $ogTitle);
+
+        $parts = [];
+        $parts[] = 'Precio: ' . $precioVisibleOg;
+        $parts[] = 'Stock: ' . $stockOg;
+        $parts[] = 'Ref: ' . $refParamClean;
+        if ($descOg) $parts[] = $descOg;
+        $ogDesc = truncar(implode(' · ', $parts), 240);
+
+        $sig = hash_hmac('sha256', $refParamClean, OGIMG_SECRET);
+        $ogImage = 'https://clientes.roelplant.cl/ogimg.php?ref=' . $refParamUrl . '&sig=' . $sig;
+    }
+}
+
+$ogTitleH    = htmlspecialchars($ogTitle, ENT_QUOTES, 'UTF-8');
+$ogDescH     = htmlspecialchars($ogDesc, ENT_QUOTES, 'UTF-8');
+$ogUrlH      = htmlspecialchars($ogUrl, ENT_QUOTES, 'UTF-8');
+$canonicalH  = htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8');
+$ogImageH    = htmlspecialchars($ogImage, ENT_QUOTES, 'UTF-8');
+
 /* -------- Render Cards -------- */
 function render_catalogo(array $ps, string $catalogoBase, string $priceValidUntil): void
 {
     foreach ($ps as $p) {
-        // Precio numérico (para JSON-LD) y formateado (para el usuario)
         $pmNumber = ((float)$p['precio']) * 1.19;
         $pm       = number_format($pmNumber, 0, ',', '.');
 
@@ -168,7 +236,7 @@ function render_catalogo(array $ps, string $catalogoBase, string $priceValidUnti
         $img = $imgFile
             ? "https://control.roelplant.cl/uploads/variedades/{$imgFile}"
             : "https://via.placeholder.com/600x400?text=Imagen+pendiente";
-        $imgCb = $img . (strpos($img, '?') === false ? '?v=' : '&v=') . time(); // cache buster
+        $imgCb = $img . (strpos($img, '?') === false ? '?v=' : '&v=') . time();
 
         $d     = trim($p['descripcion'] ?? '');
         $dAttr = htmlspecialchars($d, ENT_QUOTES, 'UTF-8');
@@ -182,6 +250,11 @@ function render_catalogo(array $ps, string $catalogoBase, string $priceValidUnti
         $stock = (int)$p['disponible_para_reservar'];
 
         $prodUrl = $catalogoBase . (strpos($catalogoBase, '?') === false ? '?' : '&') . 'ref=' . $refUrl;
+        $prodUrlAttr = htmlspecialchars($prodUrl, ENT_QUOTES, 'UTF-8');
+
+        // Texto visible para WhatsApp (igual enfoque que detalle)
+        $precioVisibleTxt  = '$' . $pm . ' (Mayorista, imp. incl.)';
+        $precioVisibleAttr = htmlspecialchars($precioVisibleTxt, ENT_QUOTES, 'UTF-8');
         ?>
         <div class="producto" role="button" tabindex="0"
              aria-label="Ver detalle <?= $name ?>"
@@ -189,7 +262,9 @@ function render_catalogo(array $ps, string $catalogoBase, string $priceValidUnti
              data-ref="<?= $ref ?>"
              data-stock="<?= $stock ?>"
              data-preciomayorista="<?= $pm ?>"
+             data-preciovisible="<?= $precioVisibleAttr ?>"
              data-imagen="<?= $img ?>"
+             data-url="<?= $prodUrlAttr ?>"
              data-descripcion="<?= $dAttr ?>"
              onclick="openProductoModal(this)"
              onkeypress="if(event.key==='Enter'){openProductoModal(this);}">
@@ -213,9 +288,10 @@ function render_catalogo(array $ps, string $catalogoBase, string $priceValidUnti
                     onclick="event.stopPropagation(); openProductoModal(this.closest('.producto'));">
                 Ver detalle
             </button>
+            <!-- Mantengo clase btn-reservar para NO romper tracking, pero ahora compra por WhatsApp -->
             <button class="btn-reservar"
-                    onclick="event.stopPropagation(); window.location.href='https://clientes.roelplant.cl/';">
-                Reservar
+                    onclick="event.stopPropagation(); openWhatsApp(this.closest('.producto'));">
+                Comprar
             </button>
           </div>
 
@@ -268,12 +344,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   gtag('config', 'G-B13EZZR4R7');
 </script>
 
-<?php
-// URL absoluta actual (para canonical / og:url)
-$scheme     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$currentUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
-?>
-
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="generator" content="Roelplant">
@@ -281,12 +351,13 @@ $currentUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+
 <link rel="shortcut icon" href="https://roelplant.cl/assets/images/favicon-128x128.png?v=<?php echo time(); ?>" type="image/x-icon">
 <link rel="icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="https://roelplant.cl/assets/images/favicon-128x128.png">
 <link rel="apple-touch-icon" sizes="180x180" href="https://roelplant.cl/assets/images/favicon-128x128.png">
 
-<link rel="canonical" href="<?php echo htmlspecialchars($currentUrl,ENT_QUOTES,'UTF-8'); ?>">
+<link rel="canonical" href="<?= $canonicalH ?>">
 
 <title>Catálogo Mayorista de Plantines | Roelplant</title>
 <meta name="description" content="Precios mayoristas desde 100 plantines. Interior, exterior, cubre suelos, hierbas y packs. Envíos a todo Chile. Producción a pedido y retiro en vivero (Quillota).">
@@ -296,18 +367,20 @@ $currentUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Catálogo Mayorista de Plantines | Roelplant">
-<meta property="og:description" content="Mayorista de plantines con envíos a todo Chile. Interior, exterior, cubre suelos y más.">
-<meta property="og:url" content="<?php echo htmlspecialchars($currentUrl,ENT_QUOTES,'UTF-8'); ?>">
+<meta property="og:title" content="<?= $ogTitleH ?>">
+<meta property="og:description" content="<?= $ogDescH ?>">
+<meta property="og:url" content="<?= $ogUrlH ?>">
 <meta property="og:site_name" content="Roelplant">
-<meta property="og:image" content="https://roelplant.cl/assets/images/logo-fondo-negroV2.png">
+<meta property="og:image" content="<?= $ogImageH ?>">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="800">
 <meta property="og:locale" content="es_CL">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Catálogo Mayorista de Plantines | Roelplant">
-<meta name="twitter:description" content="Precios mayoristas desde 100 plantines. Envíos a todo Chile.">
-<meta name="twitter:image" content="https://roelplant.cl/assets/images/logo-fondo-negroV2.png">
+<meta name="twitter:title" content="<?= $ogTitleH ?>">
+<meta name="twitter:description" content="<?= $ogDescH ?>">
+<meta name="twitter:image" content="<?= $ogImageH ?>">
 
 <!-- JSON-LD (Organization + WebSite) -->
 <script type="application/ld+json">
@@ -319,7 +392,7 @@ $currentUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
   "logo":"https://roelplant.cl/assets/images/logo-fondo-negroV2.png",
   "sameAs":[
     "https://www.instagram.com/roelplant",
-    "https://wa.me/56933217944"
+    "https://wa.me/56984226651"
   ]
 }
 </script>
@@ -350,7 +423,7 @@ h2{text-align:center;color:var(--ink);margin:40px 0 20px;scroll-margin-top:96px}
 @media (min-width:1200px){.catalogo{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* Card flex */
-.producto{display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.08);padding:16px;text-align:center;transition:transform .18s ease,box-shadow .18s.ease;border-top:5px solid var(--brand);cursor:pointer;min-height:420px;overflow:hidden}
+.producto{display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.08);padding:16px;text-align:center;transition:transform .18s ease,box-shadow .18s ease;border-top:5px solid var(--brand);cursor:pointer;min-height:420px;overflow:hidden}
 .producto:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.12)}
 .img-wrap{background:#f7f7f7;border-radius:10px;overflow:hidden;padding:6px;margin-bottom:12px;aspect-ratio:4/3}
 .producto img{width:100%;height:100%;aspect-ratio:4/3;object-fit:contain;display:block}
@@ -404,9 +477,9 @@ body{padding-left:300px}
   body{padding-left:0}
   h2{scroll-margin-top:76px}
   .catalogo{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-  .menu-toggle{position:sticky;top:8px;z-index:9600;margin:0.auto 10px;display:flex;gap:8px;align-items:center;justify-content:center;background:var(--menu);color:#fff;border:0;border-radius:999px;padding:10px 16px;font-weight:600;box-shadow:0 6px 16px rgba(0,0,0,.12)}
+  .menu-toggle{position:sticky;top:8px;z-index:9600;margin:0 auto 10px;display:flex;gap:8px;align-items:center;justify-content:center;background:var(--menu);color:#fff;border:0;border-radius:999px;padding:10px 16px;font-weight:600;box-shadow:0 6px 16px rgba(0,0,0,.12)}
   .menu-toggle svg{width:18px;height:18px}
-  .tech-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;margin:0;border-radius:14px;transform:translateY(-130%);transition:transform .25s.ease;max-height:72vh;overflow:auto}
+  .tech-menu{position:fixed;left:12px;right:12px;top:64px;width:auto;margin:0;border-radius:14px;transform:translateY(-130%);transition:transform .25s ease;max-height:72vh;overflow:auto}
   .tech-menu.open{transform:translateY(0)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -433,7 +506,7 @@ body{padding-left:300px}
 
 <!-- WhatsApp -->
 <div class="whatsapp-bubble"
-     onclick="window.open('https://wa.me/56933217944?text=Estoy%20viendo%20el%20cat%C3%A1logo%20de%20mayoristas%20y%20me%20gustar%C3%ADa%20realizar%20un%20pedido','_blank')">
+     onclick="window.open('https://wa.me/56984226651?text=Estoy%20viendo%20el%20cat%C3%A1logo%20de%20mayoristas%20y%20me%20gustar%C3%ADa%20realizar%20un%20pedido','_blank')">
   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
 </div>
 
@@ -452,8 +525,7 @@ $secciones = [
 <nav class="tech-menu" id="techMenu" aria-label="Filtrar por tipo">
   <h3>Tipos</h3>
   <ul>
-    <?php foreach ($secciones as $id => $sec) {
-        if (count($sec[1]) === 0) continue; ?>
+    <?php foreach ($secciones as $id => $sec) { if (count($sec[1]) === 0) continue; ?>
       <li><a href="#<?= $id ?>"><?= htmlspecialchars($sec[0], ENT_QUOTES, 'UTF-8') ?></a></li>
     <?php } ?>
     <li class="divider"></li>
@@ -462,8 +534,7 @@ $secciones = [
 </nav>
 <a id="top"></a>
 
-<?php foreach ($secciones as $id => $sec) {
-    if (count($sec[1]) === 0) continue; ?>
+<?php foreach ($secciones as $id => $sec) { if (count($sec[1]) === 0) continue; ?>
   <h2 id="<?= $id ?>"><?= htmlspecialchars($sec[0], ENT_QUOTES, 'UTF-8') ?></h2>
   <div class="catalogo"><?php render_catalogo($sec[1], $catalogoBase, $priceValidUntil); ?></div>
 <?php } ?>
@@ -495,7 +566,7 @@ $secciones = [
     <li><strong>Retiro en vivero:</strong> disponible previa coordinación de fecha y horario.</li>
     <li><strong>Condiciones climáticas:</strong> en olas de calor/frío intenso, los despachos pueden reprogramarse para proteger el material vegetal.</li>
     <li><strong>Contacto ventas:</strong> WhatsApp
-      <a href="https://wa.me/56933217944" target="_blank" rel="noopener">+56 9 3321 7944</a>
+      <a href="https://wa.me/56984226651" target="_blank" rel="noopener">+56 9 8422 6651</a>
       <a href="https://wa.me/56984226651" target="_blank" rel="noopener">+56 9 8422 6651</a> ·
       Instagram <a href="https://instagram.com/roelplant" target="_blank" rel="noopener">@roelplant</a>
     </li>
@@ -507,7 +578,6 @@ $secciones = [
 </div>
 
 <script>
-  // Fecha legible para la nota
   (function(){
     try{
       const el = document.getElementById('notaFechaAct');
@@ -536,7 +606,7 @@ $secciones = [
       <p id="mPrecioMayorista"></p>
       <div id="mDesc" class="modal-desc"></div>
       <div class="acciones-modal">
-        <button class="btn-reservar" onclick="window.location.href='https://clientes.roelplant.cl/';">Reservar</button>
+        <button class="btn-reservar" onclick="comprarWhatsAppActual();">Comprar</button>
         <button class="btn-detalle" onclick="closeProductoModal()">Cerrar</button>
       </div>
     </div>
@@ -549,9 +619,7 @@ const mq  = window.matchMedia('(max-width:980px)');
 const btn = document.getElementById('menuToggle');
 const menu= document.getElementById('techMenu');
 
-function upd(){
-  btn.style.display = mq.matches ? 'flex' : 'none';
-}
+function upd(){ btn.style.display = mq.matches ? 'flex' : 'none'; }
 (mq.addEventListener ? mq.addEventListener('change',upd) : mq.addListener(upd));
 upd();
 
@@ -587,8 +655,28 @@ const io = new IntersectionObserver(es=>{
 
 secs.forEach(s=>io.observe(s));
 
+let __currentCardForBuy = null;
+
+function openWhatsApp(card){
+  if(!card) return;
+  const nombre = card.dataset.nombre || '';
+  const url    = card.dataset.url || location.href;
+  const precio = card.dataset.preciovisible || '';
+  const desc   = (card.dataset.descripcion || '').trim();
+
+  const msg = `Hola Quiero comprar ${nombre}\nPrecio: ${precio}\n\nDescripción:\n ${desc}\n\nDetalle: ${url}`;
+  const wa  = 'https://wa.me/56984226651?text=' + encodeURIComponent(msg);
+  window.open(wa,'_blank');
+}
+
+function comprarWhatsAppActual(){
+  if(__currentCardForBuy) openWhatsApp(__currentCardForBuy);
+}
+
 // Modal base
 function openProductoModal(card){
+  __currentCardForBuy = card;
+
   const m = document.getElementById('productoModal');
   document.getElementById('mImagen').src = card.dataset.imagen || '';
   document.getElementById('modalTitle').textContent = card.dataset.nombre || '';
@@ -613,6 +701,22 @@ document.getElementById('productoModal').addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') closeProductoModal();
 });
+
+// Auto-abrir modal si viene ?ref=...
+(function(){
+  const params = new URLSearchParams(location.search);
+  const ref = params.get('ref');
+  if(!ref) return;
+  if(typeof CSS==='undefined' || typeof CSS.escape!=='function'){
+    window.CSS = window.CSS || {};
+    CSS.escape = function(s){return (s+'').replace(/"/g,'\\"').replace(/'/g,"\\'");};
+  }
+  const card = document.querySelector('.producto[data-ref="'+CSS.escape(ref)+'"]');
+  if(card){
+    openProductoModal(card);
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+})();
 </script>
 
 <script>
@@ -695,7 +799,7 @@ document.addEventListener('click', (e)=>{
         ecommerce:{ currency:'CLP', value:price, items:[{item_id:id, item_name:name, price}] }
       });
     }else{
-      dl({event:'select_item', ecommerce:{items:[{item_id:id, item_name:name}]}});
+      dl({event:'select_item', ecommerce:{items:[{item_id:id, item_name:name}]}}); 
     }
   }
 });

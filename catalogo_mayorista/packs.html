@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Packs de Plantines – Roelplant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Packs de plantines Roelplant: clásicos y exclusivos. Detalle de contenidos, precios con impuestos, despacho por Starken y descuentos por volumen." />
+  <link rel="canonical" href="https://roelplant.cl/packs" />
+
+  <!-- OG -->
+  <meta property="og:title" content="Packs de Plantines – Roelplant" />
+  <meta property="og:description" content="Packs clásicos y exclusivos con precios con impuestos, guía de cuidados y despacho por Starken. Descuentos por volumen." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Roelplant" />
+
+  <style>
+    :root {
+      --green: #27ae60;
+      --dark: #2c3e50;
+      --muted: #6b7280;
+      --bg: #f4f4f4;
+      --card: #ffffff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:20px; background:var(--bg);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; color:#222;
+    }
+    header{
+      max-width:1100px; margin:0 auto 16px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    }
+    h1{ margin:.2em 0; color:var(--dark); }
+    .nav{
+      display:flex; gap:8px; flex-wrap:wrap;
+    }
+    .nav a{
+      text-decoration:none; color:#fff; background:var(--green);
+      padding:10px 14px; border-radius:10px; font-weight:600;
+    }
+    .container{ max-width:1100px; margin:0 auto; }
+    h2{
+      color:var(--dark); margin:28px 0 12px;
+    }
+    .grid{
+      display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap:18px;
+    }
+    .card{
+      background:var(--card); border-radius:14px; padding:16px;
+      box-shadow:0 4px 10px rgba(0,0,0,.08); border-top:5px solid var(--green);
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .card h3{ margin:.2em 0; color:var(--green); }
+    .price{ font-size:1.15rem; font-weight:700; color:#000; }
+    .note{ color:var(--muted); font-size:.95rem; }
+    details{
+      border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff;
+    }
+    summary{
+      cursor:pointer; font-weight:600; color:var(--dark);
+      list-style:none;
+    }
+    summary::-webkit-details-marker{ display:none; }
+    .btns{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{
+      appearance:none; border:none; cursor:pointer; border-radius:10px;
+      padding:10px 14px; font-weight:600;
+    }
+    .btn-primary{ background:var(--green); color:#fff; }
+    .btn-outline{ background:#fff; color:var(--green); border:2px solid var(--green); }
+    .badge{
+      display:inline-block; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;
+      padding:4px 8px; border-radius:999px; font-size:.8rem; font-weight:700;
+    }
+    /* Burbujas */
+    .whatsapp-bubble{
+      position: fixed; bottom: 20px; left: 20px;
+      background-color: #25D366; border-radius: 50%;
+      width: 60px; height: 60px; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index: 9999; box-shadow:0 4px 8px rgba(0,0,0,0.3); transition: transform .2s;
+    }
+    .whatsapp-bubble:hover{ transform: scale(1.05); }
+    .whatsapp-bubble img{ width: 35px; height: 35px; }
+    .ig-bubble{
+      position: fixed; bottom: 20px; right: 20px;
+      background: linear-gradient(45deg, #f58529, #dd2a7b, #8134af, #515bd4);
+      border-radius: 50%; width:60px; height:60px; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index: 9998; box-shadow:0 4px 8px rgba(0,0,0,0.3); transition: transform .2s;
+    }
+    .ig-bubble:hover{ transform: scale(1.05); }
+    .ig-bubble img{ width:30px; height:30px; }
+    footer{ text-align:center; color:var(--muted); margin:24px auto 8px; font-size:.9rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Packs de Plantines</h1>
+    <div class="note">Despacho por pagar vía Starken • Incluye guía de cuidados y QR de trasplante</div>
+  </div>
+  <nav class="nav">
+    <a href="#clasicos">Ver Packs Clásicos</a>
+    <a href="#exclusivos">Ver Packs Exclusivos</a>
+    <a href="https://clientes.roelplant.cl/" target="_blank" rel="noopener">Reservar en portal</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <section id="clasicos">
+    <h2>Packs Clásicos <span class="badge">-25% desde 5 packs</span></h2>
+    <div class="grid" id="grid-clasicos"></div>
+  </section>
+
+  <section id="exclusivos">
+    <h2>Packs Exclusivos <span class="badge">-25% desde 5 packs</span></h2>
+    <div class="grid" id="grid-exclusivos"></div>
+  </section>
+
+</div>
+
+<footer>
+  Roelplant • Quillota • +56 9 8422 6651
+</footer>
+
+<!-- Burbuja WhatsApp -->
+<div class="whatsapp-bubble"
+     onclick="window.open('https://wa.me/56984226651?text='+encodeURIComponent('Estoy viendo la página de PACKS y me gustaría realizar un pedido'),'_blank')">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
+</div>
+
+<!-- Burbuja Instagram -->
+<div class="ig-bubble" onclick="window.open('https://instagram.com/roelplant','_blank')">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram">
+</div>
+
+<script>
+  const WA = "https://wa.me/56984226651";
+  const precio = v => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits:0 }).format(v);
+
+  const packsClasicos = [
+    {
+      titulo: "PACK 1 · 5 Plantines Mix (Dólar)",
+      precio: 3570,
+      incluye: [
+        "2 Dólar Variegado",
+        "2 Dólar Verde",
+        "1 Dólar Negro"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Incluye guía de cuidados y QR de trasplante"]
+    },
+    {
+      titulo: "PACK 2 · 10 Plantines Mix",
+      precio: 8925,
+      incluye: [
+        "2 Tradescantia Zebrina",
+        "2 Tradescantia Nanuk",
+        "2 Tradescantia Blanca",
+        "2 Dólar Variegado",
+        "4 Incienso"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Incluye cuidados básicos + QR con guía de trasplante"]
+    },
+    {
+      titulo: "PACK 3 · Mix a elección – 10 Plantines",
+      precio: 14875,
+      incluye: [
+        "10 plantines de interior a elección (Dólar variegado, verde o negro, Tradescantia zebrina, nanuk, blanca, Incienso)",
+        "10 macetas biodegradables",
+        "1 bolsa de sustrato interior (2 L)",
+        "Guía de cuidados + QR de trasplante"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken"]
+    },
+    {
+      titulo: "PACK 4 · 15 Plantines – Tradescantia Mix",
+      precio: 12495,
+      incluye: [
+        "5 Tradescantia Zebrina",
+        "5 Tradescantia Blanca",
+        "5 Tradescantia Nanuk"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Guía de cuidados + QR con video de trasplante"]
+    },
+    {
+      titulo: "PACK 5 · 35 Plantines – Mix",
+      precio: 17850,
+      incluye: [
+        "5 Tradescantia Zebrina",
+        "5 Tradescantia Nanuk",
+        "5 Tradescantia Blanca",
+        "5 Dólar Variegado",
+        "5 Dólar Verde",
+        "5 Dólar Negro",
+        "5 Incienso"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Guía de cuidados + QR con video de trasplante"]
+    },
+    {
+      titulo: "PACK 6 · 50 Plantines – Mix XL",
+      precio: 26180,
+      incluye: [
+        "10 Dólar Variegado",
+        "10 Incienso",
+        "10 Tradescantia Zebrina",
+        "10 Dólar Verde",
+        "10 Dólar Negro"
+      ],
+      promo: "15% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Guía de cuidados + QR con instrucciones de trasplante"]
+    }
+  ];
+
+  const packsExclusivos = [
+    {
+      titulo: "PACK 1 EXCLUSIVO · 5 Plantines Mix",
+      precio: 12495,
+      incluye: [
+        "1 Philodendron Monstera Esqueleto",
+        "1 Philodendron Silver Sword",
+        "1 Monstera Deliciosa",
+        "1 Scindapsus Jessenia (Pothos)",
+        "1 Asplenium"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Guía de cuidados + QR de trasplante"]
+    },
+    {
+      titulo: "PACK 2 EXCLUSIVO · 10 Plantines Mix",
+      precio: 18445,
+      incluye: [
+        "5 Monstera Deliciosa",
+        "2 Monstera Esqueleto",
+        "3 Scindapsus Jessenia (Pothos)"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Incluye cuidados básicos + QR con guía de trasplante"]
+    },
+    {
+      titulo: "PACK 3 EXCLUSIVO · Mix a Elección – 10 Plantines",
+      precio: 30345,
+      incluye: [
+        "10 interior a elección (Monstera Deliciosa, Monstera Esqueleto, Scindapsus Jessenia, Asplenium, Ph. Silver Sword, Helecho Arroz)",
+        "10 macetas biodegradables",
+        "1 bolsa sustrato interior (2 L)",
+        "Guía de cuidados + QR de trasplante"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken"]
+    },
+    {
+      titulo: "PACK 4 EXCLUSIVO · 15 Plantines – Tropical Interior",
+      precio: 26775,
+      incluye: [
+        "5 Monstera Deliciosa",
+        "5 Monstera Esqueleto",
+        "5 Asplenium Nidus"
+      ],
+      promo: "25% de descuento desde 5 packs",
+      notas: ["Despacho por pagar vía Starken", "Guía de cuidados + QR con video de trasplante"]
+    },
+    {
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  try {
+    const WA = "https://wa.me/56984226651";
+    const precio = v => new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(v);
+
+    const packsClasicos = [
+      { titulo:"PACK 1 · 5 Plantines Mix (Dólar)", precio:3570, incluye:[
+        "2 Dólar Variegado","2 Dólar Verde","1 Dólar Negro"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Incluye guía de cuidados y QR de trasplante"] },
+      { titulo:"PACK 2 · 10 Plantines Mix", precio:8925, incluye:[
+        "2 Tradescantia Zebrina","2 Tradescantia Nanuk","2 Tradescantia Blanca",
+        "2 Dólar Variegado","4 Incienso"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Incluye cuidados básicos + QR con guía de trasplante"] },
+      { titulo:"PACK 3 · Mix a elección – 10 Plantines", precio:14875, incluye:[
+        "10 interior a elección (Dólar variegado, verde o negro, Zebrina, Nanuk, Blanca, Incienso)",
+        "10 macetas biodegradables","1 bolsa de sustrato interior (2 L)","Guía de cuidados + QR de trasplante"
+      ], promo:"25% de descuento desde 5 packs", notas:["Despacho por pagar vía Starken"] },
+      { titulo:"PACK 4 · 15 Plantines – Tradescantia Mix", precio:12495, incluye:[
+        "5 Zebrina","5 Blanca","5 Nanuk"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR video de trasplante"] },
+      { titulo:"PACK 5 · 35 Plantines – Mix", precio:17850, incluye:[
+        "5 Zebrina","5 Nanuk","5 Blanca","5 Dólar Variegado","5 Dólar Verde","5 Dólar Negro","5 Incienso"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR video"] },
+      { titulo:"PACK 6 · 50 Plantines – Mix XL", precio:26180, incluye:[
+        "10 Dólar Variegado","10 Incienso","10 Zebrina","10 Dólar Verde","10 Dólar Negro"
+      ], promo:"15% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR instrucciones"] },
+    ];
+
+    const packsExclusivos = [
+      { titulo:"PACK 1 EXCLUSIVO · 5 Plantines Mix", precio:12495, incluye:[
+        "1 Monstera Esqueleto","1 Philodendron Silver Sword","1 Monstera Deliciosa",
+        "1 Scindapsus Jessenia (Pothos)","1 Asplenium"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR"] },
+      { titulo:"PACK 2 EXCLUSIVO · 10 Plantines Mix", precio:18445, incluye:[
+        "5 Monstera Deliciosa","2 Monstera Esqueleto","3 Scindapsus Jessenia (Pothos)"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Cuidados + QR"] },
+      { titulo:"PACK 3 EXCLUSIVO · Mix a Elección – 10", precio:30345, incluye:[
+        "10 a elección (Deliciosa, Esqueleto, Jessenia, Asplenium, Silver Sword, Helecho Arroz)",
+        "10 macetas biodegradables","1 bolsa sustrato interior (2 L)","Guía + QR"
+      ], promo:"25% de descuento desde 5 packs", notas:["Despacho por pagar vía Starken"] },
+      { titulo:"PACK 4 EXCLUSIVO · 15 – Tropical Interior", precio:26775, incluye:[
+        "5 Deliciosa","5 Esqueleto","5 Asplenium Nidus"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR video"] },
+      { titulo:"PACK 5 EXCLUSIVO · 35 – Mix Verde Decorativo", precio:59500, incluye:[
+        "10 Deliciosa","10 Esqueleto","10 Jessenia","5 Silver Sword"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR video"] },
+      { titulo:"PACK 6 EXCLUSIVO · 50 – Mix Natural XL", precio:86275, incluye:[
+        "10 Deliciosa","10 Esqueleto","10 Jessenia","10 Asplenium","10 Helecho Arroz"
+      ], promo:"25% de descuento desde 5 packs",
+      notas:["Despacho por pagar vía Starken","Guía + QR video"] },
+    ];
+
+    function cardHTML(p){
+      const waMsg = encodeURIComponent(`Hola, estoy viendo PACKS.\nMe interesa: ${p.titulo}. ¿Me ayudan a coordinar despacho y pago?`);
+      const waLink = `${WA}?text=${waMsg}`;
+      const portalLink = "https://clientes.roelplant.cl/";
+      return `
+        <article class="card">
+          <h3>${p.titulo}</h3>
+          <div class="price">${precio(p.precio)} Imp. Incl.</div>
+          <details><summary>Ver qué incluye</summary>
+            <ul style="margin:8px 0 0 18px;">${p.incluye.map(i=>`<li>${i}</li>`).join('')}</ul>
+          </details>
+          <div class="note">${(p.notas||[]).join(' • ')}</div>
+          ${p.promo ? `<div class="badge">${p.promo}</div>` : ``}
+          <div class="btns">
+            <a class="btn btn-primary" href="${waLink}" target="_blank" rel="noopener">Pedir por WhatsApp</a>
+            <a class="btn btn-outline" href="${portalLink}" target="_blank" rel="noopener">Reservar en portal</a>
+          </div>
+        </article>`;
+    }
+
+    const c = document.getElementById('grid-clasicos');
+    const e = document.getElementById('grid-exclusivos');
+
+    if (!c || !e) throw new Error('No existen los contenedores de grid en el DOM');
+
+    c.innerHTML = (packsClasicos.length ? packsClasicos.map(cardHTML).join('') :
+      `<div class="card"><h3>Pronto más packs clásicos</h3></div>`);
+    e.innerHTML = (packsExclusivos.length ? packsExclusivos.map(cardHTML).join('') :
+      `<div class="card"><h3>Pronto más packs exclusivos</h3></div>`);
+
+  } catch(err){
+    console.error('Error renderizando packs:', err);
+    const msg = `<div class="card"><h3>Ups</h3><p>No pudimos cargar las tarjetas. Actualiza la página o contáctanos por WhatsApp.</p></div>`;
+    const c = document.getElementById('grid-clasicos');
+    const e = document.getElementById('grid-exclusivos');
+    if (c) c.innerHTML = msg;
+    if (e) e.innerHTML = msg;
+  }
+});
+</script>
+</html>

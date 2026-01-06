@@ -85,7 +85,7 @@ if ($consulta == "busca_stock_actual") {
                     <td>
                         <div class='d-flex flex-row justify-content-center' style='gap: 5px;'>
                             <input type='number' class='form-control' style='width: 80px;' value='1' min='1' id='cantidad-tabla-$ww[id_variedad]'>
-                            <button class='btn btn-primary' onclick='agregarAlCarritoDesdeTabla($ww[id_variedad], \"$nombre_producto_escaped\", $disponible, \"cantidad-tabla-$ww[id_variedad]\")' title='Añadir al carrito'>
+                            <button class='btn btn-primary' onclick='agregarAlCarritoDesdeTabla($ww[id_variedad], \"$nombre_producto_escaped\", $disponible, \"cantidad-tabla-$ww[id_variedad]\", $ww[precio], $ww[precio_detalle])' title='Añadir al carrito'>
                                 <i class='fa fa-cart-plus'></i>
                             </button>
                         </div>
@@ -106,6 +106,8 @@ if ($consulta == "busca_stock_actual") {
         v.nombre as nombre_variedad,
         t.codigo,
         v.id_interno,
+        v.precio,
+        v.precio_detalle,
         (SUM(s.cantidad) - 
          IFNULL((SELECT SUM(r.cantidad) FROM reservas_productos r WHERE r.id_variedad = v.id AND r.estado >= 0), 0)
         ) as disponible
@@ -123,6 +125,36 @@ if ($consulta == "busca_stock_actual") {
         $productos[] = $ww;
     }
     echo json_encode($productos);
+} else if ($consulta == "get_product_details_for_packing") {
+    $ids_variedad = json_decode($_POST["ids_variedad"]);
+    if (empty($ids_variedad) || !is_array($ids_variedad)) {
+        echo json_encode([]);
+        return;
+    }
+
+    $in_clause = implode(',', array_map('intval', $ids_variedad));
+    
+    $query = "SELECT 
+                v.id as id_variedad,
+                tp.nombre as tipo_nombre,
+                tp.codigo as tipo_codigo,
+                av.valor as tamano
+              FROM variedades_producto v
+              JOIN tipos_producto tp ON v.id_tipo = tp.id
+              LEFT JOIN atributos_valores_variedades avv ON v.id = avv.id_variedad
+              LEFT JOIN atributos_valores av ON avv.id_atributo_valor = av.id
+              LEFT JOIN atributos_producto ap ON av.id_atributo = ap.id AND ap.nombre = 'TAMAÑO'
+              WHERE v.id IN ($in_clause)";
+
+    $val = mysqli_query($con, $query);
+    $details = [];
+    while ($row = mysqli_fetch_assoc($val)) {
+        $details[$row['id_variedad']] = [
+            'tipo' => $row['tipo_nombre'] ?: $row['tipo_codigo'],
+            'tamano' => $row['tamano']
+        ];
+    }
+    echo json_encode($details);
 } else if ($consulta == "busca_reservas") {
     $query = "SELECT
             r.id as id_reserva,
