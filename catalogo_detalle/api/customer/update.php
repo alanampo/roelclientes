@@ -14,7 +14,7 @@ if (!is_array($in)) bad_request('Payload inválido');
 $nombre   = trim((string)($in['nombre'] ?? ''));
 $telefono = trim((string)($in['telefono'] ?? ''));
 $region   = trim((string)($in['region'] ?? ''));
-$comuna   = trim((string)($in['comuna'] ?? ''));
+$comunaRaw = trim((string)($in['comuna'] ?? ''));
 
 $currentPassword = (string)($in['current_password'] ?? '');
 $newPassword     = (string)($in['new_password'] ?? '');
@@ -22,7 +22,7 @@ $newPassword     = (string)($in['new_password'] ?? '');
 if ($nombre === '' || mb_strlen($nombre) < 3) bad_request('Nombre inválido');
 if ($telefono === '' || mb_strlen($telefono) < 6) bad_request('Teléfono inválido');
 if ($region === '' || mb_strlen($region) < 2) bad_request('Región inválida');
-if ($comuna === '' || mb_strlen($comuna) < 2) bad_request('Comuna inválida');
+if ($comunaRaw === '' || mb_strlen($comunaRaw) < 2) bad_request('Comuna inválida');
 
 $changingPass = ($currentPassword !== '' || $newPassword !== '');
 if ($changingPass) {
@@ -32,35 +32,72 @@ if ($changingPass) {
 
 $db = db();
 
-// Verificar existencia y (si aplica) password actual
-$q = "SELECT id, password_hash FROM customers WHERE id=? LIMIT 1";
-$st = $db->prepare($q);
-if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'], 500);
-$st->bind_param('i', $cid);
-$st->execute();
-$row = $st->get_result()->fetch_assoc();
-$st->close();
-if (!$row) unauthorized('Sesión inválida');
+// Usar siempre las tablas unificadas de roel
+update_unificado($db, $cid, $nombre, $telefono, $region, $comunaRaw, $currentPassword, $newPassword, $changingPass);
 
-if ($changingPass) {
-  $hash = (string)$row['password_hash'];
-  if (!password_verify($currentPassword, $hash)) {
-    bad_request('La contraseña actual no coincide');
+function update_unificado(mysqli $db, int $cid, string $nombre, string $telefono, string $region, string $comunaRaw, string $currentPassword, string $newPassword, bool $changingPass) {
+  // Obtener ID de la comuna
+  $comunaId = 0;
+  $qC = "SELECT id FROM comunas WHERE nombre=? LIMIT 1";
+  $stC = $db->prepare($qC);
+  $stC->bind_param('s', $comunaRaw);
+  $stC->execute();
+  $rowC = $stC->get_result()->fetch_assoc();
+  if ($rowC) $comunaId = (int)$rowC['id'];
+  $stC->close();
+
+  if ($comunaId <= 0) bad_request('Comuna no válida');
+
+  // Verificar existencia y (si aplica) password actual
+  $q = "SELECT u.id, u.password FROM usuarios u WHERE u.id_cliente=? LIMIT 1";
+  $st = $db->prepare($q);
+  if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'], 500);
+  $st->bind_param('i', $cid);
+  $st->execute();
+  $row = $st->get_result()->fetch_assoc();
+  $st->close();
+  if (!$row) unauthorized('Sesión inválida');
+
+  if ($changingPass) {
+    $hash = (string)$row['password'];
+    if (!password_verify($currentPassword, $hash)) {
+      bad_request('La contraseña actual no coincide');
+    }
+    $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+
+    // Actualizar clientes
+    $qU = "UPDATE clientes SET nombre=?, telefono=?, region=?, comuna=? WHERE id_cliente=? LIMIT 1";
+    $stU = $db->prepare($qU);
+    if (!$stU) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
+    $stU->bind_param('sssii', $nombre, $telefono, $region, $comunaId, $cid);
+    if (!$stU->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar cliente'], 500);
+    $stU->close();
+
+    // Actualizar usuarios (password + nombre_real)
+    $qU2 = "UPDATE usuarios SET password=?, nombre_real=? WHERE id_cliente=? LIMIT 1";
+    $stU2 = $db->prepare($qU2);
+    if (!$stU2) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
+    $stU2->bind_param('ssi', $newHash, $nombre, $cid);
+    if (!$stU2->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar usuario'], 500);
+    $stU2->close();
+  } else {
+    // Solo actualizar datos sin contraseña
+    $qU = "UPDATE clientes SET nombre=?, telefono=?, region=?, comuna=? WHERE id_cliente=? LIMIT 1";
+    $stU = $db->prepare($qU);
+    if (!$stU) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
+    $stU->bind_param('sssii', $nombre, $telefono, $region, $comunaId, $cid);
+    if (!$stU->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar cliente'], 500);
+    $stU->close();
+
+    // Actualizar nombre_real en usuarios
+    $qU2 = "UPDATE usuarios SET nombre_real=? WHERE id_cliente=? LIMIT 1";
+    $stU2 = $db->prepare($qU2);
+    if (!$stU2) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
+    $stU2->bind_param('si', $nombre, $cid);
+    if (!$stU2->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar usuario'], 500);
+    $stU2->close();
   }
-  $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
-  $qU = "UPDATE customers SET nombre=?, telefono=?, region=?, comuna=?, password_hash=? WHERE id=? LIMIT 1";
-  $stU = $db->prepare($qU);
-  if (!$stU) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
-  $stU->bind_param('sssssi', $nombre, $telefono, $region, $comuna, $newHash, $cid);
-  if (!$stU->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar'], 500);
-  $stU->close();
-} else {
-  $qU = "UPDATE customers SET nombre=?, telefono=?, region=?, comuna=? WHERE id=? LIMIT 1";
-  $stU = $db->prepare($qU);
-  if (!$stU) json_out(['ok'=>false,'error'=>'No se pudo preparar actualización'], 500);
-  $stU->bind_param('ssssi', $nombre, $telefono, $region, $comuna, $cid);
-  if (!$stU->execute()) json_out(['ok'=>false,'error'=>'No se pudo actualizar'], 500);
-  $stU->close();
+
+  json_out(['ok'=>true]);
 }
 
-json_out(['ok'=>true]);

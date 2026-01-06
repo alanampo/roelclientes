@@ -39,7 +39,7 @@
         </div>
       </div>
       <div class="row-actions">
-        <a class="btn btn-primary" href="order_detail.php?id=${o.id}">Ver detalle</a>
+        <a class="btn btn-primary" href="${buildUrl('order_detail.php?id='+o.id)}">Ver detalle</a>
       </div>
     `;
     return el;
@@ -50,19 +50,19 @@
   }
 
   async function init(){
-    const me = await fetchJson('api/me.php', {method:'GET'});
-    if(!me.ok || !me.logged){ location.href='index.php?openAuth=1'; return; }
+    const me = await fetchJson(buildApiUrl('me.php'), {method:'GET'});
+    if(!me.ok || !me.logged){ location.href=buildUrl('index.php?openAuth=1'); return; }
 
     const btnLogout = $('btnLogout');
     if(btnLogout){
       btnLogout.style.display='inline-flex';
       btnLogout.onclick = async ()=>{
-        await fetchJson('api/auth/logout.php', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf||''}, body:'{}'});
-        location.href='index.php';
+        await fetchJson(buildApiUrl('auth/logout.php'), {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf||''}, body:'{}'});
+        location.href=buildUrl('index.php');
       };
     }
 
-    const list = await fetchJson('api/order/list.php', {method:'GET'});
+    const list = await fetchJson(buildApiUrl('order/list.php'), {method:'GET'});
     if(!list.ok){ showAlert('error', list.error||'No se pudo cargar pedidos'); $('ordersMeta').textContent=''; return; }
 
     $('ordersMeta').textContent = 'Pedidos encontrados: '+(list.orders?.length||0);

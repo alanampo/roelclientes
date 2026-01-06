@@ -19,13 +19,13 @@ if ($itemId <= 0) bad_request('Ítem inválido');
 if ($qty < 0) $qty = 0;
 
 if ($qty === 0) {
-  $del = $db->prepare("DELETE FROM cart_items WHERE id=? AND cart_id=?");
+  $del = $db->prepare("DELETE FROM " . CART_ITEMS_TABLE . " WHERE id=? AND cart_id=?");
   $del->bind_param('ii', $itemId, $cartId);
   $del->execute();
   json_out(['ok'=>true,'cart'=>cart_snapshot($db, $cartId)]);
 }
 
-$up = $db->prepare("UPDATE cart_items SET qty=? WHERE id=? AND cart_id=?");
+$up = $db->prepare("UPDATE " . CART_ITEMS_TABLE . " SET qty=? WHERE id=? AND cart_id=?");
 $up->bind_param('iii', $qty, $itemId, $cartId);
 if (!$up->execute()) {
   json_out(['ok'=>false,'error'=>'No se pudo actualizar'], 500);

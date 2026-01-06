@@ -57,24 +57,24 @@ function fillComunas(regionName, selected){
 
   async function init(){
     hideAlert();
-    const me = await fetchJson('api/me.php', {method:'GET'});
+    const me = await fetchJson(buildApiUrl('me.php'), {method:'GET'});
     if(!me.ok || !me.logged){
-      location.href = 'index.php?openAuth=1';
+      location.href = buildUrl('index.php?openAuth=1');
       return;
     }
     const btnLogout = $('btnLogout');
     if(btnLogout){
       btnLogout.style.display='inline-flex';
       btnLogout.onclick = async ()=>{
-        await fetchJson('api/auth/logout.php', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf||''}, body:'{}'});
-        location.href='index.php';
+        await fetchJson(buildApiUrl('auth/logout.php'), {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf||''}, body:'{}'});
+        location.href=buildUrl('index.php');
       };
     }
 
     fillRegions();
     $('pRegion').addEventListener('change', ()=> fillComunas($('pRegion').value, ''));
 
-    const prof = await fetchJson('api/customer/profile.php', {method:'GET'});
+    const prof = await fetchJson(buildApiUrl('customer/profile.php'), {method:'GET'});
     if(!prof.ok){ showAlert('error', prof.error||'No se pudo cargar el perfil'); return; }
 
     const c = prof.customer;
@@ -100,7 +100,7 @@ function fillComunas(regionName, selected){
         current_password: ($('pCurrentPass').value||''),
         new_password: ($('pNewPass').value||'')
       };
-      const res = await fetchJson('api/customer/update.php', {
+      const res = await fetchJson(buildApiUrl('customer/update.php'), {
         method:'POST',
         headers:{'Content-Type':'application/json','X-CSRF-Token':me.csrf||''},
         body: JSON.stringify(payload)

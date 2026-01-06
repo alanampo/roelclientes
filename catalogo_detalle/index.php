@@ -40,9 +40,9 @@ SELECT
   sv.precio,
   sv.precio_detalle,
   sv.disponible_para_reservar,
-  ANY_VALUE(av.valor)           AS tipo_planta,
-  ANY_VALUE(img.nombre_archivo) AS imagen,
-  ANY_VALUE(v.descripcion)      AS descripcion
+  MAX(av.valor)           AS tipo_planta,
+  MAX(img.nombre_archivo) AS imagen,
+  MAX(v.descripcion)      AS descripcion
 FROM
 (
   SELECT
@@ -289,6 +289,9 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 <html lang="es">
 <head>
 
+<!-- Configuración de rutas dinámicas (DEBE SER LO PRIMERO) -->
+<?php include __DIR__ . '/config/routes.php'; ?>
+
 <!-- Meta Pixel Code -->
 <script>
 !function(f,b,e,v,n,t,s)
@@ -409,7 +412,7 @@ foreach($all as $p){
 }
 </script>
 
-<link rel="stylesheet" href="assets/styles.css?v=4">
+<link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/styles.css?v=4'), ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 <body>
 
@@ -561,8 +564,11 @@ $secciones=[
         <input class="inp" id="regRut" placeholder="RUT (12.345.678-5)">
         <input class="inp" id="regEmail" type="email" placeholder="Email (correo@dominio.com)">
 
-        <input class="inp" id="regNombre" placeholder="Nombre">
+        <input class="inp" id="regNombre" placeholder="Nombre completo">
         <input class="inp" id="regTelefono" placeholder="Teléfono">
+
+        <input class="inp span2" id="regDomicilio" placeholder="Domicilio / Dirección">
+        <input class="inp" id="regCiudad" placeholder="Ciudad">
 
         <select class="inp" id="regRegion" aria-label="Región"><option value="">Selecciona Región</option></select>
         <select class="inp" id="regComuna" aria-label="Comuna" disabled><option value="">Selecciona Comuna</option></select>
@@ -600,7 +606,7 @@ $secciones=[
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="assets/locations_cl.js?v=1"></script>
-  <script src="assets/app.js?v=5"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/locations_cl.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/app.js?v=5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>

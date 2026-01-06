@@ -102,12 +102,12 @@
 
             <div class="form-group">
               <label class="control-label" for="Domicilio">Domicilio <span class="text-danger">*</span></label>
-              <input class="form-control" name="domicilio" id="Domicilio" type="text" maxlength="200" required>
+              <input class="form-control" name="domicilio" id="Domicilio" type="text" maxlength="100" required placeholder="Calle, número y detalles">
             </div>
 
             <div class="form-group">
               <label class="control-label" for="Domicilio2">Domicilio de Entrega</label>
-              <input class="form-control" name="domicilio2" id="Domicilio2" type="text" maxlength="200">
+              <input class="form-control" name="domicilio2" id="Domicilio2" type="text" maxlength="255" placeholder="Detalles adicionales para entregas">
             </div>
 
             <div class="form-group">
@@ -119,12 +119,12 @@
 
             <div class="form-group">
               <label class="control-label" for="Ciudad">Ciudad <span class="text-danger">*</span></label>
-              <input class="form-control" name="ciudad" id="Ciudad" type="text" maxlength="100" required>
+              <input class="form-control" name="ciudad" id="Ciudad" type="text" maxlength="40" required placeholder="Nombre de la ciudad o localidad">
             </div>
 
             <div class="form-group">
-              <label class="control-label" for="Region">Región</label>
-              <select class="form-control selectpicker" name="region" id="Region" data-live-search="true" data-none-selected-text="Selecciona una región">
+              <label class="control-label" for="Region">Región <small class="text-muted">(Se auto-completa al seleccionar una comuna)</small></label>
+              <select class="form-control selectpicker" name="region" id="Region" data-live-search="true" data-none-selected-text="Se completará automáticamente" disabled>
                 <option value="">Seleccione una región...</option>
                 <option value="Arica y Parinacota">Arica y Parinacota</option>
                 <option value="Tarapacá">Tarapacá</option>

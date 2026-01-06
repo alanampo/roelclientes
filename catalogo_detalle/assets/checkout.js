@@ -220,7 +220,7 @@ const notesEl = $('notes');
     } catch (e) {}
 
     // Ir a confirmación; allí se muestra el detalle y el botón a WhatsApp
-    window.location.href = `order_success.php?order_id=${encodeURIComponent(j.order_id||'')}&order_code=${encodeURIComponent(j.order_code||'')}`;
+    window.location.href = buildUrl(`order_success.php?order_id=${encodeURIComponent(j.order_id||'')}&order_code=${encodeURIComponent(j.order_code||'')}`);
 // Refrescar carrito (debería quedar vacío)
     await loadCart();
   }
@@ -228,9 +228,8 @@ const notesEl = $('notes');
   function bindEvents() {
     btnLogin?.addEventListener('click', () => {
       // Redirige al catálogo para login
-      const url = new URL(window.location.href);
-      const next = url.pathname.replace(/\/[^/]*$/, '/checkout.php');
-      window.location.href = `index.php?openAuth=1&next=${encodeURIComponent(next)}`;
+      const next = buildUrl('checkout.php');
+      window.location.href = buildUrl(`index.php?openAuth=1&next=${encodeURIComponent(next)}`);
     });
 
     btnLogout?.addEventListener('click', () => logout().catch((e) => showAlert(String(e.message || e), 'danger')));

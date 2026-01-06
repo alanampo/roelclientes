@@ -160,7 +160,7 @@ function closeAuthModal(){
 }
 
 async function refreshMe(){
-  const me = await fetchJson('api/me.php', {method:'GET'});
+  const me = await fetchJson(buildApiUrl('me.php'), {method:'GET'});
   if (me.ok){
     API.csrf = me.csrf || API.csrf;
     API.me = me.logged ? me.customer : null;
@@ -192,6 +192,8 @@ async function doRegister(){
   const email = (document.getElementById('regEmail').value||'').trim();
   const nombre = (document.getElementById('regNombre').value||'').trim();
   const telefono = (document.getElementById('regTelefono').value||'').trim();
+  const domicilio = (document.getElementById('regDomicilio').value||'').trim();
+  const ciudad = (document.getElementById('regCiudad').value||'').trim();
   const region = (document.getElementById('regRegion').value||'').trim();
   const comuna = (document.getElementById('regComuna').value||'').trim();
   const password = (document.getElementById('regPass').value||'');
@@ -200,14 +202,16 @@ async function doRegister(){
   if(email.length < 5 || !email.includes('@')){ setErr('authErr','Email inválido'); return; }
   if(nombre.length < 3){ setErr('authErr','Nombre inválido'); return; }
   if(telefono.length < 6){ setErr('authErr','Teléfono inválido'); return; }
+  if(domicilio.length < 3){ setErr('authErr','Domicilio inválido'); return; }
+  if(ciudad.length < 2){ setErr('authErr','Ciudad inválida'); return; }
   if(region.length < 2){ setErr('authErr','Región inválida'); return; }
   if(comuna.length < 2){ setErr('authErr','Comuna inválida'); return; }
   if(password.length < 8){ setErr('authErr','La contraseña debe tener al menos 8 caracteres'); return; }
 
-  const payload = {rut,email,nombre,telefono,region,comuna,password};
+  const payload = {rut,email,nombre,telefono,domicilio,ciudad,region,comuna,password};
 
   try{
-    const j = await apiFetch('api/auth/register.php', {method:'POST', body: JSON.stringify(payload)});
+    const j = await apiFetch(buildApiUrl('auth/register.php'), {method:'POST', body: JSON.stringify(payload)});
     if(!j.ok){ setErr('authErr', j.error||'No se pudo registrar'); return; }
     toast('Cuenta creada');
     closeAuthModal();
@@ -221,7 +225,7 @@ async function doRegister(){
         // Only allow relative safe paths
         const safe = rt.replace(/^[\/]+/,'').replace(/\s/g,'');
         if(safe && !/^https?:/i.test(safe) && safe.indexOf('..') === -1){
-          window.location.href = safe;
+          window.location.href = buildUrl(safe);
           return;
         }
       }
@@ -240,7 +244,7 @@ async function doLogin(){
   if(!password){ setErr('authErr','Contraseña requerida'); return; }
 
   try{
-    const j = await apiFetch('api/auth/login.php', {method:'POST', body: JSON.stringify({email,password})});
+    const j = await apiFetch(buildApiUrl('auth/login.php'), {method:'POST', body: JSON.stringify({email,password})});
     if(!j.ok){ setErr('authErr', j.error||'No se pudo ingresar'); return; }
     toast('Sesión iniciada');
     closeAuthModal();
@@ -252,7 +256,7 @@ async function doLogin(){
 }
 
 async function doLogout(){
-  const j = await apiFetch('api/auth/logout.php', {method:'POST', body:'{}'});
+  const j = await apiFetch(buildApiUrl('auth/logout.php'), {method:'POST', body:'{}'});
   if(j.ok){ toast('Sesión cerrada'); }
   await refreshMe();
   document.getElementById('cartCount').textContent='0';
@@ -267,7 +271,7 @@ function ensureLoggedOrAuth(pending){
 
 async function refreshCartCount(){
   if (!API.me){ document.getElementById('cartCount').textContent='0'; return; }
-  const j = await apiFetch('api/cart/get.php', {method:'GET'});
+  const j = await apiFetch(buildApiUrl('cart/get.php'), {method:'GET'});
   if (j.ok){
     document.getElementById('cartCount').textContent = (j.cart.item_count||0);
   }
@@ -282,7 +286,7 @@ async function addToCart(card, qty){
     unit_price_clp: parseInt(card.dataset.unitpriceclp||'0',10),
     qty: qty || 1,
   };
-  const j = await apiFetch('api/cart/add.php', {method:'POST', body: JSON.stringify(payload)});
+  const j = await apiFetch(buildApiUrl('cart/add.php'), {method:'POST', body: JSON.stringify(payload)});
   if(!j.ok){ toast(j.error||'No se pudo agregar'); return; }
   document.getElementById('cartCount').textContent = (j.cart.item_count||0);
   // Si el carrito está abierto, recargar sin refrescar la página
@@ -378,7 +382,7 @@ function fmtCLP(n){
 
 async function loadCart(){
   setErr('cartErr','');
-  const j = await apiFetch('api/cart/get.php', {method:'GET'});
+  const j = await apiFetch(buildApiUrl('cart/get.php'), {method:'GET'});
   if(!j.ok){ setErr('cartErr', j.error||'No se pudo cargar carrito'); return; }
   const list = document.getElementById('cartList');
   list.innerHTML = '';
@@ -416,7 +420,7 @@ async function loadCart(){
     const itemId = it.item_id;
 
     const applyQty = async (newQty)=>{
-      const jj = await apiFetch('api/cart/update.php', {method:'POST', body: JSON.stringify({item_id: itemId, qty: newQty})});
+      const jj = await apiFetch(buildApiUrl('cart/update.php'), {method:'POST', body: JSON.stringify({item_id: itemId, qty: newQty})});
       if(!jj.ok){ toast(jj.error||'No se pudo actualizar'); return; }
       document.getElementById('cartCount').textContent = (jj.cart.item_count||0);
       document.getElementById('cartTotal').textContent = fmtCLP(jj.cart.total_clp||0);
@@ -444,7 +448,7 @@ async function loadCart(){
       applyQty(v);
     });
     btnDel.addEventListener('click',async ()=>{
-      const jj = await apiFetch('api/cart/remove.php', {method:'POST', body: JSON.stringify({item_id: itemId})});
+      const jj = await apiFetch(buildApiUrl('cart/remove.php'), {method:'POST', body: JSON.stringify({item_id: itemId})});
       if(!jj.ok){ toast(jj.error||'No se pudo eliminar'); return; }
       toast('Eliminado');
       document.getElementById('cartCount').textContent = (jj.cart.item_count||0);
@@ -472,7 +476,7 @@ function bindCheckoutButton(){
   if(!btn) return;
   btn.addEventListener('click', ()=>{
     if(!ensureLoggedOrAuth(null)) return;
-    window.location.href = 'checkout.php';
+    window.location.href = buildUrl('checkout.php');
   });
 }
 

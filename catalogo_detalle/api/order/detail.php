@@ -17,11 +17,11 @@ function table_has_column(mysqli $db, string $table, string $col): bool {
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) bad_request('ID inválido');
 
-$hasV2 = table_has_column($db,'orders','order_code') && table_has_column($db,'orders','customer_id');
-$itemsV2 = table_has_column($db,'order_items','referencia'); // v2
+$hasV2 = table_has_column($db, ORDERS_TABLE, 'order_code') && table_has_column($db, ORDERS_TABLE, 'customer_id');
+$itemsV2 = table_has_column($db, ORDER_ITEMS_TABLE, 'referencia'); // v2
 if ($hasV2) {
   $sql = "SELECT id, order_code, status, subtotal_clp, shipping_label, shipping_cost_clp, total_clp, notes, created_at
-          FROM orders WHERE id=? AND customer_id=? LIMIT 1";
+          FROM " . ORDERS_TABLE . " WHERE id=? AND customer_id=? LIMIT 1";
   $st = $db->prepare($sql);
   if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'],500);
   $st->bind_param('ii',$id,$cid);
@@ -32,7 +32,7 @@ if ($hasV2) {
 
   $items = [];
   if ($itemsV2) {
-    $st = $db->prepare("SELECT referencia, nombre, imagen_url, unit_price_clp, qty, line_total_clp FROM order_items WHERE order_id=? ORDER BY id ASC");
+    $st = $db->prepare("SELECT referencia, nombre, imagen_url, unit_price_clp, qty, line_total_clp FROM " . ORDER_ITEMS_TABLE . " WHERE order_id=? ORDER BY id ASC");
     if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar items'],500);
     $st->bind_param('i',$id);
     $st->execute();
@@ -68,7 +68,7 @@ if ($hasV2) {
   ]);
 } else {
   $sql = "SELECT id, status, shipping_label, shipping_amount, subtotal_amount, total_amount, notes, created_at
-          FROM orders WHERE id=? AND user_id=? LIMIT 1";
+          FROM " . ORDERS_TABLE . " WHERE id=? AND user_id=? LIMIT 1";
   $st = $db->prepare($sql);
   if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'],500);
   $st->bind_param('ii',$id,$cid);
@@ -78,7 +78,7 @@ if ($hasV2) {
   if (!$o) unauthorized('Pedido no encontrado');
 
   $items = [];
-  $st = $db->prepare("SELECT product_ref, product_name, image_url, unit_price, qty, line_total FROM order_items WHERE order_id=? ORDER BY id ASC");
+  $st = $db->prepare("SELECT product_ref, product_name, image_url, unit_price, qty, line_total FROM " . ORDER_ITEMS_TABLE . " WHERE order_id=? ORDER BY id ASC");
   if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar items'],500);
   $st->bind_param('i',$id);
   $st->execute();

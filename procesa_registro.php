@@ -115,6 +115,26 @@ if ($consulta == "register") {
     // Hash de la contraseña
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
+    // Validar que la región seleccionada coincida con la región de la comuna
+    $stmt = mysqli_prepare($con, "SELECT ciudad FROM comunas WHERE id = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 'i', $comuna);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    if (!$row = mysqli_fetch_assoc($result)) {
+        mysqli_stmt_close($stmt);
+        echo json_encode(['success' => false, 'message' => 'Comuna no encontrada']);
+        exit;
+    }
+    mysqli_stmt_close($stmt);
+
+    $comunaRegion = $row['ciudad']; // La BD almacena la región como 'ciudad'
+
+    // Validar que la región enviada coincida con la región de la comuna
+    if ($region !== $comunaRegion) {
+        echo json_encode(['success' => false, 'message' => 'La región seleccionada no coincide con la comuna']);
+        exit;
+    }
+
     // Iniciar transacción
     mysqli_begin_transaction($con);
 

@@ -16,7 +16,7 @@ if (!is_array($in)) bad_request('Payload inválido');
 $itemId = (int)($in['item_id'] ?? 0);
 if ($itemId <= 0) bad_request('Ítem inválido');
 
-$del = $db->prepare("DELETE FROM cart_items WHERE id=? AND cart_id=?");
+$del = $db->prepare("DELETE FROM " . CART_ITEMS_TABLE . " WHERE id=? AND cart_id=?");
 $del->bind_param('ii', $itemId, $cartId);
 $del->execute();
 

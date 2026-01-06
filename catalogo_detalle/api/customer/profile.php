@@ -8,7 +8,8 @@ require __DIR__ . '/../_bootstrap.php';
 $cid = require_auth();
 $db  = db();
 
-$q = "SELECT id, rut, email, nombre, telefono, region, comuna FROM customers WHERE id=? LIMIT 1";
+// Obtener datos del cliente desde tabla unificada clientes
+$q = "SELECT id_cliente, rut, mail as email, nombre, telefono, region, ciudad, domicilio, domicilio2, comuna FROM clientes WHERE id_cliente=? LIMIT 1";
 $st = $db->prepare($q);
 if (!$st) {
   json_out(['ok' => false, 'error' => 'No se pudo preparar consulta de cliente'], 500);
@@ -27,15 +28,30 @@ if (!$row) {
   unauthorized('Sesión inválida');
 }
 
+// Obtener nombre de la comuna
+$comunaName = '';
+if ($row['comuna']) {
+  $qC = "SELECT nombre FROM comunas WHERE id=? LIMIT 1";
+  $stC = $db->prepare($qC);
+  $stC->bind_param('i', $row['comuna']);
+  $stC->execute();
+  $rowC = $stC->get_result()->fetch_assoc();
+  if ($rowC) $comunaName = $rowC['nombre'];
+  $stC->close();
+}
+
 json_out([
   'ok' => true,
   'customer' => [
-    'id' => (int)$row['id'],
+    'id' => (int)$row['id_cliente'],
     'rut' => (string)$row['rut'],
     'email' => (string)($row['email'] ?? ''),
     'nombre' => (string)$row['nombre'],
     'telefono' => (string)$row['telefono'],
+    'domicilio' => (string)$row['domicilio'],
+    'domicilio2' => (string)($row['domicilio2'] ?? ''),
+    'ciudad' => (string)$row['ciudad'],
     'region' => (string)$row['region'],
-    'comuna' => (string)$row['comuna'],
+    'comuna' => (string)$comunaName,
   ],
 ]);

@@ -161,8 +161,8 @@ function require_auth(): int {
 }
 
 function cart_get_or_create(mysqli $db, int $customerId): int {
-  // 1) buscar carrito open
-  $q = "SELECT id FROM carts WHERE customer_id=? AND status='open' LIMIT 1";
+  // 1) buscar carrito open (usa id_cliente en tabla carrito_carts de roel)
+  $q = "SELECT id FROM " . CART_TABLE . " WHERE id_cliente=? AND status='open' LIMIT 1";
   $st = $db->prepare($q);
   $st->bind_param('i', $customerId);
   $st->execute();
@@ -171,18 +171,19 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
   $st->close();
 
   // 2) crear
-  $q2 = "INSERT INTO carts (customer_id, status) VALUES (?, 'open')";
+  $q2 = "INSERT INTO " . CART_TABLE . " (id_cliente, status) VALUES (?, 'open')";
   $st2 = $db->prepare($q2);
   $st2->bind_param('i', $customerId);
   if (!$st2->execute()) {
     json_out(['ok'=>false,'error'=>'No se pudo crear carrito'], 500);
   }
+  $st2->close();
   return (int)$st2->insert_id;
 }
 
 
 function cart_snapshot(mysqli $db, int $cartId): array {
-  $q = "SELECT id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty\n        FROM cart_items WHERE cart_id=? ORDER BY updated_at DESC";
+  $q = "SELECT id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty\n        FROM " . CART_ITEMS_TABLE . " WHERE cart_id=? ORDER BY updated_at DESC";
   $st = $db->prepare($q);
   $st->bind_param('i', $cartId);
   $st->execute();

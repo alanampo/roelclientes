@@ -26,7 +26,7 @@ SELECT
   sv.precio,
   sv.precio_detalle,
   sv.disponible_para_reservar,
-  ANY_VALUE(av.valor) AS tipo_planta
+  MAX(av.valor) AS tipo_planta
 FROM
 (
   SELECT

@@ -7,13 +7,13 @@
   const money = (n)=>'$'+Number(n||0).toLocaleString('es-CL');
 
   // Login check (reutiliza sesión del sitio)
-  const me = await fetch('api/me.php', { credentials: 'same-origin' })
+  const me = await fetch(buildApiUrl('me.php'), { credentials: 'same-origin' })
     .then(r=>r.json())
     .catch(()=>({logged:false}));
 
   if(!me.logged){
     const rt = encodeURIComponent('produccion.php');
-    location.href = 'index.php?openAuth=1&return_to=' + rt;
+    location.href = buildUrl('index.php?openAuth=1&return_to=' + rt);
     return;
   }
 
@@ -235,7 +235,7 @@
     }
     if(list) list.innerHTML='';
 
-    const res = await fetch('api/production/list.php', { credentials:'same-origin' })
+    const res = await fetch(buildApiUrl('production/list.php'), { credentials:'same-origin' })
       .then(r=>r.json())
       .catch(()=>null);
 
@@ -285,7 +285,7 @@
       notes: (notesEl?.value || '').trim()
     };
 
-    const res = await fetch('api/production/request_create.php', {
+    const res = await fetch(buildApiUrl('production/request_create.php'), {
       method: 'POST',
       credentials: 'same-origin',
       headers: {

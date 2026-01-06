@@ -5,6 +5,29 @@ $(document).ready(function() {
     // Inicializar selectpickers
     $('.selectpicker').selectpicker();
 
+    // Auto-llenar región cuando se selecciona una comuna
+    $('#Comuna').on('change', function() {
+        const comunaId = $(this).val();
+        const comunaText = $(this).find('option:selected').text();
+
+        if (comunaId) {
+            // Extraer la región del texto de la opción: "Quilpué (Valparaíso)"
+            const regionMatch = comunaText.match(/\(([^)]+)\)$/);
+            if (regionMatch) {
+                const regionName = regionMatch[1].trim();
+                // Temporalmente habilitar para actualizar el valor
+                $('#Region').prop('disabled', false);
+                $('#Region').val(regionName);
+                $('#Region').selectpicker('refresh');
+                // Volver a deshabilitar después de actualizar
+                $('#Region').prop('disabled', true);
+
+                // Disparar el cambio de región para filtrar provincias
+                $('#Region').trigger('change');
+            }
+        }
+    });
+
     // Filtrar provincias cuando se selecciona una región
     $('#Region').on('change', function() {
         const regionSeleccionada = $(this).val();
@@ -250,6 +273,9 @@ function validateRUT(rut) {
 
 // Enviar el formulario de registro
 function submitRegistration() {
+    // Temporalmente habilitar el campo Region para que se envíe
+    $('#Region').prop('disabled', false);
+
     const formData = {
         consulta: 'register',
         email: $('#Email').val().trim(),
@@ -264,6 +290,9 @@ function submitRegistration() {
         provincia: $('#Provincia').val().trim(),
         region: $('#Region').val().trim()
     };
+
+    // Volver a deshabilitar
+    $('#Region').prop('disabled', true);
 
     // Mostrar indicador de carga
     const $submitBtn = $('#registerform button[type="submit"]');
@@ -282,12 +311,16 @@ function submitRegistration() {
             } else {
                 alert('Error en el registro: ' + (response.message || 'Error desconocido'));
                 $submitBtn.prop('disabled', false).text(originalText);
+                // Volver a deshabilitar el campo región
+                $('#Region').prop('disabled', true);
             }
         },
         error: function(xhr, status, error) {
             console.error('Error en registro:', error);
             alert('Error al procesar el registro. Por favor, intente nuevamente.');
             $submitBtn.prop('disabled', false).text(originalText);
+            // Volver a deshabilitar el campo región
+            $('#Region').prop('disabled', true);
         }
     });
 }

@@ -14,7 +14,7 @@ function table_has_column(mysqli $db, string $table, string $col): bool {
   return (bool)$res->fetch_assoc();
 }
 
-$hasV2 = table_has_column($db,'orders','order_code') && table_has_column($db,'orders','customer_id');
+$hasV2 = table_has_column($db, ORDERS_TABLE, 'order_code') && table_has_column($db, ORDERS_TABLE, 'customer_id');
 
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
 if ($limit < 1) $limit = 50;
@@ -22,7 +22,7 @@ if ($limit > 200) $limit = 200;
 
 if ($hasV2) {
   $sql = "SELECT id, order_code, status, subtotal_clp, shipping_cost_clp, total_clp, created_at
-          FROM orders
+          FROM " . ORDERS_TABLE . "
           WHERE customer_id = ?
           ORDER BY id DESC
           LIMIT ?";
@@ -47,7 +47,7 @@ if ($hasV2) {
   json_out(['ok'=>true,'schema'=>'v2','orders'=>$rows]);
 } else {
   $sql = "SELECT id, status, shipping_label, shipping_amount, subtotal_amount, total_amount, created_at
-          FROM orders
+          FROM " . ORDERS_TABLE . "
           WHERE user_id = ?
           ORDER BY id DESC
           LIMIT ?";

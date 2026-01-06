@@ -42,8 +42,8 @@ if (!is_array($payload)) $payload = [];
 $shippingCode = trim((string)($payload['shipping_code'] ?? 'retiro'));
 $notes = trim((string)($payload['notes'] ?? ''));
 
-// Cliente
-$q = "SELECT id, rut, email, nombre, telefono, region, comuna FROM customers WHERE id=? LIMIT 1";
+// Cliente (tabla unificada clientes)
+$q = "SELECT id_cliente as id, rut, mail as email, nombre, telefono, region, comuna FROM clientes WHERE id_cliente=? LIMIT 1";
 $st = $db->prepare($q);
 if (!$st) json_out(['ok'=>false,'error'=>'No se pudo leer cliente'], 500);
 $st->bind_param('i', $cid);
@@ -111,7 +111,7 @@ $waPrefix = (string)($APP['WHATSAPP_PREFIX'] ?? 'Pedido Roelplant');
 $orderPrefix = (string)($APP['ORDER_PREFIX'] ?? 'RP');
 
 // Detectar esquema
-$hasOrderCode = _table_has_column($db, 'orders', 'order_code') && _table_has_column($db, 'orders', 'customer_id');
+$hasOrderCode = _table_has_column($db, ORDERS_TABLE, 'order_code') && _table_has_column($db, ORDERS_TABLE, 'customer_id');
 
 $db->begin_transaction();
 try {
@@ -121,7 +121,7 @@ try {
   if ($hasOrderCode) {
     $orderCode = _order_code($orderPrefix);
 
-    $sql = "INSERT INTO orders
+    $sql = "INSERT INTO " . ORDERS_TABLE . "
       (order_code, customer_id, customer_rut, customer_nombre, customer_telefono, customer_region, customer_comuna, customer_email,
        currency, subtotal_clp, shipping_code, shipping_label, shipping_cost_clp, total_clp, notes, status)
       VALUES (?,?,?,?,?,?,?,?, 'CLP', ?,?,?, ?, ?, ?, 'new')";
@@ -156,7 +156,7 @@ try {
     $orderId = (int)$st->insert_id;
     $st->close();
 
-    $stItem = $db->prepare("INSERT INTO order_items (order_id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty, line_total_clp)
+    $stItem = $db->prepare("INSERT INTO " . ORDER_ITEMS_TABLE . " (order_id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty, line_total_clp)
                             VALUES (?,?,?,?,?,?,?,?)");
     if (!$stItem) throw new Exception('prepare order_items v2 failed: '.$db->error);
 
@@ -174,7 +174,7 @@ try {
     $stItem->close();
   } else {
     // Legacy
-    $sql = "INSERT INTO orders (user_id, status, shipping_method, shipping_label, shipping_amount, subtotal_amount, total_amount, notes)
+    $sql = "INSERT INTO " . ORDERS_TABLE . " (user_id, status, shipping_method, shipping_label, shipping_amount, subtotal_amount, total_amount, notes)
             VALUES (?, 'created', 'manual', ?, ?, ?, ?, ?)";
     $st = $db->prepare($sql);
     if (!$st) throw new Exception('prepare orders legacy failed: '.$db->error);
@@ -184,7 +184,7 @@ try {
     $orderId = (int)$st->insert_id;
     $st->close();
 
-    $stItem = $db->prepare("INSERT INTO order_items (order_id, product_ref, product_name, unit_price, qty, line_total, image_url)
+    $stItem = $db->prepare("INSERT INTO " . ORDER_ITEMS_TABLE . " (order_id, product_ref, product_name, unit_price, qty, line_total, image_url)
                             VALUES (?,?,?,?,?,?,?)");
     if (!$stItem) throw new Exception('prepare order_items legacy failed: '.$db->error);
 
@@ -202,13 +202,13 @@ try {
   }
 
   // Convertir carrito y crear uno nuevo
-  $st = $db->prepare("UPDATE carts SET status='converted' WHERE id=?");
+  $st = $db->prepare("UPDATE " . CART_TABLE . " SET status='converted' WHERE id=?");
   if ($st) { $st->bind_param('i', $cartId); $st->execute(); $st->close(); }
 
-  $st = $db->prepare("INSERT INTO carts (customer_id, status) VALUES (?, 'open')");
+  $st = $db->prepare("INSERT INTO " . CART_TABLE . " (id_cliente, status) VALUES (?, 'open')");
   if ($st) { $st->bind_param('i', $cid); $st->execute(); $st->close(); }
 
-  $st = $db->prepare("DELETE FROM cart_items WHERE cart_id=?");
+  $st = $db->prepare("DELETE FROM " . CART_ITEMS_TABLE . " WHERE cart_id=?");
   if ($st) { $st->bind_param('i', $cartId); $st->execute(); $st->close(); }
 
   $db->commit();
