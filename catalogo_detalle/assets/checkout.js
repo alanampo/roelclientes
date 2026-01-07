@@ -627,9 +627,18 @@
     if (btnQuoteShipping) {
       btnQuoteShipping.addEventListener('click', () => {
         btnQuoteShipping.disabled = true;
+        const spinner = $('btnQuoteShippingSpinner');
+        const text = $('btnQuoteShippingText');
+        if (spinner) spinner.style.display = 'block';
+        if (text) text.style.display = 'none';
+
         quoteShipping()
           .catch((e) => showAlert(String(e.message || e), 'danger'))
-          .finally(() => { btnQuoteShipping.disabled = false; });
+          .finally(() => {
+            btnQuoteShipping.disabled = false;
+            if (spinner) spinner.style.display = 'none';
+            if (text) text.style.display = 'inline';
+          });
       });
     }
 

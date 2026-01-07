@@ -33,6 +33,12 @@ if ($logged) {
   <title>Checkout - Roelplant</title>
   <!-- checkout.css incluye layout propio, evitamos styles.css del catálogo para no romper el diseño -->
   <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/checkout.css'), ENT_QUOTES, 'UTF-8'); ?>" />
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
 
@@ -117,7 +123,10 @@ if ($logged) {
                     <option value="">Seleccionar comuna...</option>
                   </select>
                 </div>
-                <button id="btnQuoteShipping" type="button" style="width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:3px;cursor:pointer;font-weight:600">Cotizar Envío</button>
+                <button id="btnQuoteShipping" type="button" style="width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:3px;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">
+                  <span id="btnQuoteShippingText">Cotizar Envío</span>
+                  <span id="btnQuoteShippingSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite"></span>
+                </button>
               </div>
 
               <!-- Select de sucursales para Retiro en Sucursal -->
