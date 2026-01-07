@@ -7,6 +7,17 @@
     shippingCode: 'auto',
     packingCost: 0,
     packingLabel: '',
+    shippingMethod: 'domicilio',
+    shippingCost: 0,
+    shippingLabel: 'Por pagar',
+    shippingQuoted: false,  // Si ya se ejecutó la cotización
+    cartDestination: 'Santiago',
+    shippingAddress: '',
+    shippingCommune: '',
+    communes: [],
+    agencies: [],
+    shippingAgency: '',
+    canPayButton: false,  // Si el botón pagar está habilitado
   };
 
   const $ = (id) => document.getElementById(id);
@@ -29,6 +40,14 @@
   const btnMakeReservation = $('btnMakeReservation');
   const btnCreateOrder = $('btnCreateOrder');
   const orderResult = $('orderResult');
+
+  // Shipping form elements
+  const shippingAddressForm = $('shippingAddressForm');
+  const shippingAddressInput = $('shippingAddress');
+  const shippingCommuneSelect = $('shippingCommune');
+  const btnQuoteShipping = $('btnQuoteShipping');
+  const shippingAgenciesForm = $('shippingAgenciesForm');
+  const shippingAgencySelect = $('shippingAgency');
 
   function fmtCLP(n) {
     const v = Number(n || 0);
@@ -54,6 +73,261 @@
   function hideAlert() {
     if (!alertBox) return;
     alertBox.classList.add('hidden');
+  }
+
+  async function loadCommunes() {
+    try {
+      const j = await fetchJson(buildApiUrl('shipping/starken_communes.php'), { method: 'GET' });
+      if (j.ok && j.communes) {
+        state.communes = j.communes;
+        populateCommuneSelect();
+      }
+    } catch (e) {
+      console.error('Error loading communes:', e.message);
+    }
+  }
+
+  function populateCommuneSelect() {
+    if (!shippingCommuneSelect || state.communes.length === 0) return;
+
+    // Clear existing options except first
+    while (shippingCommuneSelect.options.length > 1) {
+      shippingCommuneSelect.remove(1);
+    }
+
+    // Add commune options
+    state.communes.forEach(comm => {
+      const opt = document.createElement('option');
+      opt.value = comm.code_dls;
+      opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
+      shippingCommuneSelect.appendChild(opt);
+    });
+  }
+
+  function showShippingForm() {
+    const method = document.querySelector('input[name="shipping_method"]:checked')?.value || 'domicilio';
+
+    // Hide all forms first
+    shippingAddressForm.style.display = 'none';
+    shippingAgenciesForm.style.display = 'none';
+
+    if (method === 'domicilio') {
+      shippingAddressForm.style.display = 'block';
+      state.shippingQuoted = false;
+    } else if (method === 'agencia') {
+      shippingAgenciesForm.style.display = 'block';
+      state.shippingAgency = '';
+      if (shippingAgencySelect) shippingAgencySelect.value = '';
+    } else if (method === 'vivero') {
+      state.shippingQuoted = true;  // Vivero es "autoaprobado"
+    }
+
+    updatePayButtonState();
+  }
+
+  async function loadAgencies() {
+    try {
+      const communeCode = shippingCommuneSelect?.value || '';
+
+      const j = await fetchJson(buildApiUrl('shipping/starken_agencies.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify({
+          commune_code_dls: Number(communeCode) || 1
+        })
+      });
+
+      if (j.ok && j.agencies) {
+        state.agencies = j.agencies;
+        populateAgenciesSelect();
+      }
+    } catch (e) {
+      console.error('Error loading agencies:', e.message);
+    }
+  }
+
+  function populateAgenciesSelect() {
+    if (!shippingAgencySelect || state.agencies.length === 0) return;
+
+    // Clear existing options except first
+    while (shippingAgencySelect.options.length > 1) {
+      shippingAgencySelect.remove(1);
+    }
+
+    // Add agency options
+    state.agencies.forEach(agency => {
+      const opt = document.createElement('option');
+      opt.value = agency.code_dls;
+      opt.textContent = agency.name + (agency.commune_name ? ` (${agency.commune_name})` : '');
+      shippingAgencySelect.appendChild(opt);
+    });
+
+    shippingAgencySelect.innerHTML = '<option value="">Seleccionar sucursal...</option>' + shippingAgencySelect.innerHTML;
+  }
+
+  function updatePayButtonState() {
+    const method = state.shippingMethod;
+
+    // Vivero: siempre se puede pagar
+    if (method === 'vivero') {
+      state.canPayButton = true;
+      if (btnMakeReservation) btnMakeReservation.disabled = false;
+      return;
+    }
+
+    // Domicilio: solo si se cotizó
+    if (method === 'domicilio') {
+      state.canPayButton = state.shippingQuoted;
+      if (btnMakeReservation) btnMakeReservation.disabled = !state.shippingQuoted;
+      return;
+    }
+
+    // Agencia: solo si se seleccionó sucursal
+    if (method === 'agencia') {
+      state.canPayButton = state.shippingAgency !== '';
+      if (btnMakeReservation) btnMakeReservation.disabled = !state.shippingAgency;
+      return;
+    }
+
+    state.canPayButton = false;
+    if (btnMakeReservation) btnMakeReservation.disabled = true;
+  }
+
+  async function quoteShipping() {
+    const address = (shippingAddressInput?.value || '').trim();
+    const commune = shippingCommuneSelect?.value || '';
+
+    if (!address || !commune) {
+      showAlert('Completa dirección y comuna antes de cotizar', 'warning');
+      return;
+    }
+
+    try {
+      // Origen: usar domicilio2 (code_dls de la comuna del cliente)
+      const originCommuneCodeDls = Number(2735) || 1;
+      // Destino: usar la comuna seleccionada
+      const destinationCommuneCodeDls = Number(commune) || 1;
+
+      const weight = 1.0;
+      const height = 1.0;
+      const width = 1.0;
+      const depth = 1.0;
+
+      const j = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify({
+          destination: destinationCommuneCodeDls,
+          origin: originCommuneCodeDls,  // code_dls de la comuna del cliente
+          weight: weight,
+          height: height,
+          width: width,
+          depth: depth
+        })
+      });
+
+      if (j.ok && j.data && j.data.alternativas) {
+        const options = j.data.alternativas;
+        if (options.length > 0) {
+          const firstOption = options[0];
+          state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
+          state.shippingLabel = 'Envío a domicilio (Starken)';
+          state.shippingQuoted = true;
+          showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
+        } else {
+          showAlert('No hay opciones de envío disponibles', 'warning');
+        }
+      } else {
+        throw new Error(j.error || 'Error en cotización');
+      }
+    } catch (e) {
+      showAlert(`Error cotizando: ${String(e.message || e)}`, 'danger');
+      state.shippingQuoted = false;
+    }
+
+    updatePayButtonState();
+    updateShippingDisplay();
+  }
+
+  async function updateCustomerShippingAddress() {
+    if (state.shippingMethod !== 'domicilio') return;
+
+    const address = (shippingAddressInput?.value || '').trim();
+    const commune = shippingCommuneSelect?.value || '';
+
+    if (!address || !commune) {
+      return; // Not ready yet
+    }
+
+    try {
+      await fetchJson(buildApiUrl('customer/update.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify({
+          domicilio: address,
+          comuna_code_dls: commune,
+          t: Date.now(),
+        }),
+      });
+
+      state.shippingAddress = address;
+      state.shippingCommune = commune;
+
+      // Trigger shipping cost update
+      await updateShippingCost();
+    } catch (e) {
+      console.error('Error updating address:', e.message);
+    }
+  }
+
+  async function updateShippingCost() {
+    const method = document.querySelector('input[name="shipping_method"]:checked')?.value || 'domicilio';
+    state.shippingMethod = method;
+
+    if (method === 'vivero') {
+      state.shippingCost = 0;
+      state.shippingLabel = 'Retiro en vivero (Gratis)';
+    } else if (method === 'domicilio') {
+      // Wait for manual quote button
+      state.shippingLabel = 'Haz clic en "Cotizar Envío"';
+    } else if (method === 'agencia') {
+      // Wait for agency selection
+      state.shippingLabel = 'Selecciona una sucursal';
+      await loadAgencies();
+    }
+
+    updatePayButtonState();
+    updateShippingDisplay();
+  }
+
+  function updateShippingDisplay() {
+    const sumShipping = $('sumShipping');
+    const shippingInfo = $('shippingInfo');
+
+    if (sumShipping) {
+      sumShipping.textContent = state.shippingCost > 0 ? fmtCLP(state.shippingCost) : 'Por pagar';
+    }
+
+    if (shippingInfo) {
+      shippingInfo.textContent = state.shippingLabel;
+    }
+
+    // Update total
+    const sumSubtotalText = (sumSubtotal?.textContent || '').replace(/[^\d]/g, '');
+    const subtotal = Number(sumSubtotalText) || 0;
+    const total = subtotal + state.packingCost + state.shippingCost;
+    if (sumTotal) {
+      sumTotal.textContent = fmtCLP(total);
+    }
   }
 
   async function fetchJson(url, opts = {}) {
@@ -167,6 +441,9 @@
     const j = await fetchJson('api/customer/profile.php', { method: 'GET' });
     const c = j.customer || {};
 
+    // Store destination for shipping quotes
+    state.cartDestination = c.comuna || 'Santiago';
+
     customerBox.innerHTML = `
       <div style="font-weight:900;margin-bottom:6px">${c.nombre || 'Cliente'}</div>
       <div class="muted" style="font-size:14px">RUT: ${c.rut || '-'}</div>
@@ -174,6 +451,30 @@
       <div class="muted" style="font-size:14px">Email: ${c.email || '-'}</div>
       <div class="muted" style="font-size:14px">Comuna/Región: ${c.comuna || '-'} / ${c.region || '-'}</div>
     `;
+
+    // Load saved shipping address if available
+    if (c.domicilio) {
+      state.shippingAddress = c.domicilio;
+      if (shippingAddressInput) {
+        shippingAddressInput.value = c.domicilio;
+      }
+    }
+
+    // Load communes and set saved value
+    await loadCommunes();
+    if (c.domicilio2 && shippingCommuneSelect) {
+      shippingCommuneSelect.value = c.domicilio2;
+      state.shippingCommune = c.domicilio2;
+    }
+
+    // Show form if domicilio is selected
+    showShippingForm();
+
+    // Update shipping cost based on customer location
+    await updateShippingCost();
+
+    // Deshabilitar botón pagar inicialmente
+    updatePayButtonState();
   }
 
   async function makeReservation() {
@@ -220,6 +521,8 @@
         body: JSON.stringify({
           items: reservationItems,
           notes,
+          shipping_method: state.shippingMethod,
+          shipping_cost: state.shippingCost,
           t: Date.now(),
         }),
       });
@@ -294,6 +597,49 @@
     });
 
     btnLogout?.addEventListener('click', () => logout().catch((e) => showAlert(String(e.message || e), 'danger')));
+
+    // Shipping method change listeners
+    document.querySelectorAll('input[name="shipping_method"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        showShippingForm();
+        updateShippingCost().catch((e) => showAlert(String(e.message || e), 'warning'));
+      });
+    });
+
+    // Shipping address change listeners
+    if (shippingAddressInput) {
+      shippingAddressInput.addEventListener('change', () => {
+        updateCustomerShippingAddress().catch((e) => showAlert(String(e.message || e), 'warning'));
+      });
+    }
+
+    if (shippingCommuneSelect) {
+      shippingCommuneSelect.addEventListener('change', () => {
+        updateCustomerShippingAddress().catch((e) => showAlert(String(e.message || e), 'warning'));
+        // Cargar agencias si estamos en modo agencia
+        if (state.shippingMethod === 'agencia') {
+          loadAgencies().catch((e) => showAlert(String(e.message || e), 'warning'));
+        }
+      });
+    }
+
+    // Botón Cotizar Envío
+    if (btnQuoteShipping) {
+      btnQuoteShipping.addEventListener('click', () => {
+        btnQuoteShipping.disabled = true;
+        quoteShipping()
+          .catch((e) => showAlert(String(e.message || e), 'danger'))
+          .finally(() => { btnQuoteShipping.disabled = false; });
+      });
+    }
+
+    // Select de agencias
+    if (shippingAgencySelect) {
+      shippingAgencySelect.addEventListener('change', () => {
+        state.shippingAgency = shippingAgencySelect.value;
+        updatePayButtonState();
+      });
+    }
 
     btnMakeReservation?.addEventListener('click', () => {
       btnMakeReservation.disabled = true;

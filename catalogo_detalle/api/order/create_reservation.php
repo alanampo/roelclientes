@@ -21,6 +21,8 @@ if (!is_array($payload)) bad_request('Payload inválido');
 
 $items = $payload['items'] ?? [];
 $notes = trim((string)($payload['notes'] ?? ''));
+$shippingMethod = (string)($payload['shipping_method'] ?? 'domicilio');
+$shippingCost = (int)($payload['shipping_cost'] ?? 0);
 
 if (!is_array($items) || count($items) === 0) {
   bad_request('Carrito vacío');
@@ -123,11 +125,20 @@ try {
   $dbStock->begin_transaction();
 
   // Crear reserva en BD de producción
+  // Build observations with shipping method info
+  $reservaObs = $notes;
+  if ($shippingMethod !== 'domicilio') {
+    $reservaObs .= ($reservaObs ? ' | ' : '') . "Método: " . $shippingMethod;
+  }
+  if ($shippingCost > 0) {
+    $reservaObs .= ($reservaObs ? ' | ' : '') . "Flete: " . $shippingCost;
+  }
+
   $queryReserva = "INSERT INTO reservas (fecha, id_cliente, observaciones, id_usuario) VALUES (NOW(), ?, ?, ?)";
   $stReserva = $dbStock->prepare($queryReserva);
   if (!$stReserva) throw new RuntimeException('Prepare reserva failed: ' . $dbStock->error);
 
-  $stReserva->bind_param('isi', $cid, $notes, $idUsuario);
+  $stReserva->bind_param('isi', $cid, $reservaObs, $idUsuario);
   if (!$stReserva->execute()) {
     throw new RuntimeException('Execute reserva failed: ' . $stReserva->error);
   }
@@ -177,7 +188,9 @@ try {
   json_out([
     'ok' => true,
     'reservation_id' => $idReserva,
-    'message' => 'Compra registrada correctamente'
+    'message' => 'Compra registrada correctamente',
+    'shipping_method' => $shippingMethod,
+    'shipping_cost' => $shippingCost
   ]);
 
 } catch (Throwable $e) {
