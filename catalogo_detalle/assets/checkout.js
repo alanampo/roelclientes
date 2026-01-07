@@ -438,11 +438,16 @@
     d.className = 'cart-item';
     d.innerHTML = `
       <img src="${img}" alt="" loading="lazy" />
-      <div class="ci-main">
+      <div class="ci-main" style="width: 70%;">
         <div class="ci-title">${name}</div>
         <div class="ci-sub muted">${ref}</div>
       </div>
-      <div class="ci-right">
+      <div class="ci-right" style="
+          width: 20%;
+          text-align: right;
+          display: flex;
+          justify-content: end;
+          gap: 20px;">
         <div class="ci-qty">x${qty}</div>
         <div class="ci-price">${fmtCLP(line)}</div>
       </div>
