@@ -174,7 +174,7 @@ if ($logged) {
         <textarea id="notes" rows="4" placeholder="Ej: dejar en portería / horario de retiro / etc."></textarea>
 
         <div class="footer-actions">
-          <button id="btnMakeReservation" class="btn btn-success" type="button">Pagar</button>
+          <button id="btnMakeReservation" class="btn btn-success" style="display:none;" type="button">Pagar</button>
           <button id="btnCreateOrder" class="btn btn-primary" type="button">Enviar pedido por WhatsApp</button>
         </div>
 
