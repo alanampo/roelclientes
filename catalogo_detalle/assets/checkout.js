@@ -615,6 +615,29 @@
 
     const notes = notesEl ? String(notesEl.value || '').trim() : '';
 
+    // Preparar datos de envío según el método seleccionado
+    const shippingData = {
+      shipping_method: state.shippingMethod,
+      shipping_cost: state.shippingCost || 0,
+    };
+
+    if (state.shippingMethod === 'domicilio') {
+      shippingData.shipping_address = shippingAddressInput?.value || '';
+      shippingData.shipping_commune = shippingCommuneSelect?.value || '';
+    } else if (state.shippingMethod === 'agencia') {
+      // Encontrar la agencia seleccionada en el array
+      const selectedAgencyCode = shippingAgencySelect?.value || '';
+      const agency = state.agencies.find(a => String(a.code_dls) === String(selectedAgencyCode));
+      if (agency) {
+        shippingData.shipping_agency_code = agency.code_dls;
+        shippingData.shipping_agency_name = agency.name;
+        shippingData.shipping_agency_address = agency.address;
+        shippingData.shipping_agency_phone = agency.phone;
+      }
+    } else if (state.shippingMethod === 'vivero') {
+      shippingData.shipping_vivero = true;
+    }
+
     const j = await fetchJson('api/order/create.php', {
       method: 'POST',
       headers: {
@@ -625,6 +648,7 @@
         shipping_code: 'por_pagar',
         packing_cost_clp: state.packingCost || 0,
         packing_label: state.packingLabel || '',
+        ...shippingData,
         notes,
         t: Date.now(),
       }),
@@ -637,7 +661,7 @@
         order_id: j.order_id || null,
         order_code: j.order_code || '',
         total_clp: j.total_clp || 0,
-        shipping_label: 'por pagar',
+        shipping_label: state.shippingLabel || 'por pagar',
         packing_cost_clp: j.packing_cost_clp || 0,
         packing_label: j.packing_label || '',
         whatsapp_url: j.whatsapp_url || '',

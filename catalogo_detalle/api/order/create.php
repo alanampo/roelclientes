@@ -42,6 +42,16 @@ if (!is_array($payload)) $payload = [];
 $shippingCode = trim((string)($payload['shipping_code'] ?? 'retiro'));
 $notes = trim((string)($payload['notes'] ?? ''));
 
+// Datos de envío
+$shippingMethod = trim((string)($payload['shipping_method'] ?? 'domicilio'));
+$shippingAddress = trim((string)($payload['shipping_address'] ?? ''));
+$shippingCommune = trim((string)($payload['shipping_commune'] ?? ''));
+$shippingCostFromPayload = (int)($payload['shipping_cost'] ?? 0);
+$shippingAgencyName = trim((string)($payload['shipping_agency_name'] ?? ''));
+$shippingAgencyAddress = trim((string)($payload['shipping_agency_address'] ?? ''));
+$shippingAgencyPhone = trim((string)($payload['shipping_agency_phone'] ?? ''));
+$shippingVivero = (bool)($payload['shipping_vivero'] ?? false);
+
 // Cliente (tabla unificada clientes)
 $q = "SELECT id_cliente as id, rut, mail as email, nombre, telefono, region, comuna FROM clientes WHERE id_cliente=? LIMIT 1";
 $st = $db->prepare($q);
@@ -110,8 +120,8 @@ $waPhone = (string)($APP['WHATSAPP_SELLER_E164'] ?? '');
 $waPrefix = (string)($APP['WHATSAPP_PREFIX'] ?? 'Pedido Roelplant');
 $orderPrefix = (string)($APP['ORDER_PREFIX'] ?? 'RP');
 
-// Detectar esquema
-$hasOrderCode = _table_has_column($db, ORDERS_TABLE, 'order_code') && _table_has_column($db, ORDERS_TABLE, 'customer_id');
+// Detectar esquema (v2 con order_code e id_cliente)
+$hasOrderCode = _table_has_column($db, ORDERS_TABLE, 'order_code') && (_table_has_column($db, ORDERS_TABLE, 'id_cliente') || _table_has_column($db, ORDERS_TABLE, 'customer_id'));
 
 $db->begin_transaction();
 try {
@@ -122,7 +132,7 @@ try {
     $orderCode = _order_code($orderPrefix);
 
     $sql = "INSERT INTO " . ORDERS_TABLE . "
-      (order_code, customer_id, customer_rut, customer_nombre, customer_telefono, customer_region, customer_comuna, customer_email,
+      (order_code, id_cliente, customer_rut, customer_nombre, customer_telefono, customer_region, customer_comuna, customer_email,
        currency, subtotal_clp, shipping_code, shipping_label, shipping_cost_clp, total_clp, notes, status)
       VALUES (?,?,?,?,?,?,?,?, 'CLP', ?,?,?, ?, ?, ?, 'new')";
     $st = $db->prepare($sql);
@@ -201,13 +211,7 @@ try {
     $stItem->close();
   }
 
-  // Convertir carrito y crear uno nuevo
-  $st = $db->prepare("UPDATE " . CART_TABLE . " SET status='converted' WHERE id=?");
-  if ($st) { $st->bind_param('i', $cartId); $st->execute(); $st->close(); }
-
-  $st = $db->prepare("INSERT INTO " . CART_TABLE . " (id_cliente, status) VALUES (?, 'open')");
-  if ($st) { $st->bind_param('i', $cid); $st->execute(); $st->close(); }
-
+  // Vaciar los items del carrito (el carrito sigue siendo 'open' para reutilización)
   $st = $db->prepare("DELETE FROM " . CART_ITEMS_TABLE . " WHERE cart_id=?");
   if ($st) { $st->bind_param('i', $cartId); $st->execute(); $st->close(); }
 
@@ -235,6 +239,36 @@ try {
   }
   $lines[] = "";
   $lines[] = "Subtotal: " . _clp($subtotal);
+  $lines[] = "Packing: " . _clp($packingCost) . " ({$packingLabel})";
+
+  // Información de envío según el método
+  if ($shippingMethod === 'domicilio' && !empty($shippingAddress)) {
+    $lines[] = "*Método de Entrega: Envío a Domicilio*";
+    $lines[] = "Dirección: {$shippingAddress}";
+    $lines[] = "Comuna: {$shippingCommune}";
+    if ($shippingCostFromPayload > 0) {
+      $lines[] = "Costo envío: " . _clp($shippingCostFromPayload);
+    } else {
+      $lines[] = "Costo envío: Por cotizar";
+    }
+  } elseif ($shippingMethod === 'agencia' && !empty($shippingAgencyName)) {
+    $lines[] = "*Método de Entrega: Retiro en Sucursal Starken*";
+    $lines[] = "Sucursal: {$shippingAgencyName}";
+    if (!empty($shippingAgencyAddress)) {
+      $lines[] = "Dirección: {$shippingAgencyAddress}";
+    }
+    if (!empty($shippingAgencyPhone)) {
+      $lines[] = "Teléfono: {$shippingAgencyPhone}";
+    }
+    if ($shippingCostFromPayload > 0) {
+      $lines[] = "Costo envío: " . _clp($shippingCostFromPayload);
+    } else {
+      $lines[] = "Costo envío: Por cobrar al retiro";
+    }
+  } elseif ($shippingMethod === 'vivero') {
+    $lines[] = "*Método de Entrega: Retiro en Vivero (Gratis)*";
+  }
+
   $lines[] = "Envío: *por pagar* ({$shippingLabel})";
   $lines[] = "Total: *" . _clp($total) . "*";
   if ($notes !== '') {
