@@ -21,12 +21,15 @@ if (!is_array($payload_in)) {
 }
 
 // Parámetros
-$originCommuneCodeDls = (int)($payload_in['origin'] ?? 1);  // code_dls de la comuna origen
-$destinationCommuneCodeDls = (int)($payload_in['destination'] ?? 1);  // code_dls de la comuna destino
-$weight = (float)($payload_in['weight'] ?? 1.0);  // Kilos
-$height = (float)($payload_in['height'] ?? 1.0);  // Centímetros
-$width = (float)($payload_in['width'] ?? 1.0);    // Centímetros
-$depth = (float)($payload_in['depth'] ?? 1.0);    // Centímetros
+$originCommuneCodeDls = (int)($payload_in['origin'] ?? 1);
+$destinationCommuneCodeDls = (int)($payload_in['destination'] ?? 1);
+$quantity = (int)($payload_in['quantity'] ?? 0);
+
+// Dimensiones opcionalmente recibidas del frontend
+$clientWeight = isset($payload_in['weight']) ? (float)$payload_in['weight'] : null;
+$clientHeight = isset($payload_in['height']) ? (float)$payload_in['height'] : null;
+$clientWidth = isset($payload_in['width']) ? (float)$payload_in['width'] : null;
+$clientDepth = isset($payload_in['depth']) ? (float)$payload_in['depth'] : null;
 
 // Validar
 if ($destinationCommuneCodeDls <= 0) {
@@ -37,9 +40,60 @@ if ($originCommuneCodeDls <= 0) {
   bad_request('Origen es requerido');
 }
 
-if ($weight <= 0 || $height <= 0 || $width <= 0 || $depth <= 0) {
-  bad_request('Dimensiones y peso deben ser mayores a 0');
+if ($quantity <= 0) {
+  bad_request('Cantidad es requerida y debe ser mayor a 0');
 }
+
+// Especificaciones de cajas (IDÉNTICAS al frontend)
+$boxSpecs = [
+  'pequeña' => ['height' => 13, 'width' => 29, 'depth' => 27, 'weight' => 1.0],
+  'mediana' => ['height' => 13, 'width' => 29, 'depth' => 54, 'weight' => 2.5],
+  'grande' => ['height' => 26, 'width' => 29, 'depth' => 54, 'weight' => 3.0]
+];
+
+// Calcular tipo de caja y dimensiones basado en cantidad (MISMA LÓGICA que frontend)
+function calculateShippingDimensions(int $qty, array $boxSpecs): array {
+  if ($qty <= 0) {
+    return ['boxType' => '', 'boxCount' => 0, 'weight' => 0, 'height' => 0, 'width' => 0, 'depth' => 0];
+  }
+
+  $boxType = '';
+  $boxCount = 0;
+
+  if ($qty <= 50) {
+    $boxType = 'pequeña';
+    $boxCount = 1;
+  } elseif ($qty <= 100) {
+    $boxType = 'mediana';
+    $boxCount = 1;
+  } else {
+    $boxType = 'grande';
+    $boxCount = (int)ceil($qty / 100);
+  }
+
+  $specs = $boxSpecs[$boxType];
+  $totalWeight = $specs['weight'] * $boxCount;
+  $totalHeight = $specs['height'] * $boxCount;
+  $totalWidth = $specs['width'];
+  $totalDepth = $specs['depth'];
+
+  return [
+    'boxType' => $boxType,
+    'boxCount' => $boxCount,
+    'weight' => $totalWeight,
+    'height' => $totalHeight,
+    'width' => $totalWidth,
+    'depth' => $totalDepth
+  ];
+}
+
+$dimensions = calculateShippingDimensions($quantity, $boxSpecs);
+
+// Usar dimensiones del cliente si se enviaron, sino usar las calculadas
+$weight = $clientWeight !== null ? $clientWeight : (float)$dimensions['weight'];
+$height = $clientHeight !== null ? $clientHeight : (float)$dimensions['height'];
+$width = $clientWidth !== null ? $clientWidth : (float)$dimensions['width'];
+$depth = $clientDepth !== null ? $clientDepth : (float)$dimensions['depth'];
 
 // Traducir code_dls de comunas a city_code_dls
 function getCityDlsFromCommuneDls(mysqli $db, int $communeCodeDls): int {
@@ -133,6 +187,12 @@ try {
     'ok' => true,
     'destination_city_dls' => (int)$destinationCityDls,
     'origin_city_dls' => (int)$originCityDls,
+    'box_type' => $dimensions['boxType'],
+    'box_count' => (int)$dimensions['boxCount'],
+    'weight' => (float)$dimensions['weight'],
+    'height' => (float)$dimensions['height'],
+    'width' => (float)$dimensions['width'],
+    'depth' => (float)$dimensions['depth'],
     'data' => $data
   ]);
 

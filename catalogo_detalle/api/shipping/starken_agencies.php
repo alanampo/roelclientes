@@ -90,7 +90,8 @@ try {
   }
 
   $ch = curl_init();
-  curl_setopt($ch, CURLOPT_URL, $starkenApiUrl . '/agency/city/' . $cityCityDls);
+  // Intentar primero con /agency/agency (endpoint general)
+  curl_setopt($ch, CURLOPT_URL, $starkenApiUrl . '/agency/agency');
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json',
@@ -104,42 +105,39 @@ try {
   $response = curl_exec($ch);
   $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   $curlError = curl_error($ch);
+  $curlInfo = curl_getinfo($ch);
   curl_close($ch);
 
   if ($curlError) {
     throw new RuntimeException("Error de conexión con Starken: {$curlError}");
   }
 
-  if ($httpCode !== 200) {
-    $errorMsg = "Starken API respondió con HTTP {$httpCode}";
-    if (!empty($response)) {
-      $errorMsg .= ": " . substr($response, 0, 200);
-    }
-    throw new RuntimeException($errorMsg);
+  if (empty($response)) {
+    throw new RuntimeException("Starken devolvió respuesta vacía (HTTP {$httpCode}). URL: " . $curlInfo['url'] . ". Content-length: " . ($curlInfo['content_length_download'] ?? 'N/A'));
+  }
+
+  if ($httpCode < 200 || $httpCode >= 300) {
+    throw new RuntimeException("Starken API respondió con HTTP {$httpCode}: " . substr($response, 0, 500));
   }
 
   $data = json_decode($response, true);
   if (!is_array($data)) {
-    throw new RuntimeException("Respuesta de Starken tiene formato inválido");
+    throw new RuntimeException("Respuesta de Starken tiene formato inválido. Response: " . substr($response, 0, 1000) . ". Type: " . gettype($response));
   }
 
-  // Procesar comunas y sus agencias
+  // Procesar agencias directamente (respuesta es un array plano)
   $agencies = [];
-  if (isset($data['comunas']) && is_array($data['comunas'])) {
-    foreach ($data['comunas'] as $commune) {
-      if (isset($commune['agencies']) && is_array($commune['agencies'])) {
-        foreach ($commune['agencies'] as $agency) {
-          $agencies[] = [
-            'id' => (int)($agency['id'] ?? 0),
-            'code_dls' => (int)($agency['code_dls'] ?? 0),
-            'name' => (string)($agency['name'] ?? ''),
-            'address' => (string)($agency['address'] ?? ''),
-            'phone' => (string)($agency['phone'] ?? ''),
-            'commune_name' => (string)($commune['name'] ?? ''),
-            'commune_code_dls' => (int)($commune['code_dls'] ?? 0)
-          ];
-        }
-      }
+  if (is_array($data)) {
+    foreach ($data as $agency) {
+      $agencies[] = [
+        'id' => (int)($agency['id'] ?? 0),
+        'code_dls' => (int)($agency['code_dls'] ?? 0),
+        'name' => (string)($agency['name'] ?? ''),
+        'address' => (string)($agency['address'] ?? ''),
+        'phone' => (string)($agency['phone'] ?? ''),
+        'url_google_maps' => (string)($agency['url_google_maps'] ?? ''),
+        'city_code_dls' => (int)($cityCityDls)  // Agregar city_code_dls para referencia
+      ];
     }
   }
 
@@ -157,9 +155,25 @@ try {
   json_out([
     'ok' => true,
     'agencies' => $agencies,
-    'from_cache' => false
+    'from_cache' => false,
+    '_debug' => [
+      'request_params' => [
+        'commune_code_dls' => $communeCodeDls,
+        'city_code_dls' => $cityCityDls
+      ],
+      'starken_response_type' => gettype($data),
+      'starken_response_sample' => is_array($data) ? array_slice($data, 0, 2) : substr((string)$data, 0, 200)
+    ]
   ]);
 
 } catch (Throwable $e) {
-  json_out(['ok'=>false,'error'=>$e->getMessage()], 400);
+  json_out([
+    'ok' => false,
+    'error' => $e->getMessage(),
+    '_request_params' => [
+      'commune_code_dls' => $communeCodeDls ?? null,
+      'city_code_dls' => $cityCityDls ?? null,
+      'http_code' => $httpCode ?? null
+    ]
+  ], 400);
 }

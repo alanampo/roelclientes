@@ -63,6 +63,51 @@
     return { cost: 4500 * packs, label: `caja grande x${packs} (cada 100 unid.)` };
   }
 
+  // Especificaciones de cajas (IDÉNTICAS al backend)
+  const BOX_SPECS = {
+    pequeña: { height: 13, width: 29, depth: 27, weight: 1.0 },
+    mediana: { height: 13, width: 29, depth: 54, weight: 2.5 },
+    grande: { height: 26, width: 29, depth: 54, weight: 3.0 }
+  };
+
+  // Calcular dimensiones y peso (MISMA LÓGICA que backend)
+  function calculateShippingDimensions(qtyTotal) {
+    const q = Number(qtyTotal || 0);
+
+    if (q <= 0) {
+      return { boxType: '', boxCount: 0, weight: 0, height: 0, width: 0, depth: 0 };
+    }
+
+    let boxType, boxCount;
+
+    if (q <= 50) {
+      boxType = 'pequeña';
+      boxCount = 1;
+    } else if (q <= 100) {
+      boxType = 'mediana';
+      boxCount = 1;
+    } else {
+      boxType = 'grande';
+      boxCount = Math.ceil(q / 100);
+    }
+
+    const specs = BOX_SPECS[boxType];
+    const totalWeight = specs.weight * boxCount;
+    const totalHeight = specs.height * boxCount;
+    const totalWidth = specs.width;
+    const totalDepth = specs.depth;
+
+    return {
+      boxType,
+      boxCount,
+      weight: totalWeight,
+      height: totalHeight,
+      width: totalWidth,
+      depth: totalDepth
+    };
+  }
+
+
   function showAlert(msg, type = 'info') {
     if (!alertBox) return;
     alertBox.textContent = msg;
@@ -90,10 +135,8 @@
   function populateCommuneSelect() {
     if (!shippingCommuneSelect || state.communes.length === 0) return;
 
-    // Clear existing options except first
-    while (shippingCommuneSelect.options.length > 1) {
-      shippingCommuneSelect.remove(1);
-    }
+    // Clear all options and rebuild
+    shippingCommuneSelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
 
     // Add commune options
     state.communes.forEach(comm => {
@@ -102,6 +145,12 @@
       opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
       shippingCommuneSelect.appendChild(opt);
     });
+
+    // Reinitialize Choices if already initialized
+    if (window.communesChoices) {
+      window.communesChoices.destroy();
+      window.communesChoices = new Choices(shippingCommuneSelect, { searchEnabled: true, itemSelectText: '' });
+    }
   }
 
   function showShippingForm() {
@@ -152,20 +201,22 @@
   function populateAgenciesSelect() {
     if (!shippingAgencySelect || state.agencies.length === 0) return;
 
-    // Clear existing options except first
-    while (shippingAgencySelect.options.length > 1) {
-      shippingAgencySelect.remove(1);
-    }
+    // Clear all options and rebuild
+    shippingAgencySelect.innerHTML = '<option value="">Seleccionar sucursal...</option>';
 
     // Add agency options
     state.agencies.forEach(agency => {
       const opt = document.createElement('option');
       opt.value = agency.code_dls;
-      opt.textContent = agency.name + (agency.commune_name ? ` (${agency.commune_name})` : '');
+      opt.textContent = agency.name + (agency.address ? ` - ${agency.address}` : '');
       shippingAgencySelect.appendChild(opt);
     });
 
-    shippingAgencySelect.innerHTML = '<option value="">Seleccionar sucursal...</option>' + shippingAgencySelect.innerHTML;
+    // Reinitialize Choices if already initialized
+    if (window.agenciesChoices) {
+      window.agenciesChoices.destroy();
+      window.agenciesChoices = new Choices(shippingAgencySelect, { searchEnabled: true, itemSelectText: '' });
+    }
   }
 
   function updatePayButtonState() {
@@ -206,17 +257,22 @@
     }
 
     try {
+      // Obtener carrito para calcular cantidad total
+      const cartResp = await fetchJson(buildApiUrl('cart/get.php'), { method: 'GET' });
+      const cart = cartResp.cart || {};
+      const items = cart.items || [];
+      const qtyTotal = items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
+
+      // Calcular dimensiones localmente (rápido, sin esperar al backend)
+      const dimensions = calculateShippingDimensions(qtyTotal);
+
       // Origen: usar domicilio2 (code_dls de la comuna del cliente)
       const originCommuneCodeDls = Number(2735) || 1;
       // Destino: usar la comuna seleccionada
       const destinationCommuneCodeDls = Number(commune) || 1;
 
-      const weight = 1.0;
-      const height = 1.0;
-      const width = 1.0;
-      const depth = 1.0;
-
-      const j = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
+      // Enviar dimensiones calculadas al backend para cotizar con Starken
+      const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,27 +280,28 @@
         },
         body: JSON.stringify({
           destination: destinationCommuneCodeDls,
-          origin: originCommuneCodeDls,  // code_dls de la comuna del cliente
-          weight: weight,
-          height: height,
-          width: width,
-          depth: depth
+          origin: originCommuneCodeDls,
+          quantity: qtyTotal,
+          weight: dimensions.weight,
+          height: dimensions.height,
+          width: dimensions.width,
+          depth: dimensions.depth
         })
       });
 
-      if (j.ok && j.data && j.data.alternativas) {
-        const options = j.data.alternativas;
+      if (response.ok && response.data && response.data.alternativas) {
+        const options = response.data.alternativas;
         if (options.length > 0) {
           const firstOption = options[0];
           state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
-          state.shippingLabel = 'Envío a domicilio (Starken)';
+          state.shippingLabel = `Envío a domicilio (Starken) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
           showAlert('No hay opciones de envío disponibles', 'warning');
         }
       } else {
-        throw new Error(j.error || 'Error en cotización');
+        throw new Error(response.error || 'Error en cotización');
       }
     } catch (e) {
       showAlert(`Error cotizando: ${String(e.message || e)}`, 'danger');
@@ -589,6 +646,30 @@
     await loadCart();
   }
 
+  function initializeSearchableSelects() {
+    // Initialize Choices.js for communes
+    if (shippingCommuneSelect && typeof Choices !== 'undefined') {
+      window.communesChoices = new Choices(shippingCommuneSelect, {
+        searchEnabled: true,
+        itemSelectText: '',
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: 'Seleccionar comuna...'
+      });
+    }
+
+    // Initialize Choices.js for agencies
+    if (shippingAgencySelect && typeof Choices !== 'undefined') {
+      window.agenciesChoices = new Choices(shippingAgencySelect, {
+        searchEnabled: true,
+        itemSelectText: '',
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: 'Seleccionar sucursal...'
+      });
+    }
+  }
+
   function bindEvents() {
     btnLogin?.addEventListener('click', () => {
       // Redirige al catálogo para login
@@ -663,6 +744,9 @@
         .catch((e) => showAlert(String(e.message || e), 'danger'))
         .finally(() => { btnCreateOrder.disabled = false; });
     });
+
+    // Initialize searchable selects
+    initializeSearchableSelects();
   }
 
   async function init() {

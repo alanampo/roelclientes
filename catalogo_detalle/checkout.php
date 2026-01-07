@@ -31,12 +31,36 @@ if ($logged) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Checkout - Roelplant</title>
+  <!-- Choices.js para selects searchables -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
   <!-- checkout.css incluye layout propio, evitamos styles.css del catálogo para no romper el diseño -->
   <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/checkout.css'), ENT_QUOTES, 'UTF-8'); ?>" />
   <style>
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+    /* Ajustes de estilo para Choices.js */
+    .choices {
+      width: 100%;
+    }
+    .choices__inner {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background-color: white;
+    }
+    .choices__list--single {
+      display: flex;
+      padding: 0;
+    }
+    .choices__item {
+      padding: 0;
+      margin: 0;
+    }
+    .choices__button {
+      padding: 0 4px;
+      margin-left: 4px;
     }
   </style>
 </head>
@@ -166,6 +190,8 @@ if ($logged) {
       customer_name: <?= json_encode($customerName, JSON_UNESCAPED_UNICODE) ?>
     };
   </script>
+  <!-- Choices.js para selects searchables -->
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
   <script src="<?php echo htmlspecialchars(buildUrl('assets/checkout.js?v=4.5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>
