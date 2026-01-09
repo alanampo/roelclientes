@@ -160,7 +160,7 @@
   function populateCommuneAgencySelect() {
     if (!shippingCommuneAgencySelect || state.communes.length === 0) return;
 
-    // Destruir Choices PRIMERO (antes de cambiar innerHTML)
+    // Destruir Choices si existe
     if (window.communesAgencyChoices) {
       window.communesAgencyChoices.destroy();
       window.communesAgencyChoices = null;
@@ -177,8 +177,8 @@
       shippingCommuneAgencySelect.appendChild(opt);
     });
 
-    // Reinitialize Choices DESPUÉS de poblar
-    if (typeof Choices !== 'undefined') {
+    // SIEMPRE reinicializar Choices (aunque no haya existido antes)
+    if (typeof Choices !== 'undefined' && shippingCommuneAgencySelect) {
       window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
         searchEnabled: true,
         itemSelectText: '',
