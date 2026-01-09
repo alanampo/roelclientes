@@ -17,6 +17,7 @@
     communes: [],
     agencies: [],
     shippingAgency: '',
+    shippingAgencyQuotedCodeDls: null,  // Código de la sucursal cotizada
     canPayButton: false,  // Si el botón pagar está habilitado
   };
 
@@ -47,7 +48,9 @@
   const shippingCommuneSelect = $('shippingCommune');
   const btnQuoteShipping = $('btnQuoteShipping');
   const shippingAgenciesForm = $('shippingAgenciesForm');
+  const shippingCommuneAgencySelect = $('shippingCommuneAgency');
   const shippingAgencySelect = $('shippingAgency');
+  const btnQuoteAgencyShipping = $('btnQuoteAgencyShipping');
 
   function fmtCLP(n) {
     const v = Number(n || 0);
@@ -126,6 +129,7 @@
       if (j.ok && j.communes) {
         state.communes = j.communes;
         populateCommuneSelect();
+        populateCommuneAgencySelect();
       }
     } catch (e) {
       console.error('Error loading communes:', e.message);
@@ -153,6 +157,27 @@
     }
   }
 
+  function populateCommuneAgencySelect() {
+    if (!shippingCommuneAgencySelect || state.communes.length === 0) return;
+
+    // Clear all options and rebuild
+    shippingCommuneAgencySelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
+
+    // Add commune options
+    state.communes.forEach(comm => {
+      const opt = document.createElement('option');
+      opt.value = comm.code_dls;
+      opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
+      shippingCommuneAgencySelect.appendChild(opt);
+    });
+
+    // Reinitialize Choices if already initialized
+    if (window.communesAgencyChoices) {
+      window.communesAgencyChoices.destroy();
+      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, { searchEnabled: true, itemSelectText: '' });
+    }
+  }
+
   function showShippingForm() {
     const method = document.querySelector('input[name="shipping_method"]:checked')?.value || 'domicilio';
 
@@ -167,6 +192,8 @@
       shippingAgenciesForm.style.display = 'block';
       state.shippingAgency = '';
       state.shippingQuoted = false;  // Requiere cotizar
+      state.shippingAgencyQuotedCodeDls = null;
+      if (shippingCommuneAgencySelect) shippingCommuneAgencySelect.value = '';
       if (shippingAgencySelect) shippingAgencySelect.value = '';
     } else if (method === 'vivero') {
       state.shippingQuoted = true;  // Vivero es "autoaprobado"
@@ -237,10 +264,12 @@
       return;
     }
 
-    // Agencia: solo si se seleccionó sucursal Y se cotizó
+    // Agencia: solo si se cotizó y no cambió de sucursal desde la cotización
     if (method === 'agencia') {
-      state.canPayButton = state.shippingAgency !== '' && state.shippingQuoted;
-      if (btnMakeReservation) btnMakeReservation.disabled = !(state.shippingAgency && state.shippingQuoted);
+      const isValidQuote = state.shippingQuoted &&
+                          String(state.shippingAgency) === String(state.shippingAgencyQuotedCodeDls);
+      state.canPayButton = isValidQuote;
+      if (btnMakeReservation) btnMakeReservation.disabled = !isValidQuote;
       return;
     }
 
@@ -369,6 +398,7 @@
           state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
           state.shippingLabel = `Retiro en sucursal Starken (${agency.name}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
+          state.shippingAgencyQuotedCodeDls = selectedAgencyCode;  // Guardar qué sucursal se cotizó
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
           showAlert('No hay opciones de envío disponibles', 'warning');
@@ -379,6 +409,7 @@
     } catch (e) {
       showAlert(`Error cotizando: ${String(e.message || e)}`, 'danger');
       state.shippingQuoted = false;
+      state.shippingAgencyQuotedCodeDls = null;
     }
 
     updatePayButtonState();
@@ -801,9 +832,20 @@
   }
 
   function initializeSearchableSelects() {
-    // Initialize Choices.js for communes
+    // Initialize Choices.js for communes (Domicilio)
     if (shippingCommuneSelect && typeof Choices !== 'undefined') {
       window.communesChoices = new Choices(shippingCommuneSelect, {
+        searchEnabled: true,
+        itemSelectText: '',
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: 'Seleccionar comuna...'
+      });
+    }
+
+    // Initialize Choices.js for communes (Agencia)
+    if (shippingCommuneAgencySelect && typeof Choices !== 'undefined') {
+      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
         searchEnabled: true,
         itemSelectText: '',
         removeItemButton: true,
@@ -851,34 +893,44 @@
     if (shippingCommuneSelect) {
       shippingCommuneSelect.addEventListener('change', () => {
         updateCustomerShippingAddress().catch((e) => showAlert(String(e.message || e), 'warning'));
-        // Cargar agencias si estamos en modo agencia
-        if (state.shippingMethod === 'agencia') {
+      });
+    }
+
+    // Event listener para comuna en modo agencia
+    if (shippingCommuneAgencySelect) {
+      shippingCommuneAgencySelect.addEventListener('change', () => {
+        const communeCode = shippingCommuneAgencySelect.value || '';
+        state.shippingCommune = communeCode;
+
+        // Cargar agencias cuando cambia la comuna
+        if (communeCode) {
           loadAgencies().catch((e) => showAlert(String(e.message || e), 'warning'));
           // Resetear cotización cuando cambia la comuna
           state.shippingQuoted = false;
+          state.shippingAgencyQuotedCodeDls = null;
+          if (shippingAgencySelect) shippingAgencySelect.value = '';
+          state.shippingAgency = '';
           updatePayButtonState();
         }
       });
     }
 
-    // Event listener para seleccionar sucursal (cotizar automáticamente)
+    // Event listener para seleccionar sucursal (NO cotiza automáticamente)
     if (shippingAgencySelect) {
       shippingAgencySelect.addEventListener('change', () => {
         const selectedCode = shippingAgencySelect.value || '';
         state.shippingAgency = selectedCode;
 
-        if (selectedCode && state.shippingMethod === 'agencia') {
-          // Cotizar automáticamente cuando se selecciona una sucursal
-          quoteAgencyShipping().catch((e) => showAlert(String(e.message || e), 'danger'));
-        } else {
-          // Si se deselecciona, resetear estado
+        // Si cambió la sucursal, resetear la cotización (debe volver a cotizar)
+        if (selectedCode !== state.shippingAgencyQuotedCodeDls) {
           state.shippingQuoted = false;
+          state.shippingAgencyQuotedCodeDls = null;
           updatePayButtonState();
         }
       });
     }
 
-    // Botón Cotizar Envío
+    // Botón Cotizar Envío (Domicilio)
     if (btnQuoteShipping) {
       btnQuoteShipping.addEventListener('click', () => {
         btnQuoteShipping.disabled = true;
@@ -897,11 +949,22 @@
       });
     }
 
-    // Select de agencias
-    if (shippingAgencySelect) {
-      shippingAgencySelect.addEventListener('change', () => {
-        state.shippingAgency = shippingAgencySelect.value;
-        updatePayButtonState();
+    // Botón Cotizar Envío (Agencia)
+    if (btnQuoteAgencyShipping) {
+      btnQuoteAgencyShipping.addEventListener('click', () => {
+        btnQuoteAgencyShipping.disabled = true;
+        const spinner = $('btnQuoteAgencyShippingSpinner');
+        const text = $('btnQuoteAgencyShippingText');
+        if (spinner) spinner.style.display = 'block';
+        if (text) text.style.display = 'none';
+
+        quoteAgencyShipping()
+          .catch((e) => showAlert(String(e.message || e), 'danger'))
+          .finally(() => {
+            btnQuoteAgencyShipping.disabled = false;
+            if (spinner) spinner.style.display = 'none';
+            if (text) text.style.display = 'inline';
+          });
       });
     }
 
