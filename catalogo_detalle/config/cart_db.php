@@ -19,10 +19,10 @@ if (ENVIRONMENT === 'local') {
   define('CART_DB_PASS', '');
   define('CART_DB_NAME', 'roel');
 } else {
-  // Hosting production - usa BD roeluser1_carrito
-  define('CART_DB_HOST', 'localhost');
-  define('CART_DB_USER', 'roeluser1_cart_user');
-  define('CART_DB_PASS', 'g]3,+[-*NneM@sA{');
+  // Hosting production - usa BD unificada roeluser1_bdsys (mismos credenciales que .env)
+  define('CART_DB_HOST', '127.0.0.1');
+  define('CART_DB_USER', 'roeluser1_usercli');
+  define('CART_DB_PASS', 'SergioVM2022!!');
   define('CART_DB_NAME', 'roeluser1_bdsys');
 }
 
