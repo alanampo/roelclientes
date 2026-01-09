@@ -63,8 +63,8 @@ try {
   )";
   $db->query($createTableSQL);
 
-  // Intentar obtener caché de la BD (máximo 24 horas)
-  $qCache = "SELECT agencies_json FROM starken_agencies_cache WHERE city_code_dls=? AND updated_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) LIMIT 1";
+  // Intentar obtener caché de la BD (máximo 6 meses, solo si no está vacío)
+  $qCache = "SELECT agencies_json FROM starken_agencies_cache WHERE city_code_dls=? AND updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH) LIMIT 1";
   $stCache = $db->prepare($qCache);
   if ($stCache) {
     $stCache->bind_param('i', $cityCityDls);
@@ -74,7 +74,8 @@ try {
 
     if ($rowCache) {
       $agencies = json_decode($rowCache['agencies_json'], true);
-      if (is_array($agencies)) {
+      // Solo usar cache si es un array válido y no está vacío
+      if (is_array($agencies) && !empty($agencies)) {
         json_out([
           'ok' => true,
           'agencies' => $agencies,

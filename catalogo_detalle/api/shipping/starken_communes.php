@@ -23,8 +23,8 @@ try {
   )";
   $db->query($createTableSQL);
 
-  // Intentar obtener caché de la BD (máximo 24 horas)
-  $qCache = "SELECT communes_json FROM starken_cache WHERE id=1 AND updated_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) LIMIT 1";
+  // Intentar obtener caché de la BD (máximo 6 meses, solo si no está vacío)
+  $qCache = "SELECT communes_json FROM starken_cache WHERE id=1 AND updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH) LIMIT 1";
   $stCache = $db->prepare($qCache);
   if ($stCache) {
     $stCache->execute();
@@ -33,7 +33,8 @@ try {
 
     if ($rowCache) {
       $communes = json_decode($rowCache['communes_json'], true);
-      if (is_array($communes)) {
+      // Solo usar cache si es un array válido y no está vacío
+      if (is_array($communes) && !empty($communes)) {
         json_out([
           'ok' => true,
           'communes' => $communes,

@@ -160,6 +160,12 @@
   function populateCommuneAgencySelect() {
     if (!shippingCommuneAgencySelect || state.communes.length === 0) return;
 
+    // Destruir Choices PRIMERO (antes de cambiar innerHTML)
+    if (window.communesAgencyChoices) {
+      window.communesAgencyChoices.destroy();
+      window.communesAgencyChoices = null;
+    }
+
     // Clear all options and rebuild
     shippingCommuneAgencySelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
 
@@ -171,10 +177,15 @@
       shippingCommuneAgencySelect.appendChild(opt);
     });
 
-    // Reinitialize Choices if already initialized
-    if (window.communesAgencyChoices) {
-      window.communesAgencyChoices.destroy();
-      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, { searchEnabled: true, itemSelectText: '' });
+    // Reinitialize Choices DESPUÉS de poblar
+    if (typeof Choices !== 'undefined') {
+      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
+        searchEnabled: true,
+        itemSelectText: '',
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: 'Seleccionar comuna...'
+      });
     }
   }
 
