@@ -196,6 +196,6 @@ if ($logged) {
   </script>
   <!-- Choices.js para selects searchables -->
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-  <script src="<?php echo htmlspecialchars(buildUrl('assets/checkout.js?v=125'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/checkout.js?v=2'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>
