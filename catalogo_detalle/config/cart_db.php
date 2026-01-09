@@ -23,7 +23,7 @@ if (ENVIRONMENT === 'local') {
   define('CART_DB_HOST', 'localhost');
   define('CART_DB_USER', 'roeluser1_cart_user');
   define('CART_DB_PASS', 'g]3,+[-*NneM@sA{');
-  define('CART_DB_NAME', 'roeluser1_carrito');
+  define('CART_DB_NAME', 'roeluser1_bdsys');
 }
 
 // Nombres de tablas con prefijo "carrito_" (consistente en ambos entornos)
