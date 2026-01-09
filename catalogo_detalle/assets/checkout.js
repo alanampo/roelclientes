@@ -539,6 +539,58 @@
     updatePayButtonState();
   }
 
+  async function makePayment() {
+    hideAlert();
+    orderResult.classList.add('hidden');
+    orderResult.textContent = '';
+
+    if (!state.me) {
+      showAlert('Debes iniciar sesión para hacer la compra.', 'danger');
+      return;
+    }
+
+    if (!state.csrf) await refreshMe();
+
+    try {
+      // Preparar payload con datos de envío
+      const paymentPayload = {
+        shipping_cost: state.shippingCost || 0
+      };
+
+      // Crear transacción de pago con Webpay
+      const response = await fetchJson(buildApiUrl('payment/webpay_create.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify(paymentPayload),
+      });
+
+      if (response.ok && response.redirect_url && response.token) {
+        // Crear un form POST para enviar a Webpay (es lo que Webpay espera)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = response.redirect_url;
+
+        // Agregar token como campo hidden
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'token_ws';
+        tokenInput.value = response.token;
+        form.appendChild(tokenInput);
+
+        // Enviar form
+        document.body.appendChild(form);
+        form.submit();
+      } else {
+        throw new Error(response.error || 'Error iniciando pago. ' + JSON.stringify(response));
+      }
+    } catch (e) {
+      showAlert(`Error al procesar pago: ${String(e.message || e)}`, 'danger');
+    }
+  }
+
   async function makeReservation() {
     hideAlert();
     orderResult.classList.add('hidden');
@@ -762,7 +814,7 @@
 
     btnMakeReservation?.addEventListener('click', () => {
       btnMakeReservation.disabled = true;
-      makeReservation()
+      makePayment()
         .catch((e) => showAlert(String(e.message || e), 'danger'))
         .finally(() => { btnMakeReservation.disabled = false; });
     });
