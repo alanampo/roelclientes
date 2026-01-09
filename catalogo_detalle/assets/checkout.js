@@ -166,6 +166,7 @@
     } else if (method === 'agencia') {
       shippingAgenciesForm.style.display = 'block';
       state.shippingAgency = '';
+      state.shippingQuoted = false;  // Requiere cotizar
       if (shippingAgencySelect) shippingAgencySelect.value = '';
     } else if (method === 'vivero') {
       state.shippingQuoted = true;  // Vivero es "autoaprobado"
@@ -236,10 +237,10 @@
       return;
     }
 
-    // Agencia: solo si se seleccionó sucursal
+    // Agencia: solo si se seleccionó sucursal Y se cotizó
     if (method === 'agencia') {
-      state.canPayButton = state.shippingAgency !== '';
-      if (btnMakeReservation) btnMakeReservation.disabled = !state.shippingAgency;
+      state.canPayButton = state.shippingAgency !== '' && state.shippingQuoted;
+      if (btnMakeReservation) btnMakeReservation.disabled = !(state.shippingAgency && state.shippingQuoted);
       return;
     }
 
@@ -295,6 +296,78 @@
           const firstOption = options[0];
           state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
           state.shippingLabel = `Envío a domicilio (Starken) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
+          state.shippingQuoted = true;
+          showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
+        } else {
+          showAlert('No hay opciones de envío disponibles', 'warning');
+        }
+      } else {
+        throw new Error(response.error || 'Error en cotización');
+      }
+    } catch (e) {
+      showAlert(`Error cotizando: ${String(e.message || e)}`, 'danger');
+      state.shippingQuoted = false;
+    }
+
+    updatePayButtonState();
+    updateShippingDisplay();
+  }
+
+  async function quoteAgencyShipping() {
+    const selectedAgencyCode = shippingAgencySelect?.value || '';
+    const commune = shippingCommuneSelect?.value || '';
+
+    if (!selectedAgencyCode || !commune) {
+      showAlert('Selecciona una sucursal antes de cotizar', 'warning');
+      return;
+    }
+
+    // Buscar la agencia seleccionada para obtener city_code_dls
+    const agency = state.agencies.find(a => String(a.code_dls) === String(selectedAgencyCode));
+    if (!agency || !agency.city_code_dls) {
+      showAlert('No se pudo obtener información de la sucursal', 'danger');
+      return;
+    }
+
+    try {
+      // Obtener carrito para calcular cantidad total
+      const cartResp = await fetchJson(buildApiUrl('cart/get.php'), { method: 'GET' });
+      const cart = cartResp.cart || {};
+      const items = cart.items || [];
+      const qtyTotal = items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
+
+      // Calcular dimensiones localmente (rápido, sin esperar al backend)
+      const dimensions = calculateShippingDimensions(qtyTotal);
+
+      // Origen: usar domicilio2 (code_dls de la comuna del cliente)
+      const originCommuneCodeDls = Number(2735) || 1;
+      // Destino: usar la ciudad de la sucursal seleccionada (ya que es un city_code_dls)
+      const destinationCityCodeDls = Number(agency.city_code_dls) || 1;
+
+      // Enviar dimensiones calculadas al backend para cotizar con Starken
+      const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': state.csrf,
+        },
+        body: JSON.stringify({
+          destination: destinationCityCodeDls,
+          origin: originCommuneCodeDls,
+          quantity: qtyTotal,
+          weight: dimensions.weight,
+          height: dimensions.height,
+          width: dimensions.width,
+          depth: dimensions.depth
+        })
+      });
+
+      if (response.ok && response.data && response.data.alternativas) {
+        const options = response.data.alternativas;
+        if (options.length > 0) {
+          const firstOption = options[0];
+          state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
+          state.shippingLabel = `Retiro en sucursal Starken (${agency.name}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
@@ -781,6 +854,26 @@
         // Cargar agencias si estamos en modo agencia
         if (state.shippingMethod === 'agencia') {
           loadAgencies().catch((e) => showAlert(String(e.message || e), 'warning'));
+          // Resetear cotización cuando cambia la comuna
+          state.shippingQuoted = false;
+          updatePayButtonState();
+        }
+      });
+    }
+
+    // Event listener para seleccionar sucursal (cotizar automáticamente)
+    if (shippingAgencySelect) {
+      shippingAgencySelect.addEventListener('change', () => {
+        const selectedCode = shippingAgencySelect.value || '';
+        state.shippingAgency = selectedCode;
+
+        if (selectedCode && state.shippingMethod === 'agencia') {
+          // Cotizar automáticamente cuando se selecciona una sucursal
+          quoteAgencyShipping().catch((e) => showAlert(String(e.message || e), 'danger'));
+        } else {
+          // Si se deselecciona, resetear estado
+          state.shippingQuoted = false;
+          updatePayButtonState();
         }
       });
     }
