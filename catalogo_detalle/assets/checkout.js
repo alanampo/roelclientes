@@ -128,57 +128,42 @@
       const j = await fetchJson(buildApiUrl('shipping/starken_communes.php'), { method: 'GET' });
       if (j.ok && j.communes) {
         state.communes = j.communes;
-        populateCommuneSelect();
-        populateCommuneAgencySelect();
+        populateCommunes();
       }
     } catch (e) {
       console.error('Error loading communes:', e.message);
     }
   }
 
-  function populateCommuneSelect() {
-    if (!shippingCommuneSelect || state.communes.length === 0) return;
+  function populateCommunes() {
+    if (state.communes.length === 0) return;
 
-    // Clear all options and rebuild
-    shippingCommuneSelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
+    // Poblar AMBOS selects con las mismas comunas (una sola vez)
+    [shippingCommuneSelect, shippingCommuneAgencySelect].forEach(select => {
+      if (!select) return;
 
-    // Add commune options
-    state.communes.forEach(comm => {
-      const opt = document.createElement('option');
-      opt.value = comm.code_dls;
-      opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
-      shippingCommuneSelect.appendChild(opt);
+      // Limpiar y repoblar opciones
+      select.innerHTML = '<option value="">Seleccionar comuna...</option>';
+      state.communes.forEach(comm => {
+        const opt = document.createElement('option');
+        opt.value = comm.code_dls;
+        opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
+        select.appendChild(opt);
+      });
     });
 
-    // Reinitialize Choices if already initialized
-    if (window.communesChoices) {
-      window.communesChoices.destroy();
-      window.communesChoices = new Choices(shippingCommuneSelect, { searchEnabled: true, itemSelectText: '' });
-    }
-  }
-
-  function populateCommuneAgencySelect() {
-    if (!shippingCommuneAgencySelect || state.communes.length === 0) return;
-
-    // Destruir Choices si existe
-    if (window.communesAgencyChoices) {
-      window.communesAgencyChoices.destroy();
-      window.communesAgencyChoices = null;
+    // Reinicializar Choices.js para ambos selects (solo si no estaban inicializados)
+    if (shippingCommuneSelect && !window.communesChoices && typeof Choices !== 'undefined') {
+      window.communesChoices = new Choices(shippingCommuneSelect, {
+        searchEnabled: true,
+        itemSelectText: '',
+        removeItemButton: true,
+        placeholder: true,
+        placeholderValue: 'Seleccionar comuna...'
+      });
     }
 
-    // Clear all options and rebuild
-    shippingCommuneAgencySelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
-
-    // Add commune options
-    state.communes.forEach(comm => {
-      const opt = document.createElement('option');
-      opt.value = comm.code_dls;
-      opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
-      shippingCommuneAgencySelect.appendChild(opt);
-    });
-
-    // SIEMPRE reinicializar Choices (aunque no haya existido antes)
-    if (typeof Choices !== 'undefined' && shippingCommuneAgencySelect) {
+    if (shippingCommuneAgencySelect && !window.communesAgencyChoices && typeof Choices !== 'undefined') {
       window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
         searchEnabled: true,
         itemSelectText: '',
@@ -192,7 +177,7 @@
   function showShippingForm() {
     const method = document.querySelector('input[name="shipping_method"]:checked')?.value || 'domicilio';
 
-    // Hide all forms first
+    // Simplemente ocultar/mostrar los divs, sin manipular los selects
     shippingAddressForm.style.display = 'none';
     shippingAgenciesForm.style.display = 'none';
 
@@ -202,12 +187,10 @@
     } else if (method === 'agencia') {
       shippingAgenciesForm.style.display = 'block';
       state.shippingAgency = '';
-      state.shippingQuoted = false;  // Requiere cotizar
+      state.shippingQuoted = false;
       state.shippingAgencyQuotedCodeDls = null;
-      if (shippingCommuneAgencySelect) shippingCommuneAgencySelect.value = '';
-      if (shippingAgencySelect) shippingAgencySelect.value = '';
     } else if (method === 'vivero') {
-      state.shippingQuoted = true;  // Vivero es "autoaprobado"
+      state.shippingQuoted = true;
     }
 
     updatePayButtonState();
@@ -215,7 +198,9 @@
 
   async function loadAgencies() {
     try {
-      const communeCode = shippingCommuneSelect?.value || '';
+      // Usar el select de comuna correcto según el método actual
+      const communeSelect = state.shippingMethod === 'agencia' ? shippingCommuneAgencySelect : shippingCommuneSelect;
+      const communeCode = communeSelect?.value || '';
 
       const j = await fetchJson(buildApiUrl('shipping/starken_agencies.php'), {
         method: 'POST',
@@ -355,7 +340,7 @@
 
   async function quoteAgencyShipping() {
     const selectedAgencyCode = shippingAgencySelect?.value || '';
-    const commune = shippingCommuneSelect?.value || '';
+    const commune = shippingCommuneAgencySelect?.value || '';
 
     if (!selectedAgencyCode || !commune) {
       showAlert('Selecciona una sucursal antes de cotizar', 'warning');
@@ -472,9 +457,8 @@
       // Wait for manual quote button
       state.shippingLabel = 'Haz clic en "Cotizar Envío"';
     } else if (method === 'agencia') {
-      // Wait for agency selection
-      state.shippingLabel = 'Selecciona una sucursal';
-      await loadAgencies();
+      // Wait for commune selection (agencies will load via event listener)
+      state.shippingLabel = 'Selecciona una comuna';
     }
 
     updatePayButtonState();
@@ -843,29 +827,8 @@
   }
 
   function initializeSearchableSelects() {
-    // Initialize Choices.js for communes (Domicilio)
-    if (shippingCommuneSelect && typeof Choices !== 'undefined') {
-      window.communesChoices = new Choices(shippingCommuneSelect, {
-        searchEnabled: true,
-        itemSelectText: '',
-        removeItemButton: true,
-        placeholder: true,
-        placeholderValue: 'Seleccionar comuna...'
-      });
-    }
-
-    // Initialize Choices.js for communes (Agencia)
-    if (shippingCommuneAgencySelect && typeof Choices !== 'undefined') {
-      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
-        searchEnabled: true,
-        itemSelectText: '',
-        removeItemButton: true,
-        placeholder: true,
-        placeholderValue: 'Seleccionar comuna...'
-      });
-    }
-
-    // Initialize Choices.js for agencies
+    // Initialize Choices.js for agencies only
+    // (Communes will be initialized by populateCommunes() when data loads)
     if (shippingAgencySelect && typeof Choices !== 'undefined') {
       window.agenciesChoices = new Choices(shippingAgencySelect, {
         searchEnabled: true,
