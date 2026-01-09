@@ -343,8 +343,8 @@
 
       // Origen: vivero (code_dls de la comuna del cliente)
       const originCommuneCodeDls = Number(2735) || 1;
-      // Destino: usar el code_dls de la sucursal seleccionada
-      const destinationAgencyCodeDls = Number(agency.code_dls) || 1;
+      // Destino: usar city_code_dls de la sucursal seleccionada
+      const destinationCityCodeDls = Number(agency.city_code_dls) || 1;
 
       // Enviar dimensiones calculadas al backend para cotizar con Starken
       const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
@@ -354,7 +354,7 @@
           'X-CSRF-Token': state.csrf,
         },
         body: JSON.stringify({
-          destination: destinationAgencyCodeDls,
+          destination: destinationCityCodeDls,
           origin: originCommuneCodeDls,
           quantity: qtyTotal,
           weight: dimensions.weight,
@@ -430,10 +430,18 @@
     if (method === 'vivero') {
       state.shippingCost = 0;
       state.shippingLabel = 'Retiro en vivero (Gratis)';
+      state.shippingQuoted = true;
     } else if (method === 'domicilio') {
+      // Reset cuando cambia a domicilio
+      state.shippingCost = 0;
       state.shippingLabel = 'Haz clic en "Cotizar Envío"';
+      state.shippingQuoted = false;
     } else if (method === 'agencia') {
+      // Reset cuando cambia a agencia
+      state.shippingCost = 0;
       state.shippingLabel = 'Selecciona una sucursal y cotiza';
+      state.shippingQuoted = false;
+      state.shippingAgencyQuotedCodeDls = null;
     }
 
     updatePayButtonState();

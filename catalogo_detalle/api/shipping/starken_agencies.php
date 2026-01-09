@@ -53,54 +53,68 @@ try {
     throw new RuntimeException('Extensión cURL no disponible');
   }
 
-  $ch = curl_init();
-  // Obtener TODAS las agencias de Chile
-  curl_setopt($ch, CURLOPT_URL, $starkenApiUrl . '/agency/agency');
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'Cache-Control: no-cache',
-    'Authorization: Bearer ' . $starkenToken
-  ]);
-  curl_setopt($ch, CURLOPT_TIMEOUT, 300);  // 5 minutos
-  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
-  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+  // Obtener todas las ciudades desde el caché de comunas para saber cuáles existen
+  $allCities = [];
+  $qCommunes = "SELECT communes_json FROM starken_cache WHERE id=1 LIMIT 1";
+  $stCommunes = $db->prepare($qCommunes);
+  if ($stCommunes) {
+    $stCommunes->execute();
+    $rowCommunes = $stCommunes->get_result()->fetch_assoc();
+    $stCommunes->close();
 
-  $response = curl_exec($ch);
-  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  $curlError = curl_error($ch);
-  $curlInfo = curl_getinfo($ch);
-  curl_close($ch);
-
-  if ($curlError) {
-    throw new RuntimeException("Error de conexión con Starken: {$curlError}");
+    if ($rowCommunes) {
+      $communes = json_decode($rowCommunes['communes_json'], true);
+      if (is_array($communes)) {
+        // Extraer ciudades únicas
+        foreach ($communes as $comm) {
+          $cityCodeDls = (int)($comm['city_code_dls'] ?? 0);
+          if ($cityCodeDls > 0 && !in_array($cityCodeDls, $allCities)) {
+            $allCities[] = $cityCodeDls;
+          }
+        }
+      }
+    }
   }
 
-  if (empty($response)) {
-    throw new RuntimeException("Starken devolvió respuesta vacía (HTTP {$httpCode})");
-  }
-
-  if ($httpCode < 200 || $httpCode >= 300) {
-    throw new RuntimeException("Starken API respondió con HTTP {$httpCode}: " . substr($response, 0, 500));
-  }
-
-  $data = json_decode($response, true);
-  if (!is_array($data)) {
-    throw new RuntimeException("Respuesta de Starken tiene formato inválido");
-  }
-
-  // Procesar agencias simples (devuelve array plano)
+  // Obtener agencias de cada ciudad usando /agency/city/
   $agencies = [];
-  if (is_array($data)) {
-    foreach ($data as $agency) {
-      $agencies[] = [
-        'id' => (int)($agency['id'] ?? 0),
-        'code_dls' => (int)($agency['code_dls'] ?? 0),
-        'name' => (string)($agency['name'] ?? ''),
-        'address' => (string)($agency['address'] ?? ''),
-        'phone' => (string)($agency['phone'] ?? ''),
-        'url_google_maps' => (string)($agency['url_google_maps'] ?? '')
-      ];
+  foreach ($allCities as $cityCodeDls) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $starkenApiUrl . '/agency/city/' . $cityCodeDls);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+      'Content-Type: application/json',
+      'Cache-Control: no-cache',
+      'Authorization: Bearer ' . $starkenToken
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response && $httpCode >= 200 && $httpCode < 300) {
+      $data = json_decode($response, true);
+      if (is_array($data) && isset($data['comunas'])) {
+        // Procesar cada comuna dentro de esta ciudad
+        foreach ($data['comunas'] as $comuna) {
+          if (isset($comuna['agencies']) && is_array($comuna['agencies'])) {
+            foreach ($comuna['agencies'] as $agency) {
+              $agencies[] = [
+                'id' => (int)($agency['id'] ?? 0),
+                'code_dls' => (int)($agency['code_dls'] ?? 0),
+                'name' => (string)($agency['name'] ?? ''),
+                'address' => (string)($agency['address'] ?? ''),
+                'phone' => (string)($agency['phone'] ?? ''),
+                'url_google_maps' => (string)($agency['url_google_maps'] ?? ''),
+                'city_code_dls' => $cityCodeDls
+              ];
+            }
+          }
+        }
+      }
     }
   }
 
@@ -119,7 +133,18 @@ try {
   json_out([
     'ok' => true,
     'agencies' => $agencies,
-    'from_cache' => false
+    'from_cache' => false,
+    '_debug' => [
+      'total_agencies' => count($agencies),
+      'total_cities' => count($allCities),
+      'cities_list' => $allCities,
+      'first_agency_sample' => !empty($agencies) ? $agencies[0] : null,
+      'agencies_per_city' => array_reduce($agencies, function($carry, $item) {
+        $city = $item['city_code_dls'];
+        $carry[$city] = ($carry[$city] ?? 0) + 1;
+        return $carry;
+      }, [])
+    ]
   ]);
 
 } catch (Throwable $e) {
