@@ -1,84 +1,47 @@
 <?php
 /**
  * catalogo_detalle/api/shipping/starken_agencies.php
- * Obtiene lista de sucursales de Starken para una ciudad
+ * Obtiene lista de TODAS las sucursales de Starken
  */
 declare(strict_types=1);
 
 require __DIR__ . '/../_bootstrap.php';
 
-require_post();
-require_csrf();
-
-$cid = require_auth();
+require_auth();
 $db = db();
-
-// Parámetros
-$raw = file_get_contents('php://input');
-$payload_in = json_decode($raw ?: '{}', true);
-if (!is_array($payload_in)) {
-  bad_request('Payload inválido');
-}
-
-$communeCodeDls = (int)($payload_in['commune_code_dls'] ?? 1);  // Code DLS de la comuna
-
-if ($communeCodeDls <= 0) {
-  bad_request('commune_code_dls es requerido');
-}
-
-// Traducir code_dls de la comuna a city_code_dls (usando la misma función que starken_quote.php)
-function getCityDlsFromCommuneDls(mysqli $db, int $communeCodeDls): int {
-  $db->query("CREATE TABLE IF NOT EXISTS starken_commune_city_map (
-    commune_code_dls INT PRIMARY KEY,
-    city_code_dls INT NOT NULL
-  )");
-
-  $q = "SELECT city_code_dls FROM starken_commune_city_map WHERE commune_code_dls=? LIMIT 1";
-  $st = $db->prepare($q);
-  if ($st) {
-    $st->bind_param('i', $communeCodeDls);
-    $st->execute();
-    $row = $st->get_result()->fetch_assoc();
-    $st->close();
-    if ($row) {
-      return (int)$row['city_code_dls'];
-    }
-  }
-
-  return $communeCodeDls;
-}
-
-$cityCityDls = getCityDlsFromCommuneDls($db, $communeCodeDls);
 
 // Token de Starken
 $starkenToken = '7b14bb8a-9df5-4cea-bb71-c6bc285b2ad7';
 $starkenApiUrl = 'https://gateway.starken.cl/externo/integracion';
 
 try {
-  // Crear tabla de caché si no existe
-  $createTableSQL = "CREATE TABLE IF NOT EXISTS starken_agencies_cache (
-    city_code_dls INT PRIMARY KEY,
-    agencies_json LONGTEXT NOT NULL,
+  // Crear tabla de caché global (todas las agencias de Chile, cacheadas una sola vez)
+  $createTableSQL = "CREATE TABLE IF NOT EXISTS starken_agencies_global_cache (
+    id INT PRIMARY KEY DEFAULT 1,
+    all_agencies_json LONGTEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   )";
   $db->query($createTableSQL);
 
-  // Intentar obtener caché de la BD (máximo 6 meses, solo si no está vacío)
-  $qCache = "SELECT agencies_json FROM starken_agencies_cache WHERE city_code_dls=? AND updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH) LIMIT 1";
+  // Intentar obtener caché global (máximo 6 meses, solo si no está vacío)
+  $qCache = "SELECT all_agencies_json FROM starken_agencies_global_cache WHERE id=1 AND updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH) LIMIT 1";
   $stCache = $db->prepare($qCache);
+  $useGlobalCache = false;
+  $allAgencies = [];
+
   if ($stCache) {
-    $stCache->bind_param('i', $cityCityDls);
     $stCache->execute();
     $rowCache = $stCache->get_result()->fetch_assoc();
     $stCache->close();
 
     if ($rowCache) {
-      $agencies = json_decode($rowCache['agencies_json'], true);
+      $allAgencies = json_decode($rowCache['all_agencies_json'], true);
       // Solo usar cache si es un array válido y no está vacío
-      if (is_array($agencies) && !empty($agencies)) {
+      if (is_array($allAgencies) && !empty($allAgencies)) {
+        $useGlobalCache = true;
         json_out([
           'ok' => true,
-          'agencies' => $agencies,
+          'agencies' => $allAgencies,
           'from_cache' => true
         ]);
       }
@@ -91,7 +54,7 @@ try {
   }
 
   $ch = curl_init();
-  // Intentar primero con /agency/agency (endpoint general)
+  // Obtener TODAS las agencias de Chile
   curl_setopt($ch, CURLOPT_URL, $starkenApiUrl . '/agency/agency');
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -114,7 +77,7 @@ try {
   }
 
   if (empty($response)) {
-    throw new RuntimeException("Starken devolvió respuesta vacía (HTTP {$httpCode}). URL: " . $curlInfo['url'] . ". Content-length: " . ($curlInfo['content_length_download'] ?? 'N/A'));
+    throw new RuntimeException("Starken devolvió respuesta vacía (HTTP {$httpCode})");
   }
 
   if ($httpCode < 200 || $httpCode >= 300) {
@@ -123,10 +86,10 @@ try {
 
   $data = json_decode($response, true);
   if (!is_array($data)) {
-    throw new RuntimeException("Respuesta de Starken tiene formato inválido. Response: " . substr($response, 0, 1000) . ". Type: " . gettype($response));
+    throw new RuntimeException("Respuesta de Starken tiene formato inválido");
   }
 
-  // Procesar agencias directamente (respuesta es un array plano)
+  // Procesar agencias simples (devuelve array plano)
   $agencies = [];
   if (is_array($data)) {
     foreach ($data as $agency) {
@@ -136,19 +99,19 @@ try {
         'name' => (string)($agency['name'] ?? ''),
         'address' => (string)($agency['address'] ?? ''),
         'phone' => (string)($agency['phone'] ?? ''),
-        'url_google_maps' => (string)($agency['url_google_maps'] ?? ''),
-        'city_code_dls' => (int)($cityCityDls)  // Agregar city_code_dls para referencia
+        'url_google_maps' => (string)($agency['url_google_maps'] ?? '')
       ];
     }
   }
 
-  // Guardar en caché de BD
+  // Guardar TODAS las agencias en caché global
   $agenciesJson = json_encode($agencies);
-  $qInsert = "INSERT INTO starken_agencies_cache (city_code_dls, agencies_json, updated_at) VALUES (?, ?, NOW())
-              ON DUPLICATE KEY UPDATE agencies_json=VALUES(agencies_json), updated_at=NOW()";
+  $cacheId = 1;
+  $qInsert = "INSERT INTO starken_agencies_global_cache (id, all_agencies_json, updated_at) VALUES (?, ?, NOW())
+              ON DUPLICATE KEY UPDATE all_agencies_json=VALUES(all_agencies_json), updated_at=NOW()";
   $stInsert = $db->prepare($qInsert);
   if ($stInsert) {
-    $stInsert->bind_param('is', $cityCityDls, $agenciesJson);
+    $stInsert->bind_param('is', $cacheId, $agenciesJson);
     $stInsert->execute();
     $stInsert->close();
   }
@@ -156,25 +119,12 @@ try {
   json_out([
     'ok' => true,
     'agencies' => $agencies,
-    'from_cache' => false,
-    '_debug' => [
-      'request_params' => [
-        'commune_code_dls' => $communeCodeDls,
-        'city_code_dls' => $cityCityDls
-      ],
-      'starken_response_type' => gettype($data),
-      'starken_response_sample' => is_array($data) ? array_slice($data, 0, 2) : substr((string)$data, 0, 200)
-    ]
+    'from_cache' => false
   ]);
 
 } catch (Throwable $e) {
   json_out([
     'ok' => false,
-    'error' => $e->getMessage(),
-    '_request_params' => [
-      'commune_code_dls' => $communeCodeDls ?? null,
-      'city_code_dls' => $cityCityDls ?? null,
-      'http_code' => $httpCode ?? null
-    ]
+    'error' => $e->getMessage()
   ], 400);
 }

@@ -153,16 +153,10 @@ if ($logged) {
                 </button>
               </div>
 
-              <!-- Select de sucursales para Retiro en Sucursal -->
+              <!-- Select de sucursales para Retiro en Sucursal (búsqueda por nombre) -->
               <div id="shippingAgenciesForm" style="margin-top:14px;padding:12px;background:#f5f5f5;border-radius:4px;display:none">
                 <div style="margin-bottom:10px">
-                  <label style="display:block;margin-bottom:4px;font-weight:600">Comuna</label>
-                  <select id="shippingCommuneAgency" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box">
-                    <option value="">Seleccionar comuna...</option>
-                  </select>
-                </div>
-                <div style="margin-bottom:10px">
-                  <label style="display:block;margin-bottom:4px;font-weight:600">Sucursal</label>
+                  <label style="display:block;margin-bottom:4px;font-weight:600">Sucursal (busca por nombre)</label>
                   <select id="shippingAgency" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box">
                     <option value="">Seleccionar sucursal...</option>
                   </select>

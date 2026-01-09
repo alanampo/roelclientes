@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Cambia ENVIRONMENT a 'hosting' o 'local' según necesites
  */
 
-define('ENVIRONMENT', 'hosting'); // 'local' o 'hosting'
+define('ENVIRONMENT', 'local'); // 'local' o 'hosting'
 
 if (ENVIRONMENT === 'local') {
   // Local development - usa BD roel (unificada)

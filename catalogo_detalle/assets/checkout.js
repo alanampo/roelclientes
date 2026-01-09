@@ -48,7 +48,6 @@
   const shippingCommuneSelect = $('shippingCommune');
   const btnQuoteShipping = $('btnQuoteShipping');
   const shippingAgenciesForm = $('shippingAgenciesForm');
-  const shippingCommuneAgencySelect = $('shippingCommuneAgency');
   const shippingAgencySelect = $('shippingAgency');
   const btnQuoteAgencyShipping = $('btnQuoteAgencyShipping');
 
@@ -136,35 +135,20 @@
   }
 
   function populateCommunes() {
-    if (state.communes.length === 0) return;
+    if (state.communes.length === 0 || !shippingCommuneSelect) return;
 
-    // Poblar AMBOS selects con las mismas comunas (una sola vez)
-    [shippingCommuneSelect, shippingCommuneAgencySelect].forEach(select => {
-      if (!select) return;
-
-      // Limpiar y repoblar opciones
-      select.innerHTML = '<option value="">Seleccionar comuna...</option>';
-      state.communes.forEach(comm => {
-        const opt = document.createElement('option');
-        opt.value = comm.code_dls;
-        opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
-        select.appendChild(opt);
-      });
+    // Limpiar y repoblar opciones del select de comunas
+    shippingCommuneSelect.innerHTML = '<option value="">Seleccionar comuna...</option>';
+    state.communes.forEach(comm => {
+      const opt = document.createElement('option');
+      opt.value = comm.code_dls;
+      opt.textContent = comm.name + (comm.city_name ? ` (${comm.city_name})` : '');
+      shippingCommuneSelect.appendChild(opt);
     });
 
-    // Reinicializar Choices.js para ambos selects (solo si no estaban inicializados)
-    if (shippingCommuneSelect && !window.communesChoices && typeof Choices !== 'undefined') {
+    // Reinicializar Choices.js (solo si no estaba inicializado)
+    if (!window.communesChoices && typeof Choices !== 'undefined') {
       window.communesChoices = new Choices(shippingCommuneSelect, {
-        searchEnabled: true,
-        itemSelectText: '',
-        removeItemButton: true,
-        placeholder: true,
-        placeholderValue: 'Seleccionar comuna...'
-      });
-    }
-
-    if (shippingCommuneAgencySelect && !window.communesAgencyChoices && typeof Choices !== 'undefined') {
-      window.communesAgencyChoices = new Choices(shippingCommuneAgencySelect, {
         searchEnabled: true,
         itemSelectText: '',
         removeItemButton: true,
@@ -177,7 +161,7 @@
   function showShippingForm() {
     const method = document.querySelector('input[name="shipping_method"]:checked')?.value || 'domicilio';
 
-    // Simplemente ocultar/mostrar los divs, sin manipular los selects
+    // Simplemente ocultar/mostrar los divs
     shippingAddressForm.style.display = 'none';
     shippingAgenciesForm.style.display = 'none';
 
@@ -189,6 +173,10 @@
       state.shippingAgency = '';
       state.shippingQuoted = false;
       state.shippingAgencyQuotedCodeDls = null;
+      // Cargar todas las agencias
+      if (state.agencies.length === 0) {
+        loadAllAgencies().catch((e) => console.error('Error loading agencies:', e.message));
+      }
     } else if (method === 'vivero') {
       state.shippingQuoted = true;
     }
@@ -196,21 +184,11 @@
     updatePayButtonState();
   }
 
-  async function loadAgencies() {
+  async function loadAllAgencies() {
     try {
-      // Usar el select de comuna correcto según el método actual
-      const communeSelect = state.shippingMethod === 'agencia' ? shippingCommuneAgencySelect : shippingCommuneSelect;
-      const communeCode = communeSelect?.value || '';
-
+      // Cargar TODAS las agencias de Starken (sin filtros)
       const j = await fetchJson(buildApiUrl('shipping/starken_agencies.php'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': state.csrf,
-        },
-        body: JSON.stringify({
-          commune_code_dls: Number(communeCode) || 1
-        })
+        method: 'GET'
       });
 
       if (j.ok && j.agencies) {
@@ -340,16 +318,15 @@
 
   async function quoteAgencyShipping() {
     const selectedAgencyCode = shippingAgencySelect?.value || '';
-    const commune = shippingCommuneAgencySelect?.value || '';
 
-    if (!selectedAgencyCode || !commune) {
+    if (!selectedAgencyCode) {
       showAlert('Selecciona una sucursal antes de cotizar', 'warning');
       return;
     }
 
-    // Buscar la agencia seleccionada para obtener city_code_dls
+    // Buscar la agencia seleccionada
     const agency = state.agencies.find(a => String(a.code_dls) === String(selectedAgencyCode));
-    if (!agency || !agency.city_code_dls) {
+    if (!agency) {
       showAlert('No se pudo obtener información de la sucursal', 'danger');
       return;
     }
@@ -361,13 +338,13 @@
       const items = cart.items || [];
       const qtyTotal = items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
-      // Calcular dimensiones localmente (rápido, sin esperar al backend)
+      // Calcular dimensiones localmente
       const dimensions = calculateShippingDimensions(qtyTotal);
 
-      // Origen: usar domicilio2 (code_dls de la comuna del cliente)
+      // Origen: vivero (code_dls de la comuna del cliente)
       const originCommuneCodeDls = Number(2735) || 1;
-      // Destino: usar la ciudad de la sucursal seleccionada (ya que es un city_code_dls)
-      const destinationCityCodeDls = Number(agency.city_code_dls) || 1;
+      // Destino: usar el code_dls de la sucursal seleccionada
+      const destinationAgencyCodeDls = Number(agency.code_dls) || 1;
 
       // Enviar dimensiones calculadas al backend para cotizar con Starken
       const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
@@ -377,7 +354,7 @@
           'X-CSRF-Token': state.csrf,
         },
         body: JSON.stringify({
-          destination: destinationCityCodeDls,
+          destination: destinationAgencyCodeDls,
           origin: originCommuneCodeDls,
           quantity: qtyTotal,
           weight: dimensions.weight,
@@ -394,7 +371,7 @@
           state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
           state.shippingLabel = `Retiro en sucursal Starken (${agency.name}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
-          state.shippingAgencyQuotedCodeDls = selectedAgencyCode;  // Guardar qué sucursal se cotizó
+          state.shippingAgencyQuotedCodeDls = selectedAgencyCode;
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
           showAlert('No hay opciones de envío disponibles', 'warning');
@@ -454,11 +431,9 @@
       state.shippingCost = 0;
       state.shippingLabel = 'Retiro en vivero (Gratis)';
     } else if (method === 'domicilio') {
-      // Wait for manual quote button
       state.shippingLabel = 'Haz clic en "Cotizar Envío"';
     } else if (method === 'agencia') {
-      // Wait for commune selection (agencies will load via event listener)
-      state.shippingLabel = 'Selecciona una comuna';
+      state.shippingLabel = 'Selecciona una sucursal y cotiza';
     }
 
     updatePayButtonState();
@@ -867,25 +842,6 @@
     if (shippingCommuneSelect) {
       shippingCommuneSelect.addEventListener('change', () => {
         updateCustomerShippingAddress().catch((e) => showAlert(String(e.message || e), 'warning'));
-      });
-    }
-
-    // Event listener para comuna en modo agencia
-    if (shippingCommuneAgencySelect) {
-      shippingCommuneAgencySelect.addEventListener('change', () => {
-        const communeCode = shippingCommuneAgencySelect.value || '';
-        state.shippingCommune = communeCode;
-
-        // Cargar agencias cuando cambia la comuna
-        if (communeCode) {
-          loadAgencies().catch((e) => showAlert(String(e.message || e), 'warning'));
-          // Resetear cotización cuando cambia la comuna
-          state.shippingQuoted = false;
-          state.shippingAgencyQuotedCodeDls = null;
-          if (shippingAgencySelect) shippingAgencySelect.value = '';
-          state.shippingAgency = '';
-          updatePayButtonState();
-        }
       });
     }
 
