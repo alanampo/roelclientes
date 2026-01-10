@@ -29,7 +29,8 @@ if (ENVIRONMENT === 'local') {
 // Nombres de tablas con prefijo "carrito_" (consistente en ambos entornos)
 define('CART_TABLE', 'carrito_carts');
 define('CART_ITEMS_TABLE', 'carrito_cart_items');
-define('ORDERS_TABLE', 'carrito_orders');
-define('ORDER_ITEMS_TABLE', 'carrito_order_items');
+// ORDERS_TABLE deprecated - now using reservas table in production DB
+// define('ORDERS_TABLE', 'carrito_orders');
+// define('ORDER_ITEMS_TABLE', 'carrito_order_items');
 define('PROD_REQUESTS_TABLE', 'carrito_production_requests');
 define('PROD_REQUEST_ITEMS_TABLE', 'carrito_production_request_items');

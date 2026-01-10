@@ -713,8 +713,24 @@
     try {
       // Preparar payload con datos de envío
       const paymentPayload = {
-        shipping_cost: state.shippingCost || 0
+        shipping_method: state.shippingMethod,
+        shipping_cost: state.shippingCost || 0,
+        notes: notesEl ? String(notesEl.value || '').trim() : ''
       };
+
+      // Agregar datos específicos según método de envío
+      if (state.shippingMethod === 'domicilio') {
+        paymentPayload.shipping_address = shippingAddressInput?.value || '';
+        paymentPayload.shipping_commune = shippingCommuneSelect?.value || '';
+      } else if (state.shippingMethod === 'agencia') {
+        const selectedAgencyCode = shippingAgencySelect?.value || '';
+        const agency = state.agencies.find(a => String(a.code_dls) === String(selectedAgencyCode));
+        if (agency) {
+          paymentPayload.shipping_agency_code_dls = agency.code_dls;
+          paymentPayload.shipping_agency_name = agency.name;
+          paymentPayload.shipping_agency_address = agency.address;
+        }
+      }
 
       // Crear transacción de pago con Webpay
       const response = await fetchJson(buildApiUrl('payment/webpay_create.php'), {

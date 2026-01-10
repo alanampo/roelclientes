@@ -14,6 +14,7 @@ $paymentData = $_SESSION['webpay_payment_success'] ?? null;
 unset($_SESSION['webpay_payment_success']);
 
 $transactionId = (int)($_GET['transaction_id'] ?? 0);
+$reservationId = (int)($_GET['reservation_id'] ?? 0);
 $logged = !empty($_SESSION['customer_id']);
 
 ?><!doctype html>
@@ -88,6 +89,12 @@ $logged = !empty($_SESSION['customer_id']);
 
       <?php if ($paymentData): ?>
       <div class="transaction-details">
+        <?php if (!empty($paymentData['reservation_id'])): ?>
+        <div>
+          <span class="label">Número de Reserva:</span>
+          <span class="value" style="font-weight: 700; color: #4CAF50;">#<?php echo htmlspecialchars((string)$paymentData['reservation_id']); ?></span>
+        </div>
+        <?php endif; ?>
         <div>
           <span class="label">ID Transacción:</span>
           <span class="value"><?php echo htmlspecialchars((string)$paymentData['transaction_id']); ?></span>

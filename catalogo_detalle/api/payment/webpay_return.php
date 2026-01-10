@@ -26,10 +26,10 @@ $db = db();
 $APP = require __DIR__ . '/../../config/app.php';
 
 // Obtener transacción de BD
-$st = $db->prepare("SELECT id, id_cliente, buy_order, amount, status, authorized
+$st = $db->prepare("SELECT id, id_cliente, id_reserva, buy_order, amount, status, authorized
                     FROM webpay_transactions WHERE token = ? LIMIT 1");
 if (!$st) {
-  header('Location: ' . buildUrl('checkout.php?payment_error=db_error'));
+  header('Location: ' . $baseUrl . 'checkout.php?payment_error=db_error');
   exit;
 }
 
@@ -45,6 +45,7 @@ if (!$transaction) {
 
 $transactionId = (int)$transaction['id'];
 $cid = (int)$transaction['id_cliente'];
+$idReserva = (int)($transaction['id_reserva'] ?? 0);
 
 // Inicializar sesión del cliente si es necesario
 if (empty($_SESSION['customer_id'])) {
@@ -79,15 +80,62 @@ if ($st) {
 }
 
 if (!$authorized) {
-  // Pago rechazado
+  // Pago rechazado - actualizar reserva
+  if ($idReserva > 0) {
+    // Conectar a BD de producción
+    $conectaPaths = [
+      __DIR__ . '/../../class_lib/class_conecta_mysql.php',
+      __DIR__ . '/../../../class_lib/class_conecta_mysql.php',
+      __DIR__ . '/../../../../class_lib/class_conecta_mysql.php',
+    ];
+    foreach ($conectaPaths as $p) {
+      if (is_file($p)) {
+        require $p;
+        $dbStock = @mysqli_connect($host, $user, $password, $dbname);
+        if ($dbStock) {
+          mysqli_query($dbStock, "UPDATE reservas SET payment_status='failed', updated_at=NOW() WHERE id={$idReserva}");
+          mysqli_close($dbStock);
+        }
+        break;
+      }
+    }
+  }
+
   header('Location: ' . $baseUrl . "checkout.php?payment_error=payment_denied&code={$responseCode}");
   exit;
 }
 
-// Pago exitoso: vaciar carrito y redirigir a confirmación
+// Pago exitoso: actualizar reserva y vaciar carrito
 $db->begin_transaction();
 try {
-  // Obtener carrito
+  // Conectar a BD de producción para actualizar reserva
+  $conectaPaths = [
+    __DIR__ . '/../../class_lib/class_conecta_mysql.php',
+    __DIR__ . '/../../../class_lib/class_conecta_mysql.php',
+    __DIR__ . '/../../../../class_lib/class_conecta_mysql.php',
+  ];
+  $dbStock = null;
+  foreach ($conectaPaths as $p) {
+    if (is_file($p)) {
+      require $p;
+      $dbStock = @mysqli_connect($host, $user, $password, $dbname);
+      break;
+    }
+  }
+
+  if ($dbStock && $idReserva > 0) {
+    // Actualizar estado de pago de la reserva
+    $amount = (int)$transaction['amount'];
+    $updateQuery = "UPDATE reservas
+                    SET payment_status='paid',
+                        paid_clp={$amount},
+                        updated_at=NOW()
+                    WHERE id={$idReserva}";
+    mysqli_query($dbStock, $updateQuery);
+    mysqli_close($dbStock);
+  }
+
+  // Vaciar carrito
   $st = $db->prepare("SELECT id FROM " . CART_TABLE . " WHERE id_cliente = ? AND status = 'open' LIMIT 1");
   if ($st) {
     $st->bind_param('i', $cid);
@@ -113,6 +161,7 @@ try {
   // Guardar datos en sesión para mostrar en página de confirmación
   $_SESSION['webpay_payment_success'] = [
     'transaction_id' => $transactionId,
+    'reservation_id' => $idReserva,
     'token' => $token,
     'amount' => $transaction['amount'],
     'buy_order' => $transaction['buy_order'],
@@ -121,7 +170,7 @@ try {
   ];
 
   // Redirigir a página de confirmación de pago
-  header('Location: ' . $baseUrl . 'payment_success.php?transaction_id=' . urlencode((string)$transactionId));
+  header('Location: ' . $baseUrl . 'payment_success.php?transaction_id=' . urlencode((string)$transactionId) . '&reservation_id=' . urlencode((string)$idReserva));
   exit;
 
 } catch (Exception $e) {
