@@ -19,6 +19,7 @@
     shippingAgency: '',
     shippingAgencyQuotedCodeDls: null,  // Código de la sucursal cotizada
     canPayButton: false,  // Si el botón pagar está habilitado
+    starkenOriginCityCodeDls: null,  // Ciudad de origen para cotizaciones (desde .env)
   };
 
   const $ = (id) => document.getElementById(id);
@@ -122,6 +123,25 @@
     alertBox.classList.add('hidden');
   }
 
+  async function loadStarkenConfig() {
+    try {
+      const j = await fetchJson(buildApiUrl('config/starken.php'), { method: 'GET' });
+      if (j.ok && j.origin_city_code_dls) {
+        state.starkenOriginCityCodeDls = j.origin_city_code_dls;
+        console.log('Starken config loaded:', {
+          origin_agency_code_dls: j.origin_agency_code_dls,
+          origin_city_code_dls: j.origin_city_code_dls
+        });
+      } else {
+        console.error('Starken config response invalid:', j);
+        showAlert('Error: No se pudo cargar configuración de envíos', 'danger');
+      }
+    } catch (e) {
+      console.error('Error loading Starken config:', e.message);
+      showAlert('Error: No se pudo cargar configuración de envíos', 'danger');
+    }
+  }
+
   async function loadCommunes() {
     try {
       const j = await fetchJson(buildApiUrl('shipping/starken_communes.php'), { method: 'GET' });
@@ -223,32 +243,38 @@
 
   function updatePayButtonState() {
     const method = state.shippingMethod;
+    let canPay = false;
 
     // Vivero: siempre se puede pagar
     if (method === 'vivero') {
-      state.canPayButton = true;
-      if (btnMakeReservation) btnMakeReservation.disabled = false;
-      return;
+      canPay = true;
     }
 
     // Domicilio: solo si se cotizó
     if (method === 'domicilio') {
-      state.canPayButton = state.shippingQuoted;
-      if (btnMakeReservation) btnMakeReservation.disabled = !state.shippingQuoted;
-      return;
+      canPay = state.shippingQuoted;
     }
 
     // Agencia: solo si se cotizó y no cambió de sucursal desde la cotización
     if (method === 'agencia') {
-      const isValidQuote = state.shippingQuoted &&
-                          String(state.shippingAgency) === String(state.shippingAgencyQuotedCodeDls);
-      state.canPayButton = isValidQuote;
-      if (btnMakeReservation) btnMakeReservation.disabled = !isValidQuote;
-      return;
+      canPay = state.shippingQuoted &&
+               String(state.shippingAgency) === String(state.shippingAgencyQuotedCodeDls);
     }
 
-    state.canPayButton = false;
-    if (btnMakeReservation) btnMakeReservation.disabled = true;
+    state.canPayButton = canPay;
+
+    // Actualizar botón con clase CSS y transición
+    if (btnMakeReservation) {
+      btnMakeReservation.disabled = !canPay;
+
+      if (canPay) {
+        btnMakeReservation.classList.add('btn-pay-enabled');
+        btnMakeReservation.classList.remove('btn-pay-disabled');
+      } else {
+        btnMakeReservation.classList.add('btn-pay-disabled');
+        btnMakeReservation.classList.remove('btn-pay-enabled');
+      }
+    }
   }
 
   async function quoteShipping() {
@@ -257,6 +283,12 @@
 
     if (!address || !commune) {
       showAlert('Completa dirección y comuna antes de cotizar', 'warning');
+      return;
+    }
+
+    // Validar que la configuración de origen esté cargada
+    if (!state.starkenOriginCityCodeDls) {
+      showAlert('Error: No se pudo cargar configuración de origen. Recarga la página.', 'danger');
       return;
     }
 
@@ -270,10 +302,20 @@
       // Calcular dimensiones localmente (rápido, sin esperar al backend)
       const dimensions = calculateShippingDimensions(qtyTotal);
 
-      // Origen: usar domicilio2 (code_dls de la comuna del cliente)
-      const originCommuneCodeDls = Number(2735) || 1;
+      // Origen: usar configuración desde .env
+      const originCityCodeDls = state.starkenOriginCityCodeDls;
       // Destino: usar la comuna seleccionada
-      const destinationCommuneCodeDls = Number(commune) || 1;
+      const destinationCommuneCodeDls = Number(commune);
+
+      if (!destinationCommuneCodeDls) {
+        showAlert('Error: Comuna seleccionada inválida', 'danger');
+        return;
+      }
+
+      console.log('Cotizando envío a domicilio:', {
+        origin: originCityCodeDls,
+        destination: destinationCommuneCodeDls
+      });
 
       // Enviar dimensiones calculadas al backend para cotizar con Starken
       const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
@@ -284,7 +326,7 @@
         },
         body: JSON.stringify({
           destination: destinationCommuneCodeDls,
-          origin: originCommuneCodeDls,
+          origin: originCityCodeDls,
           quantity: qtyTotal,
           weight: dimensions.weight,
           height: dimensions.height,
@@ -295,14 +337,22 @@
 
       if (response.ok && response.data && response.data.alternativas) {
         const options = response.data.alternativas;
-        if (options.length > 0) {
-          const firstOption = options[0];
-          state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
-          state.shippingLabel = `Envío a domicilio (Starken) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
+        // Filtrar por DOMICILIO y preferir NORMAL
+        const domicilioOptions = options.filter(opt => opt.entrega === 'DOMICILIO');
+
+        if (domicilioOptions.length > 0) {
+          // Preferir NORMAL sobre EXPRESS, y si hay múltiples, tomar el más barato
+          const normalOptions = domicilioOptions.filter(opt => opt.servicio === 'NORMAL');
+          const selectedOption = normalOptions.length > 0
+            ? normalOptions.reduce((prev, curr) => (Number(curr.precio) < Number(prev.precio) ? curr : prev))
+            : domicilioOptions.reduce((prev, curr) => (Number(curr.precio) < Number(prev.precio) ? curr : prev));
+
+          state.shippingCost = Math.ceil(Number(selectedOption.precio || selectedOption.valor || 0));
+          state.shippingLabel = `Envío a domicilio (Starken ${selectedOption.servicio}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
-          showAlert('No hay opciones de envío disponibles', 'warning');
+          showAlert('No hay opciones de envío a domicilio disponibles', 'warning');
         }
       } else {
         throw new Error(response.error || 'Error en cotización');
@@ -324,10 +374,22 @@
       return;
     }
 
+    // Validar que la configuración de origen esté cargada
+    if (!state.starkenOriginCityCodeDls) {
+      showAlert('Error: No se pudo cargar configuración de origen. Recarga la página.', 'danger');
+      return;
+    }
+
     // Buscar la agencia seleccionada
     const agency = state.agencies.find(a => String(a.code_dls) === String(selectedAgencyCode));
     if (!agency) {
       showAlert('No se pudo obtener información de la sucursal', 'danger');
+      return;
+    }
+
+    // Validar que la agencia tenga city_code_dls
+    if (!agency.city_code_dls) {
+      showAlert('Error: La sucursal seleccionada no tiene información de ciudad. Intenta con otra.', 'danger');
       return;
     }
 
@@ -341,10 +403,17 @@
       // Calcular dimensiones localmente
       const dimensions = calculateShippingDimensions(qtyTotal);
 
-      // Origen: vivero (code_dls de la comuna del cliente)
-      const originCommuneCodeDls = Number(2735) || 1;
+      // Origen: usar configuración desde .env
+      const originCityCodeDls = state.starkenOriginCityCodeDls;
       // Destino: usar city_code_dls de la sucursal seleccionada
-      const destinationCityCodeDls = Number(agency.city_code_dls) || 1;
+      const destinationCityCodeDls = Number(agency.city_code_dls);
+
+      console.log('Cotizando envío a sucursal:', {
+        origin: originCityCodeDls,
+        destination: destinationCityCodeDls,
+        agency_name: agency.name,
+        agency_code_dls: agency.code_dls
+      });
 
       // Enviar dimensiones calculadas al backend para cotizar con Starken
       const response = await fetchJson(buildApiUrl('shipping/starken_quote.php'), {
@@ -355,7 +424,7 @@
         },
         body: JSON.stringify({
           destination: destinationCityCodeDls,
-          origin: originCommuneCodeDls,
+          origin: originCityCodeDls,
           quantity: qtyTotal,
           weight: dimensions.weight,
           height: dimensions.height,
@@ -366,15 +435,23 @@
 
       if (response.ok && response.data && response.data.alternativas) {
         const options = response.data.alternativas;
-        if (options.length > 0) {
-          const firstOption = options[0];
-          state.shippingCost = Math.ceil(Number(firstOption.precio || firstOption.valor || 0));
-          state.shippingLabel = `Retiro en sucursal Starken (${agency.name}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
+        // Filtrar por AGENCIA y preferir NORMAL
+        const agenciaOptions = options.filter(opt => opt.entrega === 'AGENCIA');
+
+        if (agenciaOptions.length > 0) {
+          // Preferir NORMAL sobre EXPRESS, y si hay múltiples, tomar el más barato
+          const normalOptions = agenciaOptions.filter(opt => opt.servicio === 'NORMAL');
+          const selectedOption = normalOptions.length > 0
+            ? normalOptions.reduce((prev, curr) => (Number(curr.precio) < Number(prev.precio) ? curr : prev))
+            : agenciaOptions.reduce((prev, curr) => (Number(curr.precio) < Number(prev.precio) ? curr : prev));
+
+          state.shippingCost = Math.ceil(Number(selectedOption.precio || selectedOption.valor || 0));
+          state.shippingLabel = `Retiro en sucursal Starken (${agency.name}, ${selectedOption.servicio}) - ${dimensions.boxCount} caja(s) ${dimensions.boxType}`;
           state.shippingQuoted = true;
           state.shippingAgencyQuotedCodeDls = selectedAgencyCode;
           showAlert('Cotización obtenida: ' + fmtCLP(state.shippingCost), 'success');
         } else {
-          showAlert('No hay opciones de envío disponibles', 'warning');
+          showAlert('No hay opciones de retiro en agencia disponibles', 'warning');
         }
       } else {
         throw new Error(response.error || 'Error en cotización');
@@ -863,7 +940,10 @@
         if (selectedCode !== state.shippingAgencyQuotedCodeDls) {
           state.shippingQuoted = false;
           state.shippingAgencyQuotedCodeDls = null;
+          state.shippingCost = 0;
+          state.shippingLabel = 'por cotizar';
           updatePayButtonState();
+          updateShippingDisplay();
         }
       });
     }
@@ -925,10 +1005,15 @@
   }
 
   async function init() {
-    try {      bindEvents();
+    try {
+      bindEvents();
+      await loadStarkenConfig();
       await refreshMe();
       await loadCart();
       await loadCustomer();
+
+      // Inicializar estado del botón de pagar
+      updatePayButtonState();
     } catch (e) {
       showAlert(String(e.message || e), 'danger');
     }
