@@ -48,8 +48,11 @@ function start_session(): void {
 
   // Cookie path: '/' para que la sesión sea válida aunque muevas el sistema de carpeta (cart3 -> cart4, etc.)
   // El nombre de sesión es único, así que no afecta a otros sistemas.
+  // Lifetime: 7 días (604800 segundos)
+  $sessionLifetime = 60 * 60 * 24 * 7; // 7 días
+
   session_set_cookie_params([
-    'lifetime' => 0,
+    'lifetime' => $sessionLifetime,
     'path' => '/',
     'domain' => '',
     'secure' => $secure,
