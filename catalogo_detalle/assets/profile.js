@@ -19,15 +19,6 @@
     return j;
   }
 
-  function fillRegions(){
-    if(!window.ROEL_LOCATIONS) return;
-    const sel = $('pRegion');
-    sel.innerHTML = '<option value="">Selecciona Región</option>';
-    window.ROEL_LOCATIONS.regiones.forEach(r=>{
-      const o=document.createElement('option'); o.value=r.nombre; o.textContent=r.nombre; sel.appendChild(o);
-    });
-  }
-  
   function fillRegiones(selected){
     const sel = $('pRegion');
     sel.innerHTML = '<option value="">Selecciona Región</option>';
@@ -47,9 +38,16 @@ function fillComunas(regionName, selected){
     sel.innerHTML = '<option value="">Selecciona Comuna</option>';
     const region = window.ROEL_LOCATIONS.regiones.find(r=>r.nombre===regionName);
     if(!region){ sel.disabled = true; return; }
+
+    // Normalizar selected para comparación case-insensitive
+    const selectedNormalized = selected ? selected.toLowerCase().trim() : '';
+
     region.comunas.forEach(c=>{
       const o=document.createElement('option'); o.value=c; o.textContent=c;
-      if(selected && selected===c) o.selected=true;
+      // Comparación case-insensitive
+      if(selectedNormalized && c.toLowerCase().trim() === selectedNormalized) {
+        o.selected=true;
+      }
       sel.appendChild(o);
     });
     sel.disabled = false;
@@ -71,9 +69,6 @@ function fillComunas(regionName, selected){
       };
     }
 
-    fillRegions();
-    $('pRegion').addEventListener('change', ()=> fillComunas($('pRegion').value, ''));
-
     const prof = await fetchJson(buildApiUrl('customer/profile.php'), {method:'GET'});
     if(!prof.ok){ showAlert('error', prof.error||'No se pudo cargar el perfil'); return; }
 
@@ -83,10 +78,14 @@ function fillComunas(regionName, selected){
     $('pEmail').value = c.email || '';
     $('pNombre').value = c.nombre || '';
     $('pTelefono').value = c.telefono || '';
+
+    // Cargar regiones y seleccionar la del cliente
     fillRegiones(c.region || '');
-    $('pRegion').value = c.region || '';
-    fillComunas(c.region || '', c.comuna || '');
-    $('pComuna').value = c.comuna || '';
+
+    // Cargar comunas de la región del cliente y preseleccionar la comuna
+    if (c.region) {
+      fillComunas(c.region, c.comuna || '');
+    }
 
     $('pRegion').onchange = ()=>{ fillComunas(($('pRegion').value||''), ''); };
 

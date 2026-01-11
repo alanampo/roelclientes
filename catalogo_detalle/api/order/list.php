@@ -1,74 +1,122 @@
 <?php
 declare(strict_types=1);
 // catalogo_detalle/api/order/list.php
+// Lista reservas del cliente desde la tabla reservas (BD producción)
 require __DIR__ . '/../_bootstrap.php';
 
 $cid = require_auth();
 $db = db();
 
-function table_has_column(mysqli $db, string $table, string $col): bool {
-  $t = $db->real_escape_string($table);
-  $c = $db->real_escape_string($col);
-  $res = $db->query("SHOW COLUMNS FROM `{$t}` LIKE '{$c}'");
-  if (!$res) return false;
-  return (bool)$res->fetch_assoc();
-}
-
-$hasV2 = table_has_column($db, ORDERS_TABLE, 'order_code') && table_has_column($db, ORDERS_TABLE, 'customer_id');
-
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
 if ($limit < 1) $limit = 50;
 if ($limit > 200) $limit = 200;
 
-if ($hasV2) {
-  $sql = "SELECT id, order_code, status, subtotal_clp, shipping_cost_clp, total_clp, created_at
-          FROM " . ORDERS_TABLE . "
-          WHERE customer_id = ?
-          ORDER BY id DESC
-          LIMIT ?";
-  $st = $db->prepare($sql);
-  if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'],500);
-  $st->bind_param('ii',$cid,$limit);
-  $st->execute();
-  $res = $st->get_result();
-  $rows = [];
-  while($r = $res->fetch_assoc()){
-    $rows[] = [
-      'id'=>(int)$r['id'],
-      'order_code'=>(string)($r['order_code']??''),
-      'status'=>(string)($r['status']??''),
-      'subtotal_clp'=>(int)($r['subtotal_clp']??0),
-      'shipping_cost_clp'=>(int)($r['shipping_cost_clp']??0),
-      'total_clp'=>(int)($r['total_clp']??0),
-      'created_at'=>(string)($r['created_at']??''),
-    ];
+// Conectar a BD de producción para obtener reservas
+$conectaPaths = [
+  __DIR__ . '/../../class_lib/class_conecta_mysql.php',
+  __DIR__ . '/../../../class_lib/class_conecta_mysql.php',
+  __DIR__ . '/../../../../class_lib/class_conecta_mysql.php',
+];
+$found = false;
+$hostStock = $hostUser = $hostPass = $hostDbname = null;
+foreach ($conectaPaths as $p) {
+  if (is_file($p)) {
+    require $p;
+    $hostStock = $host;
+    $hostUser = $user;
+    $hostPass = $password;
+    $hostDbname = $dbname;
+    $found = true;
+    break;
   }
-  $st->close();
-  json_out(['ok'=>true,'schema'=>'v2','orders'=>$rows]);
-} else {
-  $sql = "SELECT id, status, shipping_label, shipping_amount, subtotal_amount, total_amount, created_at
-          FROM " . ORDERS_TABLE . "
-          WHERE user_id = ?
-          ORDER BY id DESC
-          LIMIT ?";
-  $st = $db->prepare($sql);
-  if (!$st) json_out(['ok'=>false,'error'=>'No se pudo preparar consulta'],500);
-  $st->bind_param('ii',$cid,$limit);
-  $st->execute();
-  $res = $st->get_result();
-  $rows = [];
-  while($r = $res->fetch_assoc()){
-    $rows[] = [
-      'id'=>(int)$r['id'],
-      'order_code'=>'',
-      'status'=>(string)($r['status']??''),
-      'subtotal_clp'=>(int)($r['subtotal_amount']??0),
-      'shipping_cost_clp'=>(int)($r['shipping_amount']??0),
-      'total_clp'=>(int)($r['total_amount']??0),
-      'created_at'=>(string)($r['created_at']??''),
-      'shipping_label'=>(string)($r['shipping_label']??''),
-    ];
-  }
-  $st->close();
-  json_out(['ok'=>true,'schema'=>'legacy','orders'=>$rows]);
 }
+
+if (!$found) {
+  json_out(['ok'=>false,'error'=>'No se encontró configuración de BD de producción'], 500);
+}
+
+$dbStock = @mysqli_connect($hostStock, $hostUser, $hostPass, $hostDbname);
+if (!$dbStock) {
+  json_out(['ok'=>false,'error'=>'Error conexión BD producción'], 500);
+}
+mysqli_set_charset($dbStock, 'utf8');
+
+// Consultar reservas del cliente ordenadas por más recientes
+$sql = "SELECT
+          id,
+          fecha as created_at,
+          observaciones,
+          subtotal_clp,
+          packing_cost_clp,
+          shipping_cost_clp,
+          total_clp,
+          paid_clp,
+          payment_status,
+          payment_method,
+          shipping_method,
+          shipping_address,
+          shipping_commune,
+          shipping_agency_name,
+          cart_id,
+          created_at
+        FROM reservas
+        WHERE id_cliente = ?
+        ORDER BY id DESC
+        LIMIT ?";
+
+$st = $dbStock->prepare($sql);
+if (!$st) {
+  mysqli_close($dbStock);
+  json_out(['ok'=>false,'error'=>'No se pudo preparar consulta: ' . $dbStock->error],500);
+}
+
+$st->bind_param('ii', $cid, $limit);
+$st->execute();
+$res = $st->get_result();
+$rows = [];
+
+while($r = $res->fetch_assoc()){
+  // Determinar label de estado de pago
+  $paymentStatus = (string)($r['payment_status'] ?? 'pending');
+  $paymentLabel = [
+    'pending' => 'Pendiente de pago',
+    'paid' => 'Pagado',
+    'failed' => 'Pago fallido',
+    'refunded' => 'Reembolsado'
+  ][$paymentStatus] ?? $paymentStatus;
+
+  // Determinar label de método de envío
+  $shippingMethod = (string)($r['shipping_method'] ?? '');
+  $shippingLabel = '';
+  if ($shippingMethod === 'domicilio') {
+    $commune = (string)($r['shipping_commune'] ?? '');
+    $shippingLabel = 'Envío a domicilio' . ($commune ? " ({$commune})" : '');
+  } elseif ($shippingMethod === 'agencia') {
+    $agencyName = (string)($r['shipping_agency_name'] ?? '');
+    $shippingLabel = 'Retiro en sucursal' . ($agencyName ? " ({$agencyName})" : '');
+  } elseif ($shippingMethod === 'vivero') {
+    $shippingLabel = 'Retiro en vivero';
+  }
+
+  $rows[] = [
+    'id' => (int)$r['id'],
+    'order_code' => 'RP-' . str_pad((string)$r['id'], 6, '0', STR_PAD_LEFT), // Generar código basado en ID
+    'status' => $paymentLabel,
+    'payment_status' => $paymentStatus,
+    'payment_method' => (string)($r['payment_method'] ?? ''),
+    'subtotal_clp' => (int)($r['subtotal_clp'] ?? 0),
+    'packing_cost_clp' => (int)($r['packing_cost_clp'] ?? 0),
+    'shipping_cost_clp' => (int)($r['shipping_cost_clp'] ?? 0),
+    'total_clp' => (int)($r['total_clp'] ?? 0),
+    'paid_clp' => (int)($r['paid_clp'] ?? 0),
+    'shipping_method' => $shippingMethod,
+    'shipping_label' => $shippingLabel,
+    'created_at' => (string)($r['created_at'] ?? $r['fecha'] ?? ''),
+    'observaciones' => (string)($r['observaciones'] ?? ''),
+  ];
+}
+
+$st->close();
+mysqli_close($dbStock);
+
+json_out(['ok'=>true,'schema'=>'reservas','orders'=>$rows]);

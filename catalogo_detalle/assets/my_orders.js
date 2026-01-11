@@ -25,17 +25,33 @@
   function orderCard(o){
     const el = document.createElement('div');
     el.className = 'order-card';
-    const code = o.order_code ? ('<span class="badge">Código: '+escapeHtml(o.order_code)+'</span>') : '';
+    const code = o.order_code ? ('<span class="badge">'+escapeHtml(o.order_code)+'</span>') : '';
+
+    // Badge de estado de pago con color
+    const paymentStatus = o.payment_status || 'pending';
+    const badgeColors = {
+      'paid': 'background:#d4edda;color:#155724',
+      'pending': 'background:#fff3cd;color:#856404',
+      'failed': 'background:#f8d7da;color:#721c24',
+      'refunded': 'background:#e2e3e5;color:#383d41'
+    };
+    const badgeStyle = badgeColors[paymentStatus] || badgeColors.pending;
+    const statusBadge = `<span class="badge" style="${badgeStyle}">${escapeHtml(o.status || 'Pendiente')}</span>`;
+
+    // Label de envío
+    const shippingLabel = o.shipping_label ? `<div class="muted2" style="margin-top:4px"><small>📦 ${escapeHtml(o.shipping_label)}</small></div>` : '';
+
     el.innerHTML = `
       <div class="order-top">
         <div>
-          <div style="font-weight:900">Pedido #${o.id}</div>
+          <div style="font-weight:900">Reserva #${o.id}</div>
           <div class="muted2">${escapeHtml(o.created_at || '')}</div>
+          ${shippingLabel}
         </div>
         <div style="text-align:right">
           ${code}
+          ${statusBadge}
           <div style="font-weight:900;margin-top:6px">${clp(o.total_clp)}</div>
-          <div class="muted2">${escapeHtml(o.status || '')}</div>
         </div>
       </div>
       <div class="row-actions">
@@ -63,9 +79,9 @@
     }
 
     const list = await fetchJson(buildApiUrl('order/list.php'), {method:'GET'});
-    if(!list.ok){ showAlert('error', list.error||'No se pudo cargar pedidos'); $('ordersMeta').textContent=''; return; }
+    if(!list.ok){ showAlert('error', list.error||'No se pudo cargar compras'); $('ordersMeta').textContent=''; return; }
 
-    $('ordersMeta').textContent = 'Pedidos encontrados: '+(list.orders?.length||0);
+    $('ordersMeta').textContent = 'Compras encontradas: '+(list.orders?.length||0);
     const wrap = $('ordersList');
     wrap.innerHTML = '';
     if(!list.orders || list.orders.length===0){

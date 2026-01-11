@@ -7,10 +7,13 @@ declare(strict_types=1);
  * Autenticación: usuarios table (tipo_usuario=0 para clientes)
  * Datos del cliente: clientes table
  *
- * Cambia ENVIRONMENT a 'hosting' o 'local' según necesites
+ * ENVIRONMENT se detecta automáticamente basado en el dominio
  */
 
-define('ENVIRONMENT', 'hosting'); // 'local' o 'hosting'
+// Detectar automáticamente el environment basado en el dominio
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$isHosting = strpos($host, '.roelplant.cl') !== false;
+define('ENVIRONMENT', $isHosting ? 'hosting' : 'local');
 
 if (ENVIRONMENT === 'local') {
   // Local development - usa BD roel (unificada)
