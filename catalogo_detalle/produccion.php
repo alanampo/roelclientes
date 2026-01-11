@@ -66,6 +66,12 @@ $csrf = csrf_token();
     .toast.err{background:#fff0f0;border:1px solid #f1b5b5;color:#a33131}
     .prog{background:#eef3f7;border-radius:999px;height:10px;overflow:hidden}
     .prog>div{height:10px;background:#0f6b5a;width:0%;transition:width .3s ease}
+    .pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}
+    .pagination .btn:disabled{opacity:0.5;cursor:not-allowed}
+    @media(max-width:640px){
+      .pagination{justify-content:center}
+      .pagination .btn{flex:1;min-width:120px}
+    }
   </style>
 </head>
 <body>
@@ -102,6 +108,12 @@ $csrf = csrf_token();
 
           <div id="empty" class="muted" style="margin-top:12px">Cargando…</div>
           <div id="list" class="list" aria-live="polite"></div>
+
+          <div id="pagination" class="pagination" style="display:none;margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <button id="prevBtn" class="btn" type="button">← Anterior</button>
+            <div id="pageInfo" class="muted" style="font-weight:700"></div>
+            <button id="nextBtn" class="btn" type="button">Siguiente →</button>
+          </div>
         </div>
       </div>
 
@@ -161,6 +173,6 @@ $csrf = csrf_token();
 <script>
   window.ROEL_CSRF = <?php echo json_encode($csrf, JSON_UNESCAPED_UNICODE); ?>;
 </script>
-<script src="<?php echo htmlspecialchars(buildUrl('assets/production_cart.js?v=9.2'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars(buildUrl('assets/production_cart.js?v=10'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>
