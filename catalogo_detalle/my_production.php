@@ -17,8 +17,8 @@ $db = db();
 
 // Lista de solicitudes del cliente
 $st = $db->prepare("SELECT id, request_code, status, total_units, total_amount_clp, created_at
-                    FROM production_requests
-                    WHERE customer_id=?
+                    FROM " . PROD_REQUESTS_TABLE . "
+                    WHERE id_cliente=?
                     ORDER BY id DESC
                     LIMIT 100");
 $st->bind_param('i', $cid);

@@ -56,16 +56,17 @@ try {
     CREATE TABLE IF NOT EXISTS " . PROD_REQUESTS_TABLE . " (
       id INT AUTO_INCREMENT PRIMARY KEY,
       request_code VARCHAR(32) NOT NULL UNIQUE,
-      customer_id INT NOT NULL,
+      id_cliente INT NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'new',
       total_units INT NOT NULL DEFAULT 0,
       total_amount_clp INT NOT NULL DEFAULT 0,
       notes TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_cliente (id_cliente)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   ";
   if (!mysqli_query($db, $sql1)) {
-    throw new RuntimeException('No se pudo crear " . PROD_REQUESTS_TABLE . ": '.mysqli_error($db));
+    throw new RuntimeException('No se pudo crear tabla production_requests: '.mysqli_error($db));
   }
 
   $sql2 = "
@@ -84,7 +85,7 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   ";
   if (!mysqli_query($db, $sql2)) {
-    throw new RuntimeException('No se pudo crear " . PROD_REQUEST_ITEMS_TABLE . ": '.mysqli_error($db));
+    throw new RuntimeException('No se pudo crear tabla production_request_items: '.mysqli_error($db));
   }
 
   // Genera código
@@ -94,7 +95,7 @@ try {
   mysqli_begin_transaction($db);
 
   // Insert request
-  $st = mysqli_prepare($db, "INSERT INTO " . PROD_REQUESTS_TABLE . " (request_code, customer_id, total_units, total_amount_clp, notes) VALUES (?,?,?,?,?)");
+  $st = mysqli_prepare($db, "INSERT INTO " . PROD_REQUESTS_TABLE . " (request_code, id_cliente, total_units, total_amount_clp, notes) VALUES (?,?,?,?,?)");
   if (!$st) throw new RuntimeException('Prepare failed (requests): '.mysqli_error($db));
 
   // mysqli permite null en 's' en la práctica, pero si quieres evitar rarezas:

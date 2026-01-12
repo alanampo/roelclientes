@@ -21,8 +21,8 @@ if ($rid <= 0) {
 $db = db();
 
 $st = $db->prepare("SELECT id, request_code, status, total_units, total_amount_clp, notes, created_at
-                    FROM production_requests
-                    WHERE id=? AND customer_id=?");
+                    FROM " . PROD_REQUESTS_TABLE . "
+                    WHERE id=? AND id_cliente=?");
 $st->bind_param('ii', $rid, $cid);
 $st->execute();
 $req = $st->get_result()->fetch_assoc();
@@ -33,7 +33,7 @@ if (!$req) {
 }
 
 $sti = $db->prepare("SELECT product_name, qty, unit_price_clp, line_total_clp
-                     FROM production_request_items
+                     FROM " . PROD_REQUEST_ITEMS_TABLE . "
                      WHERE request_id=?
                      ORDER BY id ASC");
 $sti->bind_param('i', $rid);

@@ -1,5 +1,5 @@
 <?php
-// catalogo_detalle/backoffice/production_requests.php
+// catalogo_detalle/backoffice/carrito_production_requests.php
 declare(strict_types=1);
 
 require __DIR__ . '/_layout.php';
@@ -19,11 +19,11 @@ if($status!==''){ $where.=" AND status=?"; $params[]=$status; $types.='s'; }
 
 if($q!==''){
   // busca por código, nombre/email/teléfono del cliente si existe join
-  $where.=" AND (request_code LIKE CONCAT('%',?,'%') OR customer_id IN (SELECT id FROM customers WHERE nombre LIKE CONCAT('%',?,'%') OR email LIKE CONCAT('%',?,'%') OR telefono LIKE CONCAT('%',?,'%')))";
+  $where.=" AND (request_code LIKE CONCAT('%',?,'%') OR id_cliente IN (SELECT id FROM clientes WHERE nombre LIKE CONCAT('%',?,'%') OR email LIKE CONCAT('%',?,'%') OR telefono LIKE CONCAT('%',?,'%')))";
   $params=array_merge($params,[$q,$q,$q,$q]); $types.='ssss';
 }
 
-$countSql="SELECT COUNT(*) FROM production_requests WHERE $where";
+$countSql="SELECT COUNT(*) FROM carrito_production_requests WHERE $where";
 $stc=mysqli_prepare($db,$countSql);
 if($types) mysqli_stmt_bind_param($stc,$types,...$params);
 mysqli_stmt_execute($stc);
@@ -33,8 +33,8 @@ $total=(int)$total;
 
 $sql="SELECT pr.id, pr.request_code, pr.status, pr.total_units, pr.total_amount_clp, pr.created_at,
              c.nombre AS customer_nombre, c.email AS customer_email
-      FROM production_requests pr
-      LEFT JOIN customers c ON c.id=pr.customer_id
+      FROM carrito_production_requests pr
+      LEFT JOIN clientes c ON c.id=pr.id_cliente
       WHERE $where
       ORDER BY pr.id DESC
       LIMIT ? OFFSET ?";
@@ -48,7 +48,7 @@ $rows=[]; while($res && ($r=mysqli_fetch_assoc($res))) $rows[]=$r;
 mysqli_stmt_close($st);
 
 $pages=max(1,(int)ceil($total/$per));
-$statuses=[]; $rs=mysqli_query($db,"SELECT DISTINCT status FROM production_requests ORDER BY status");
+$statuses=[]; $rs=mysqli_query($db,"SELECT DISTINCT status FROM carrito_production_requests ORDER BY status");
 if($rs){while($x=mysqli_fetch_row($rs)) $statuses[]=$x[0];}
 
 bo_header('Pedidos producción');
