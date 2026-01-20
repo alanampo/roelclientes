@@ -135,7 +135,7 @@ function truncar($t,$l=120){
 }
 
 /* -------- Constantes URL -------- */
-$catalogoBase = 'https://clientes.roelplant.cl/catalogo_detalle/';
+$catalogoBase = 'https://clientes.roelplant.cl/catalogo_detalle_webpay/';
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $baseUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 $priceValidUntil = (new DateTime('+14 days'))->format('Y-m-d');
@@ -374,7 +374,7 @@ src="https://www.facebook.com/tr?id=8850593125018234&ev=PageView&noscript=1"
   "@context":"https://schema.org",
   "@type":"WebSite",
   "name":"Roelplant",
-  "url":"https://clientes.roelplant.cl/catalogo_detalle/",
+  "url":"https://clientes.roelplant.cl/catalogo_detalle_webpay/",
   "potentialAction":{
     "@type":"SearchAction",
     "target":"https://clientes.roelplant.cl/catalogo_detalle/?s={search_term_string}",
