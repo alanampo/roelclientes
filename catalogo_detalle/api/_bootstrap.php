@@ -15,6 +15,42 @@ header('Pragma: no-cache');
 ini_set('display_errors','0'); // producción: 0
 error_reporting(E_ALL);
 
+// Cargar archivo .env desde la raíz del proyecto
+$envPaths = [
+  __DIR__ . '/../../.env',
+  __DIR__ . '/../../../.env',
+  __DIR__ . '/../../../../.env',
+];
+
+foreach ($envPaths as $envPath) {
+  if (is_file($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+      // Ignorar comentarios
+      if (strpos(trim($line), '#') === 0) continue;
+
+      // Parsear KEY="VALUE" o KEY=VALUE
+      if (strpos($line, '=') !== false) {
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+
+        // Remover comillas si existen
+        if ((strpos($value, '"') === 0 && strrpos($value, '"') === strlen($value) - 1) ||
+            (strpos($value, "'") === 0 && strrpos($value, "'") === strlen($value) - 1)) {
+          $value = substr($value, 1, -1);
+        }
+
+        // Solo setear si no existe ya
+        if (!getenv($key)) {
+          putenv("{$key}={$value}");
+        }
+      }
+    }
+    break;
+  }
+}
+
 require __DIR__ . '/../config/cart_db.php';
 
 function json_out(array $payload, int $status = 200): void {
