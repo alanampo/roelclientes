@@ -26,7 +26,20 @@ SELECT
   sv.precio,
   sv.precio_detalle,
   sv.disponible_para_reservar,
-  MAX(av.valor) AS tipo_planta
+
+  MAX(CASE WHEN a.nombre = 'TIPO DE PLANTA' THEN av.valor END) AS tipo_planta,
+
+  GROUP_CONCAT(DISTINCT
+    CASE
+      WHEN a.nombre IS NULL THEN NULL
+      WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+      WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+      ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+    END
+    ORDER BY a.nombre
+    SEPARATOR '||'
+  ) AS attrs_activos
+
 FROM
 (
   SELECT
@@ -88,7 +101,7 @@ FROM
 ) AS sv
 LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = sv.id_variedad
 LEFT JOIN atributos_valores av           ON av.id = avv.id_atributo_valor
-LEFT JOIN atributos a                    ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
+LEFT JOIN atributos a                    ON a.id = av.id_atributo
 WHERE sv.disponible_para_reservar > 0
 GROUP BY
   sv.id_variedad,
@@ -312,8 +325,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <th onclick="sortTable(0)">Variedad</th>
                 <th onclick="sortTable(1)">Referencia</th>
                 <th onclick="sortTable(2)">Tipo Planta</th>
-                <th onclick="sortTable(3)">Stock</th>
-                <th onclick="sortTable(4)">Precio Imp. Incl.</th>
+                <th onclick="sortTable(3)">Atributos</th>
+                <th onclick="sortTable(4)">Stock</th>
+                <th onclick="sortTable(5)">Precio Imp. Incl.</th>
             </tr>
         </thead>
         <tbody>
@@ -321,11 +335,28 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 $precio_detalle = isset($row['precio_detalle'])
                     ? number_format($row['precio_detalle'] * 1.19, 0, ',', '.')
                     : '';
+
+                // Procesar atributos
+                $attrsRaw = trim((string)($row['attrs_activos'] ?? ''));
+                $attrs = [];
+                if($attrsRaw !== ''){
+                  foreach(explode('||',$attrsRaw) as $kv){
+                    $kv = trim((string)$kv);
+                    if($kv !== '') $attrs[] = $kv;
+                  }
+                }
             ?>
             <tr>
                 <td><?= htmlspecialchars($row['variedad']) ?></td>
                 <td><?= htmlspecialchars($row['referencia']) ?></td>
-                <td><span class="badge"><?= htmlspecialchars($row['tipo_planta']) ?></span></td>
+                <td><span class="badge"><?= htmlspecialchars($row['tipo_planta'] ?? '—') ?></span></td>
+                <td>
+                  <?php if(!empty($attrs)): ?>
+                    <small style="color:#666;"><?= htmlspecialchars(implode(' | ', array_slice($attrs, 0, 2))) ?></small>
+                  <?php else: ?>
+                    <small style="color:#999;">—</small>
+                  <?php endif; ?>
+                </td>
                 <td><?= (int)$row['disponible_para_reservar'] ?></td>
                 <td><?= $precio_detalle ? '$' . $precio_detalle : '-' ?></td>
             </tr>
