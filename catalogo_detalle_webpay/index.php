@@ -661,11 +661,11 @@ $secciones=[
         <input class="inp" id="regNombre" placeholder="Nombre completo">
         <input class="inp" id="regTelefono" placeholder="Teléfono">
 
-        <input class="inp span2" id="regDomicilio" placeholder="Domicilio / Dirección">
-        <input class="inp" id="regCiudad" placeholder="Ciudad">
-
         <select class="inp" id="regRegion" aria-label="Región"><option value="">Selecciona Región</option></select>
         <select class="inp" id="regComuna" aria-label="Comuna" disabled><option value="">Selecciona Comuna</option></select>
+
+        <input class="inp span2" id="regCiudad" placeholder="Ciudad">
+        <input class="inp span2" id="regDomicilio" placeholder="Domicilio / Dirección">
 
         <input class="inp span2" id="regPass" type="password" placeholder="Contraseña (mín 8)">
       </div>
