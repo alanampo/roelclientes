@@ -512,9 +512,9 @@ foreach($all as $p){
   </div>
 
   <!-- Buscador (filtra tarjetas por nombre/ref/atributos/desc) -->
-  <div class="top-search" role="search" aria-label="Buscar productos">
-    <input id="catalogSearch" name="catalogSearch" class="top-search-input" type="search" autocomplete="new-password" placeholder="Buscar por nombre, referencia o atributo…">
-  </div>
+  <form class="top-search" role="search" aria-label="Buscar productos" onsubmit="return false;" autocomplete="off" style="all: unset; display: block; flex: 1 1 320px; max-width: 520px; min-width: 240px;">
+    <input id="catalogSearch" class="top-search-input" type="text" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off" spellcheck="false">
+  </form>
 
   <div class="actions">
     <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
@@ -708,6 +708,17 @@ $secciones=[
 (function(){
   const inp = document.getElementById('catalogSearch');
   if(!inp) return;
+
+  // Desactivar autocomplete agresivamente
+  inp.autocomplete = 'off';
+  inp.setAttribute('autocomplete', 'off');
+  inp.addEventListener('focus', () => {
+    inp.autocomplete = 'off';
+    inp.setAttribute('autocomplete', 'off');
+  });
+  inp.addEventListener('input', () => {
+    inp.setAttribute('autocomplete', 'off');
+  });
 
   const norm = (s) => String(s||'')
     .toLowerCase()
