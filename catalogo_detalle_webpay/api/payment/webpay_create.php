@@ -128,19 +128,16 @@ try {
     ];
   }
 
-  // Buscar usuario asociado al cliente
-  $queryUser = "SELECT id FROM usuarios WHERE id_cliente = ? AND tipo_usuario = 0 LIMIT 1";
+  // Buscar usuario vendedor "catalogo" para asignar a la reserva
+  $queryUser = "SELECT id FROM usuarios WHERE nombre = 'catalogo' LIMIT 1";
   $stUser = $db->prepare($queryUser);
   if (!$stUser) throw new RuntimeException('Prepare error: ' . $db->error);
-  $stUser->bind_param('i', $cid);
   $stUser->execute();
   $rowUser = $stUser->get_result()->fetch_assoc();
   $stUser->close();
 
-  $idUsuario = $rowUser ? (int)$rowUser['id'] : null;
-  if ($idUsuario === null) {
-    throw new RuntimeException('No se encontró usuario asociado al cliente');
-  }
+  // Fallback a admin (id=1) si no existe usuario "catalogo"
+  $idUsuario = $rowUser ? (int)$rowUser['id'] : 1;
 
   // Calcular totales
   $subtotal = (int)($cart['total_clp'] ?? 0);
