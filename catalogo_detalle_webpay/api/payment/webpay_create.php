@@ -175,15 +175,15 @@ try {
   // Iniciar transacción en BD de producción
   $dbStock->begin_transaction();
 
-  // Crear reserva en BD de producción con payment_status='pending'
+  // Crear reserva en BD de producción con estado=100 (Espera de pago) y payment_status='pending'
   $queryReserva = "INSERT INTO reservas
     (fecha, id_cliente, observaciones, id_usuario,
      subtotal_clp, packing_cost_clp, shipping_cost_clp, total_clp, paid_clp,
-     payment_status, payment_method,
+     estado, payment_status, payment_method,
      shipping_method, shipping_address, shipping_commune,
      shipping_agency_code_dls, shipping_agency_name, shipping_agency_address,
      cart_id, created_at)
-    VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 'pending', 'webpay', ?, ?, ?, ?, ?, ?, ?, NOW())";
+    VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 100, 'pending', 'webpay', ?, ?, ?, ?, ?, ?, ?, NOW())";
 
   $stReserva = $dbStock->prepare($queryReserva);
   if (!$stReserva) throw new RuntimeException('Prepare reserva failed: ' . $dbStock->error);

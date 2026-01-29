@@ -124,10 +124,12 @@ try {
   }
 
   if ($dbStock && $idReserva > 0) {
-    // Actualizar estado de pago de la reserva
+    // Actualizar estado de pago de la reserva - pago exitoso
+    // estado=0 (completado), payment_status='paid'
     $amount = (int)$transaction['amount'];
     $updateQuery = "UPDATE reservas
-                    SET payment_status='paid',
+                    SET estado=0,
+                        payment_status='paid',
                         paid_clp={$amount},
                         updated_at=NOW()
                     WHERE id={$idReserva}";
