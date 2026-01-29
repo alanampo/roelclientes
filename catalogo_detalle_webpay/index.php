@@ -30,7 +30,12 @@ mysqli_set_charset($link,'utf8');
 /* ====== CONFIG OGIMG (cambia este secreto por uno largo y aleatorio) ====== */
 const OGIMG_SECRET = 'CAMBIA-ESTO-POR-UN-SECRETO-LARGO-Y-ALEATORIO-32+CHARS';
 
-/* -------- Query: catálogo detalle (solo lectura a tu BD stock) -------- */
+/* -------- Query: catálogo detalle (solo lectura a tu BD stock) --------
+   FIX: Obtiene atributos de forma correcta:
+   - tipo_planta se obtiene con MAX(CASE) para evitar confusiones
+   - attrs_activos agrupa otros atributos sin TIPO DE PLANTA
+   - Permite búsqueda y filtrado por atributos
+-------- */
 $sql = "
 SELECT
   sv.id_variedad,
@@ -40,9 +45,22 @@ SELECT
   sv.precio,
   sv.precio_detalle,
   sv.disponible_para_reservar,
-  MAX(av.valor)           AS tipo_planta,
-  MAX(img.nombre_archivo) AS imagen,
-  MAX(v.descripcion)      AS descripcion
+
+  MAX(CASE WHEN a.nombre = 'TIPO DE PLANTA' THEN av.valor END) AS tipo_planta,
+
+  GROUP_CONCAT(DISTINCT
+    CASE
+      WHEN a.nombre IS NULL THEN NULL
+      WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+      WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+      ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+    END
+    ORDER BY a.nombre
+    SEPARATOR '||'
+  ) AS attrs_activos,
+
+  ANY_VALUE(img.nombre_archivo) AS imagen,
+  ANY_VALUE(v.descripcion)      AS descripcion
 FROM
 (
   SELECT
@@ -93,11 +111,11 @@ FROM
   WHERE ap.estado = 8
   GROUP BY v.id
 ) AS sv
-JOIN variedades_producto v         ON v.id = sv.id_variedad
-LEFT JOIN imagenes_variedades img  ON img.id_variedad = sv.id_variedad
+JOIN variedades_producto v              ON v.id = sv.id_variedad
+LEFT JOIN imagenes_variedades img       ON img.id_variedad = sv.id_variedad
 LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = sv.id_variedad
-LEFT JOIN atributos_valores av     ON av.id = avv.id_atributo_valor
-LEFT JOIN atributos a              ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
+LEFT JOIN atributos_valores av          ON av.id = avv.id_atributo_valor
+LEFT JOIN atributos a                   ON a.id = av.id_atributo
 WHERE sv.disponible_para_reservar > 0
 GROUP BY sv.id_variedad
 ORDER BY sv.disponible_para_reservar DESC
@@ -132,6 +150,16 @@ function truncar($t,$l=120){
   return function_exists('mb_strimwidth')
     ? mb_strimwidth($t,0,$l,'…','UTF-8')
     : (strlen($t)>$l?substr($t,0,$l-2).'…':$t);
+}
+
+function _pretty_attr_label(string $k): string {
+  $k = trim($k);
+  if ($k === '') return $k;
+  if (function_exists('mb_strtolower') && function_exists('mb_convert_case')) {
+    $k = mb_strtolower($k, 'UTF-8');
+    return mb_convert_case($k, MB_CASE_TITLE, 'UTF-8');
+  }
+  return ucwords(strtolower($k));
 }
 
 /* -------- Constantes URL -------- */
@@ -203,6 +231,17 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 
     $unitPriceClpInt = (int)round(($pdNum>0?$pdNum:$pmNum)*1.19);
 
+    // Procesar atributos
+    $attrsRaw = trim((string)($p['attrs_activos'] ?? ''));
+    $attrs = [];
+    if($attrsRaw !== ''){
+      foreach(explode('||',$attrsRaw) as $kv){
+        $kv = trim((string)$kv);
+        if($kv !== '') $attrs[] = $kv;
+      }
+    }
+    $attrsDataAttr = htmlspecialchars($attrsRaw, ENT_QUOTES, 'UTF-8');
+
     $imgFile = !empty($p['imagen'])? htmlspecialchars($p['imagen'],ENT_QUOTES,'UTF-8') : '';
     $img = $imgFile ? "https://control.roelplant.cl/uploads/variedades/{$imgFile}" : "https://via.placeholder.com/600x400?text=Imagen+pendiente";
     $imgCb = $img.(strpos($img,'?')===false?'?v=':'&v=').time();
@@ -233,6 +272,7 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
          data-stock="<?= $stock ?>"
          data-preciodetalle="<?= $pd ?>"
          data-preciomayorista="<?= $pm ?>"
+         data-attrs="<?= $attrsDataAttr ?>"
          data-unitpriceclp="<?= (int)$unitPriceClpInt ?>"
          data-preciovisible="<?= $precioVisibleAttr ?>"
          data-imagen="<?= htmlspecialchars($img,ENT_QUOTES,'UTF-8') ?>"
@@ -248,8 +288,27 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
       <div class="contenido">
         <h3 class="variedad"><?= $name ?></h3>
         <p><strong>Referencia:</strong> <?= $ref ?></p>
-        <p><strong>Stock:</strong> <?= $stock ?></p>
-        <?php if($pd):?><p><strong>Detalle:</strong> $<?= $pd ?> Imp. incl.</p><?php endif; ?>
+        <p><strong>Stock disponible:</strong> <?= $stock ?></p>
+
+        <?php if(!empty($attrs)): ?>
+          <div class="attrs">
+            <?php foreach($attrs as $kv):
+              $parts = explode(':', $kv, 2);
+              $k = trim((string)($parts[0] ?? ''));
+              $v = trim((string)($parts[1] ?? ''));
+              if($k==='' || $v==='') continue;
+              $kH = htmlspecialchars(_pretty_attr_label($k), ENT_QUOTES, 'UTF-8');
+              $vH = htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+            ?>
+              <p class="attr-line"><strong><?= $kH ?>:</strong> <?= $vH ?></p>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+
+        <?php if($pd): ?>
+          <p><strong>Precio detalle:</strong> <?= '$'.$pd ?> Imp. incl.</p>
+        <?php endif; ?>
+
         <?php if($dSnip):?><p class="descripcion-snippet"><?= $dSnip ?></p><?php endif; ?>
       </div>
 
@@ -413,6 +472,35 @@ foreach($all as $p){
 </script>
 
 <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/styles.css?v=4'), ENT_QUOTES, 'UTF-8'); ?>">
+
+<style>
+/* ====== BUSCADOR TOP (no interfiere con assets/styles.css) ====== */
+.topbar{ gap:12px; flex-wrap:wrap; }
+.top-search{ flex:1 1 320px; max-width:520px; min-width:240px; }
+.top-search-input{
+  width:100%;
+  height:40px;
+  border:1px solid #e5e7eb;
+  border-radius:999px;
+  padding:0 14px;
+  background:#f8fafc;
+  outline:none;
+  font-size:14px;
+}
+.top-search-input:focus{ background:#fff; border-color:#93c5fd; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+
+/* ====== Atributos ====== */
+.attrs{
+  margin:8px 0 10px;
+  padding:8px 10px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+}
+.attr-line{ margin:0; font-size:13px; color:#111827; line-height:1.35; }
+.attr-line + .attr-line{ margin-top:4px; }
+.attr-line strong{ color:#374151; }
+</style>
 </head>
 <body>
 
@@ -422,6 +510,12 @@ foreach($all as $p){
     <img src="https://roelplant.cl/assets/images/favicon-128x128.png" alt="Roelplant">
     <strong>Roelplant · Catálogo detalle</strong>
   </div>
+
+  <!-- Buscador (filtra tarjetas por nombre/ref/atributos/desc) -->
+  <div class="top-search" role="search" aria-label="Buscar productos">
+    <input id="catalogSearch" class="top-search-input" type="search" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off">
+  </div>
+
   <div class="actions">
     <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
       Carrito <span class="badge" id="cartCount">0</span>
@@ -608,5 +702,110 @@ $secciones=[
 
   <script src="<?php echo htmlspecialchars(buildUrl('assets/locations_cl.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
   <script src="<?php echo htmlspecialchars(buildUrl('assets/app.js?v=5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+
+<!-- Buscador (filtrado local) + Modal attrs (sin tocar backend JS) -->
+<script>
+(function(){
+  const inp = document.getElementById('catalogSearch');
+  if(!inp) return;
+
+  const norm = (s) => String(s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  function applyFilter(){
+    const q = norm(inp.value);
+    const cards = Array.from(document.querySelectorAll('.producto'));
+
+    cards.forEach(card=>{
+      if(!q){ card.style.display = ''; return; }
+      const hay = [
+        card.dataset.nombre,
+        card.dataset.ref,
+        card.dataset.attrs,
+        card.dataset.descripcion
+      ].map(norm).join(' ');
+      card.style.display = hay.includes(q) ? '' : 'none';
+    });
+
+    // Oculta secciones sin resultados
+    document.querySelectorAll('h2[id]').forEach(h2=>{
+      const cat = h2.nextElementSibling;
+      if(!cat || !cat.classList || !cat.classList.contains('catalogo')) return;
+      const any = Array.from(cat.querySelectorAll('.producto')).some(el => el.style.display !== 'none');
+      h2.style.display  = any ? '' : 'none';
+      cat.style.display = any ? '' : 'none';
+    });
+  }
+
+  inp.addEventListener('input', applyFilter);
+
+  // Prefill desde ?s= o ?search_term_string=
+  const sp = new URLSearchParams(window.location.search);
+  const s = sp.get('s') || sp.get('search_term_string') || '';
+  if(s){ inp.value = s; applyFilter(); }
+
+  // Hook suave: si existe openProductoModal, extendemos para mostrar attrs y precio detalle
+  const _origOpen = window.openProductoModal;
+  if(typeof _origOpen === 'function'){
+    window.openProductoModal = function(card){
+      _origOpen(card);
+
+      try{
+        const attrsRaw = (card && card.dataset && card.dataset.attrs) ? String(card.dataset.attrs) : '';
+        const mAttrs = document.getElementById('mAttrs');
+        if(mAttrs){
+          const parts = attrsRaw.split('||').map(x=>x.trim()).filter(Boolean);
+          if(parts.length){
+            mAttrs.innerHTML = parts.map(kv=>{
+              const idx = kv.indexOf(':');
+              if(idx<=0) return '';
+              const k = kv.slice(0,idx).trim();
+              const v = kv.slice(idx+1).trim();
+              if(!k || !v) return '';
+              const kNice = k.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
+              return `<p class="attr-line"><strong>${kNice}:</strong> ${v}</p>`;
+            }).join('');
+            mAttrs.style.display = '';
+          }else{
+            mAttrs.innerHTML = '';
+            mAttrs.style.display = 'none';
+          }
+        }
+
+        const pd = (card && card.dataset) ? (card.dataset.preciodetalle || '') : '';
+        const pm = (card && card.dataset) ? (card.dataset.preciomayorista || '') : '';
+        const mPD = document.getElementById('mPrecioDetalle');
+        const mPM = document.getElementById('mPrecioMayorista');
+
+        if(mPD){
+          if(pd){
+            mPD.style.display = '';
+            mPD.innerHTML = `<strong>Precio detalle:</strong> $${pd} Imp. incl.`;
+          }else if(pm){
+            mPD.style.display = '';
+            mPD.innerHTML = `<strong>Precio:</strong> $${pm} Imp. incl.`;
+          }else{
+            mPD.style.display = '';
+            mPD.innerHTML = `<strong>Precio:</strong> No disponible`;
+          }
+        }
+        if(mPM){
+          if(pm && pd){
+            mPM.style.display = '';
+            mPM.innerHTML = `<strong>Precio mayorista:</strong> $${pm} Imp. incl.`;
+          }else{
+            mPM.style.display = 'none';
+            mPM.innerHTML = '';
+          }
+        }
+      }catch(e){}
+    }
+  }
+})();
+</script>
+
 </body>
 </html>
