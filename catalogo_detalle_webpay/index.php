@@ -513,7 +513,7 @@ foreach($all as $p){
 
   <!-- Buscador (filtra tarjetas por nombre/ref/atributos/desc) -->
   <div class="top-search" role="search" aria-label="Buscar productos">
-    <input id="catalogSearch" class="top-search-input" type="search" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off">
+    <input id="catalogSearch" class="top-search-input" type="search" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
   </div>
 
   <div class="actions">
