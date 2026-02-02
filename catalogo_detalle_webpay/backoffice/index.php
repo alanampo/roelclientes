@@ -274,47 +274,105 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                         <div class="muted" style="font-size:12px"><?=bo_h((string)$od['customer_rut'])?></div>
                       </div>
                       <div>
+                        <div class="small muted">Información de pago</div>
+                        <div style="font-weight:900"><?=bo_h((string)$od['payment_method'] ?: 'No especificado')?></div>
+                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:#5fe5d0;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h((string)$od['payment_status'])?></span></div>
+
+                        <?php if ($od['payment_method'] === 'webpay' && $od['payment_status'] === 'paid'): ?>
+                          <!-- Detalles de transacción Webpay -->
+                          <?php if (!empty($od['webpay_transaction_id'])): ?>
+                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1);font-size:12px">
+                              <div class="muted" style="font-size:11px;margin-bottom:6px">Detalles Webpay:</div>
+
+                              <?php if (!empty($od['webpay_token'])): ?>
+                                <div class="muted">Token: <span style="font-family:monospace;font-size:10px"><?=bo_h(substr((string)$od['webpay_token'], 0, 12))?>...</span></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_authorization_code'])): ?>
+                                <div class="muted">Código Auth: <b><?=bo_h((string)$od['webpay_authorization_code'])?></b></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_transaction_date'])): ?>
+                                <div class="muted">Fecha: <?=bo_h((string)$od['webpay_transaction_date'])?></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_card_type'])): ?>
+                                <div class="muted">Tarjeta: <?=bo_h((string)$od['webpay_card_type'])?></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_card_last_digits'])): ?>
+                                <div class="muted">Últimos dígitos: <b>****<?=bo_h((string)$od['webpay_card_last_digits'])?></b></div>
+                              <?php endif; ?>
+
+                              <?php if ((int)($od['webpay_installment_count'] ?? 0) > 0): ?>
+                                <div class="muted">Cuotas: <b><?=(int)$od['webpay_installment_count']?></b></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_bank_response'])): ?>
+                                <div class="muted">Respuesta banco: <b><?=bo_h((string)$od['webpay_bank_response'])?></b></div>
+                              <?php endif; ?>
+
+                              <?php if (!empty($od['webpay_order_number'])): ?>
+                                <div class="muted">Orden: <?=bo_h((string)$od['webpay_order_number'])?></div>
+                              <?php endif; ?>
+
+                              <?php if ((int)($od['webpay_amount'] ?? 0) > 0): ?>
+                                <div class="muted" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">Monto pagado: <b style="color:#5fe5d0">$<?=number_format((int)$od['webpay_amount'],0,',','.')?></b></div>
+                              <?php endif; ?>
+                            </div>
+                          <?php endif; ?>
+                        <?php elseif (!empty($od['webpay_transaction_id'])): ?>
+                          <div class="muted" style="font-size:12px">Transacción: <?=bo_h((string)$od['webpay_transaction_id'])?></div>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                      <div>
                         <div class="small muted">Método de envío</div>
-                        <?php
-                          $envioInfo = 'No especificado';
-                          if (!empty($od['observaciones']) && strpos($od['observaciones'], 'Envío:') !== false) {
-                            preg_match('/Envío:\s*([^|]+)/', $od['observaciones'], $matches);
-                            if (!empty($matches[1])) {
-                              $envioInfo = trim($matches[1]);
-                            }
-                          }
-                        ?>
-                        <div style="font-weight:900"><?=bo_h($envioInfo)?></div>
-                        <div class="muted" style="font-size:12px">Estado pago: <span style="color:#fff"><?=bo_h((string)$od['payment_status'])?></span></div>
+                        <div style="font-weight:900"><?=bo_h((string)$od['shipping_method'] ?: 'No especificado')?></div>
+                        <?php if ($od['shipping_method'] === 'agencia' && !empty($od['shipping_agency_name'])): ?>
+                          <div class="muted" style="font-size:12px">Agencia: <?=bo_h((string)$od['shipping_agency_name'])?></div>
+                          <?php if (!empty($od['shipping_agency_address'])): ?>
+                            <div class="muted" style="font-size:12px">Dirección: <?=bo_h((string)$od['shipping_agency_address'])?></div>
+                          <?php endif; ?>
+                          <?php if (!empty($od['shipping_agency_code_dls'])): ?>
+                            <div class="muted" style="font-size:12px">Código: <?=bo_h((string)$od['shipping_agency_code_dls'])?></div>
+                          <?php endif; ?>
+                        <?php elseif ($od['shipping_method'] === 'domicilio' && !empty($od['shipping_address'])): ?>
+                          <div class="muted" style="font-size:12px">Dirección: <?=bo_h((string)$od['shipping_address'])?></div>
+                          <?php if (!empty($od['shipping_commune'])): ?>
+                            <div class="muted" style="font-size:12px">Comuna: <?=bo_h((string)$od['shipping_commune'])?></div>
+                          <?php endif; ?>
+                        <?php elseif ($od['shipping_method'] === 'vivero'): ?>
+                          <div class="muted" style="font-size:12px">Retiro en vivero</div>
+                        <?php endif; ?>
                       </div>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
-                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
-                        <div class="small muted">Subtotal</div>
-                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['subtotal_clp'],0,',','.')?></div>
+                      <div>
+                        <div class="small muted">Montos</div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                          <span>Subtotal:</span>
+                          <span style="font-weight:900">$<?=number_format((int)$od['subtotal_clp'],0,',','.')?></span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                          <span>Packing:</span>
+                          <span style="font-weight:900">$<?=number_format((int)$od['packing_cost_clp'],0,',','.')?></span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                          <span>Envío:</span>
+                          <span style="font-weight:900">$<?=number_format((int)$od['shipping_cost_clp'],0,',','.')?></span>
+                        </div>
+                        <div style="border-top:1px solid rgba(255,255,255,.2);padding-top:8px;display:flex;justify-content:space-between">
+                          <span style="font-weight:900">TOTAL:</span>
+                          <span style="font-weight:900;font-size:16px;color:#5fe5d0">$<?=number_format((int)$od['total_clp'],0,',','.')?></span>
+                        </div>
+                        <?php if ((int)$od['paid_clp'] > 0): ?>
+                          <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.2);display:flex;justify-content:space-between">
+                            <span>Pagado:</span>
+                            <span style="font-weight:900">$<?=number_format((int)$od['paid_clp'],0,',','.')?></span>
+                          </div>
+                        <?php endif; ?>
                       </div>
-                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
-                        <div class="small muted">Packing</div>
-                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['packing_cost_clp'],0,',','.')?></div>
-                      </div>
-                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
-                        <div class="small muted">Envío</div>
-                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['shipping_cost_clp'],0,',','.')?></div>
-                      </div>
-                    </div>
-
-                    <div style="background:rgba(15,107,90,.2);padding:14px;border-radius:10px;border:1px solid rgba(15,107,90,.4);margin-bottom:16px">
-                      <div class="small muted">TOTAL</div>
-                      <div style="font-weight:900;font-size:24px;color:#5fe5d0">$<?=number_format((int)$od['total_clp'],0,',','.')?></div>
-                    </div>
-
-                    <div style="height:12px"></div>
-
-                    <div style="background:rgba(255,255,255,.04);padding:12px;border-radius:10px;margin-bottom:16px">
-                      <div class="small muted">Dirección de envío</div>
-                      <div style="font-size:13px;line-height:1.5;margin-top:6px"><?=bo_h((string)$od['shipping_address'] ?: '—')?></div>
-                      <div class="small muted" style="margin-top:8px"><?=bo_h((string)$od['shipping_commune'] ?: '—')?></div>
                     </div>
 
                     <?php if (!empty($od['observaciones'])): ?>
@@ -326,6 +384,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
                     <div style="height:12px"></div>
 
+                    <div class="small muted" style="margin-bottom:8px">Productos comprados</div>
                     <table class="table">
                       <thead><tr><th>Producto</th><th>Cant.</th><th>Precio Unit</th><th>Total</th></tr></thead>
                       <tbody>

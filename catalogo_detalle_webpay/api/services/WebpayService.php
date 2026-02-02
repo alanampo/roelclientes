@@ -102,6 +102,14 @@ class WebpayService {
       // Verificar si el pago fue autorizado
       $isAuthorized = ($data['status'] ?? '') === 'AUTHORIZED' && ($data['response_code'] ?? -1) === 0;
 
+      // Extraer detalles de la tarjeta
+      $cardDetail = $data['card_detail'] ?? [];
+      $cardNumber = $cardDetail['card_number'] ?? '';
+      $cardLastDigits = substr($cardNumber, -4);
+
+      // Extraer información de cuotas
+      $installmentsNumber = (int)($data['installments_number'] ?? 0);
+
       return [
         'ok' => $isAuthorized,
         'authorized' => $isAuthorized,
@@ -111,8 +119,11 @@ class WebpayService {
         'amount' => $data['amount'] ?? 0,
         'authorization_code' => $data['authorization_code'] ?? '',
         'transaction_date' => $data['transaction_date'] ?? '',
-        'card_number' => $data['card_detail']['card_number'] ?? '',
+        'card_number' => $cardNumber,
+        'card_last_digits' => $cardLastDigits,
         'vci' => $data['vci'] ?? '',
+        'payment_type_code' => $data['payment_type_code'] ?? '',
+        'installments_number' => $installmentsNumber,
         'error' => !$isAuthorized ? 'Pago no autorizado' : ''
       ];
     } catch (Exception $e) {

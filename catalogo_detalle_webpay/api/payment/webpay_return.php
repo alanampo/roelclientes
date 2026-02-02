@@ -67,14 +67,21 @@ $authorized = $result['authorized'] ?? false;
 $status = $result['status'] ?? 'UNKNOWN';
 $authCode = (string)($result['authorization_code'] ?? '');
 $cardNumber = (string)($result['card_number'] ?? '');
+$cardLastDigits = (string)($result['card_last_digits'] ?? '');
 $vci = (string)($result['vci'] ?? '');
 $responseCode = (int)($result['response_code'] ?? -1);
+$transactionDate = (string)($result['transaction_date'] ?? '');
+$buyOrder = (string)($result['buy_order'] ?? '');
+$installmentsNumber = (int)($result['installments_number'] ?? 0);
+$amount = (int)($result['amount'] ?? 0);
 
 $st = $db->prepare("UPDATE webpay_transactions SET status = ?, authorized = ?, authorization_code = ?,
-                    card_number = ?, vci = ?, response_code = ?, confirmed_at = NOW()
+                    card_number = ?, vci = ?, response_code = ?, transaction_date = ?,
+                    buy_order = ?, installments_number = ?, confirmed_at = NOW()
                     WHERE id = ?");
 if ($st) {
-  $st->bind_param('sisssii', $status, $authorized, $authCode, $cardNumber, $vci, $responseCode, $transactionId);
+  $st->bind_param('sisssssiii', $status, $authorized, $authCode, $cardNumber, $vci, $responseCode,
+                  $transactionDate, $buyOrder, $installmentsNumber, $transactionId);
   $st->execute();
   $st->close();
 }
@@ -126,11 +133,33 @@ try {
   if ($dbStock && $idReserva > 0) {
     // Actualizar estado de pago de la reserva - pago exitoso
     // estado=0 (completado), payment_status='paid'
-    $amount = (int)$transaction['amount'];
+
+    // Determinar tipo de tarjeta usando payment_type_code: VD=Débito, VN/VC/etc=Crédito
+    $cardType = (!empty($vci)) ? 'Débito' : 'Crédito';
+
+    // Escapar valores para MySQL
+    $cardType = mysqli_real_escape_string($dbStock, $cardType);
+    $cardLastDigits = mysqli_real_escape_string($dbStock, $cardLastDigits);
+    $authCode = mysqli_real_escape_string($dbStock, $authCode);
+    $status = mysqli_real_escape_string($dbStock, $status);
+    $buyOrder = mysqli_real_escape_string($dbStock, $buyOrder);
+    $transactionDate = mysqli_real_escape_string($dbStock, $transactionDate);
+    $token = mysqli_real_escape_string($dbStock, $token);
+
     $updateQuery = "UPDATE reservas
                     SET estado=0,
                         payment_status='paid',
                         paid_clp={$amount},
+                        webpay_transaction_date='{$transactionDate}',
+                        webpay_card_type='{$cardType}',
+                        webpay_installment_count={$installmentsNumber},
+                        webpay_card_last_digits='{$cardLastDigits}',
+                        webpay_amount={$amount},
+                        webpay_authorization_code='{$authCode}',
+                        webpay_bank_response='{$status}',
+                        webpay_order_number='{$buyOrder}',
+                        webpay_response_code={$responseCode},
+                        webpay_token='{$token}',
                         updated_at=NOW()
                     WHERE id={$idReserva}";
     mysqli_query($dbStock, $updateQuery);
