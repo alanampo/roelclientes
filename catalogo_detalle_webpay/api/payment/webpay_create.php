@@ -172,15 +172,15 @@ try {
   // Iniciar transacción en BD de producción
   $dbStock->begin_transaction();
 
-  // Crear reserva en BD de producción con estado=100 (Espera de pago) y payment_status='pending'
+  // Crear reserva en BD de producción con payment_status='pending'
   $queryReserva = "INSERT INTO reservas
     (fecha, id_cliente, observaciones, id_usuario,
      subtotal_clp, packing_cost_clp, shipping_cost_clp, total_clp, paid_clp,
-     estado, payment_status, payment_method,
+     payment_status, payment_method,
      shipping_method, shipping_address, shipping_commune,
      shipping_agency_code_dls, shipping_agency_name, shipping_agency_address,
      cart_id, created_at)
-    VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 100, 'pending', 'webpay', ?, ?, ?, ?, ?, ?, ?, NOW())";
+    VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 'pending', 'webpay', ?, ?, ?, ?, ?, ?, ?, NOW())";
 
   $stReserva = $dbStock->prepare($queryReserva);
   if (!$stReserva) throw new RuntimeException('Prepare reserva failed: ' . $dbStock->error);
@@ -222,6 +222,16 @@ try {
     }
   }
   $stProd->close();
+
+  // Actualizar estado=100 (pago pendiente/aceptado) en todos los productos de la reserva
+  $queryUpdateEstado = "UPDATE reservas_productos SET estado=100 WHERE id_reserva=?";
+  $stUpdateEstado = $dbStock->prepare($queryUpdateEstado);
+  if (!$stUpdateEstado) throw new RuntimeException('Prepare update estado failed: ' . $dbStock->error);
+  $stUpdateEstado->bind_param('i', $idReserva);
+  if (!$stUpdateEstado->execute()) {
+    throw new RuntimeException('Execute update estado failed: ' . $stUpdateEstado->error);
+  }
+  $stUpdateEstado->close();
 
   // Commit transacción en BD de producción
   $dbStock->commit();

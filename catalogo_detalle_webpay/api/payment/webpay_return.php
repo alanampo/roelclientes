@@ -87,7 +87,7 @@ if ($st) {
 }
 
 if (!$authorized) {
-  // Pago rechazado - actualizar reserva
+  // Pago rechazado - actualizar reserva (estado en reservas_productos se queda en 100)
   if ($idReserva > 0) {
     // Conectar a BD de producción
     $conectaPaths = [
@@ -147,8 +147,7 @@ try {
     $token = mysqli_real_escape_string($dbStock, $token);
 
     $updateQuery = "UPDATE reservas
-                    SET estado=0,
-                        payment_status='paid',
+                    SET payment_status='paid',
                         paid_clp={$amount},
                         webpay_transaction_date='{$transactionDate}',
                         webpay_card_type='{$cardType}',
@@ -163,6 +162,16 @@ try {
                         updated_at=NOW()
                     WHERE id={$idReserva}";
     mysqli_query($dbStock, $updateQuery);
+
+    // Actualizar estado=0 (pago aceptado) en todos los productos de la reserva
+    $queryUpdateEstado = "UPDATE reservas_productos SET estado=0 WHERE id_reserva=?";
+    $stUpdateEstado = $dbStock->prepare($queryUpdateEstado);
+    if ($stUpdateEstado) {
+      $stUpdateEstado->bind_param('i', $idReserva);
+      $stUpdateEstado->execute();
+      $stUpdateEstado->close();
+    }
+
     mysqli_close($dbStock);
   }
 
