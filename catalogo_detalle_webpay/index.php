@@ -59,8 +59,8 @@ SELECT
     SEPARATOR '||'
   ) AS attrs_activos,
 
-  ANY_VALUE(img.nombre_archivo) AS imagen,
-  ANY_VALUE(v.descripcion)      AS descripcion
+  MIN(img.nombre_archivo) AS imagen,
+  MIN(v.descripcion)      AS descripcion
 FROM
 (
   SELECT
