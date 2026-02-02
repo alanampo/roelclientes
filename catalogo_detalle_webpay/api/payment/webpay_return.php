@@ -92,12 +92,37 @@ $st = $db->prepare("UPDATE webpay_transactions SET status = ?, authorized = ?, a
                     card_number = ?, vci = ?, response_code = ?, transaction_date = ?,
                     buy_order = ?, installments_number = ?, confirmed_at = NOW()
                     WHERE id = ?");
+
+// LOG: Debug del UPDATE
+$updateLog = [
+  'prepare_ok' => ($st !== false),
+  'prepare_error' => $db->error,
+  'params' => [
+    'status' => $status,
+    'authorized' => $authorized,
+    'authCode' => $authCode,
+    'cardNumber' => $cardNumber,
+    'vci' => $vci,
+    'responseCode' => $responseCode,
+    'transactionDate' => $transactionDate,
+    'buyOrder' => $buyOrder,
+    'installmentsNumber' => $installmentsNumber,
+    'transactionId' => $transactionId
+  ]
+];
+
 if ($st) {
-  $st->bind_param('sisssisii', $status, $authorized, $authCode, $cardNumber, $vci, $responseCode,
+  $authorizedInt = $authorized ? 1 : 0; // Convertir boolean a int explícitamente
+  $st->bind_param('sisssisii', $status, $authorizedInt, $authCode, $cardNumber, $vci, $responseCode,
                   $transactionDate, $buyOrder, $installmentsNumber, $transactionId);
-  $st->execute();
+  $executeResult = $st->execute();
+  $updateLog['execute_ok'] = $executeResult;
+  $updateLog['execute_error'] = $st->error;
+  $updateLog['affected_rows'] = $st->affected_rows;
   $st->close();
 }
+
+@file_put_contents($logFile, "UPDATE LOG: " . json_encode($updateLog, JSON_PRETTY_PRINT) . "\n\n", FILE_APPEND);
 
 if (!$authorized) {
   // Pago rechazado - actualizar reserva (estado en reservas_productos se queda en 100)
