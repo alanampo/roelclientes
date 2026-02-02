@@ -237,6 +237,21 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   $od = $res ? mysqli_fetch_assoc($res) : null;
                   mysqli_stmt_close($st);
                 } else { $od = null; }
+
+                // Obtener datos de transacción Webpay si existe
+                $wpTx = null;
+                if ($od && !empty($od['webpay_transaction_id'])) {
+                  $stWp = mysqli_prepare($db, "SELECT * FROM webpay_transactions WHERE id = ?");
+                  if ($stWp) {
+                    $wpTxId = (int)$od['webpay_transaction_id'];
+                    mysqli_stmt_bind_param($stWp, 'i', $wpTxId);
+                    mysqli_stmt_execute($stWp);
+                    $resWp = mysqli_stmt_get_result($stWp);
+                    $wpTx = $resWp ? mysqli_fetch_assoc($resWp) : null;
+                    mysqli_stmt_close($stWp);
+                  }
+                }
+
                 $items=[];
                 if ($od) {
                   $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty, v.precio_detalle AS unit_price_clp, (rp.cantidad * v.precio_detalle) AS line_total_clp
@@ -276,53 +291,74 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                       <div>
                         <div class="small muted">Información de pago</div>
                         <div style="font-weight:900"><?=bo_h((string)$od['payment_method'] ?: 'No especificado')?></div>
-                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:#5fe5d0;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h((string)$od['payment_status'])?></span></div>
+                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$od['payment_status']==='paid'?'#5fe5d0':($od['payment_status']==='failed'?'#f87171':'#fbbf24')?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h((string)$od['payment_status'])?></span></div>
 
-                        <?php if ($od['payment_method'] === 'webpay' && $od['payment_status'] === 'paid'): ?>
-                          <!-- Detalles de transacción Webpay -->
-                          <?php if (!empty($od['webpay_transaction_id'])): ?>
-                            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1);font-size:12px">
-                              <div class="muted" style="font-size:11px;margin-bottom:6px">Detalles Webpay:</div>
+                        <?php if ($od['payment_method'] === 'webpay' && $wpTx): ?>
+                          <!-- Detalles de transacción Webpay desde webpay_transactions -->
+                          <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.1);font-size:12px">
+                            <div class="muted" style="font-size:11px;margin-bottom:6px">Detalles Webpay:</div>
 
-                              <?php if (!empty($od['webpay_token'])): ?>
-                                <div class="muted">Token: <span style="font-family:monospace;font-size:10px"><?=bo_h(substr((string)$od['webpay_token'], 0, 12))?>...</span></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['token'])): ?>
+                              <div class="muted">Token: <span style="font-family:monospace;font-size:10px"><?=bo_h(substr((string)$wpTx['token'], 0, 16))?>...</span></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_authorization_code'])): ?>
-                                <div class="muted">Código Auth: <b><?=bo_h((string)$od['webpay_authorization_code'])?></b></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['buy_order'])): ?>
+                              <div class="muted">Orden: <b><?=bo_h((string)$wpTx['buy_order'])?></b></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_transaction_date'])): ?>
-                                <div class="muted">Fecha: <?=bo_h((string)$od['webpay_transaction_date'])?></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['authorization_code'])): ?>
+                              <div class="muted">Código Auth: <b><?=bo_h((string)$wpTx['authorization_code'])?></b></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_card_type'])): ?>
-                                <div class="muted">Tarjeta: <?=bo_h((string)$od['webpay_card_type'])?></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['transaction_date'])): ?>
+                              <div class="muted">Fecha Transacción: <?=bo_h((string)$wpTx['transaction_date'])?></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_card_last_digits'])): ?>
-                                <div class="muted">Últimos dígitos: <b>****<?=bo_h((string)$od['webpay_card_last_digits'])?></b></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['card_number'])): ?>
+                              <div class="muted">Tarjeta: <b>****<?=bo_h((string)$wpTx['card_number'])?></b></div>
+                            <?php endif; ?>
 
-                              <?php if ((int)($od['webpay_installment_count'] ?? 0) > 0): ?>
-                                <div class="muted">Cuotas: <b><?=(int)$od['webpay_installment_count']?></b></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['payment_type_code'])): ?>
+                              <?php
+                                $paymentTypes = [
+                                  'VD' => 'Débito',
+                                  'VN' => 'Crédito (sin cuotas)',
+                                  'VC' => 'Crédito (cuotas)',
+                                  'SI' => 'Crédito (sin interés)',
+                                  'S2' => 'Crédito (2 cuotas sin interés)',
+                                  'NC' => 'Crédito (N cuotas sin interés)',
+                                ];
+                                $typeLabel = $paymentTypes[$wpTx['payment_type_code']] ?? $wpTx['payment_type_code'];
+                              ?>
+                              <div class="muted">Tipo pago: <b><?=bo_h($typeLabel)?></b></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_bank_response'])): ?>
-                                <div class="muted">Respuesta banco: <b><?=bo_h((string)$od['webpay_bank_response'])?></b></div>
-                              <?php endif; ?>
+                            <?php if ((int)($wpTx['installments_number'] ?? 0) > 0): ?>
+                              <div class="muted">Cuotas: <b><?=(int)$wpTx['installments_number']?></b></div>
+                            <?php endif; ?>
 
-                              <?php if (!empty($od['webpay_order_number'])): ?>
-                                <div class="muted">Orden: <?=bo_h((string)$od['webpay_order_number'])?></div>
-                              <?php endif; ?>
+                            <?php if (!empty($wpTx['vci'])): ?>
+                              <div class="muted">VCI: <?=bo_h((string)$wpTx['vci'])?></div>
+                            <?php endif; ?>
 
-                              <?php if ((int)($od['webpay_amount'] ?? 0) > 0): ?>
-                                <div class="muted" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">Monto pagado: <b style="color:#5fe5d0">$<?=number_format((int)$od['webpay_amount'],0,',','.')?></b></div>
-                              <?php endif; ?>
-                            </div>
-                          <?php endif; ?>
+                            <?php if (!empty($wpTx['status'])): ?>
+                              <div class="muted">Estado Transbank: <b style="color:<?=$wpTx['status']==='AUTHORIZED'?'#5fe5d0':'#f87171'?>"><?=bo_h((string)$wpTx['status'])?></b></div>
+                            <?php endif; ?>
+
+                            <?php if (isset($wpTx['response_code'])): ?>
+                              <div class="muted">Código respuesta: <?=(int)$wpTx['response_code']?> <?=$wpTx['response_code']==0?'✓':''?></div>
+                            <?php endif; ?>
+
+                            <?php if ((int)($wpTx['amount'] ?? 0) > 0): ?>
+                              <div class="muted" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)">Monto: <b style="color:#5fe5d0">$<?=number_format((int)$wpTx['amount'],0,',','.')?></b></div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($wpTx['confirmed_at'])): ?>
+                              <div class="muted" style="font-size:10px;margin-top:4px">Confirmado: <?=bo_h((string)$wpTx['confirmed_at'])?></div>
+                            <?php endif; ?>
+                          </div>
                         <?php elseif (!empty($od['webpay_transaction_id'])): ?>
-                          <div class="muted" style="font-size:12px">Transacción: <?=bo_h((string)$od['webpay_transaction_id'])?></div>
+                          <div class="muted" style="font-size:12px">ID Transacción: <?=bo_h((string)$od['webpay_transaction_id'])?></div>
                         <?php endif; ?>
                       </div>
                     </div>
