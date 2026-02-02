@@ -62,6 +62,19 @@ $webpay = new WebpayService(
 // Confirmar transacción con Webpay
 $result = $webpay->commitTransaction($token);
 
+// LOG: Guardar respuesta de Transbank para debug
+$logFile = __DIR__ . '/../../logs/webpay_debug.log';
+$logDir = dirname($logFile);
+if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
+$logData = [
+  'timestamp' => date('Y-m-d H:i:s'),
+  'token' => $token,
+  'transaction_id' => $transactionId,
+  'id_reserva' => $idReserva,
+  'result' => $result
+];
+@file_put_contents($logFile, json_encode($logData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
+
 // Actualizar estado en BD
 $authorized = $result['authorized'] ?? false;
 $status = $result['status'] ?? 'UNKNOWN';
