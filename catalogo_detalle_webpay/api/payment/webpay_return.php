@@ -88,9 +88,15 @@ $buyOrder = (string)($result['buy_order'] ?? '');
 $installmentsNumber = (int)($result['installments_number'] ?? 0);
 $amount = (int)($result['amount'] ?? 0);
 
-$st = $db->prepare("UPDATE webpay_transactions SET status = ?, authorized = ?, authorization_code = ?,
-                    card_number = ?, vci = ?, response_code = ?, transaction_date = ?,
-                    buy_order = ?, installments_number = ?, confirmed_at = NOW()
+// Extraer payment_type_code de la respuesta
+$paymentTypeCode = (string)($result['payment_type_code'] ?? '');
+
+// UPDATE webpay_transactions - guardar toda la información de Transbank
+$st = $db->prepare("UPDATE webpay_transactions
+                    SET status = ?, authorized = ?, authorization_code = ?,
+                        card_number = ?, vci = ?, response_code = ?,
+                        transaction_date = ?, payment_type_code = ?, installments_number = ?,
+                        confirmed_at = NOW()
                     WHERE id = ?");
 
 // LOG: Debug del UPDATE
@@ -105,16 +111,16 @@ $updateLog = [
     'vci' => $vci,
     'responseCode' => $responseCode,
     'transactionDate' => $transactionDate,
-    'buyOrder' => $buyOrder,
+    'paymentTypeCode' => $paymentTypeCode,
     'installmentsNumber' => $installmentsNumber,
     'transactionId' => $transactionId
   ]
 ];
 
 if ($st) {
-  $authorizedInt = $authorized ? 1 : 0; // Convertir boolean a int explícitamente
-  $st->bind_param('sisssisii', $status, $authorizedInt, $authCode, $cardNumber, $vci, $responseCode,
-                  $transactionDate, $buyOrder, $installmentsNumber, $transactionId);
+  $authorizedInt = $authorized ? 1 : 0;
+  $st->bind_param('sisssissii', $status, $authorizedInt, $authCode, $cardNumber, $vci, $responseCode,
+                  $transactionDate, $paymentTypeCode, $installmentsNumber, $transactionId);
   $executeResult = $st->execute();
   $updateLog['execute_ok'] = $executeResult;
   $updateLog['execute_error'] = $st->error;
