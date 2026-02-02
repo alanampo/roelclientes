@@ -43,14 +43,14 @@ function like(string $q): string { return '%' . $q . '%'; }
 
 // KPIs rápidos
 $kpi = [
-  'clientes' => (int)($db->query("SELECT COUNT(*) c FROM customers")->fetch_assoc()['c'] ?? 0),
-  'orders'   => (int)($db->query("SELECT COUNT(*) c FROM orders")->fetch_assoc()['c'] ?? 0),
-  'prodreq'  => (int)($db->query("SELECT COUNT(*) c FROM production_requests")->fetch_assoc()['c'] ?? 0),
+  'clientes' => (int)($db->query("SELECT COUNT(*) c FROM clientes")->fetch_assoc()['c'] ?? 0),
+  'reservas'   => (int)($db->query("SELECT COUNT(*) c FROM reservas")->fetch_assoc()['c'] ?? 0),
+  'prodreq'  => (int)($db->query("SELECT COUNT(*) c FROM carrito_production_requests")->fetch_assoc()['c'] ?? 0),
 ];
 
 // Listados
-$customers = [];
-$orders = [];
+$clientes = [];
+$reservas = [];
 $prod = [];
 
 // ------------------ Actions (cambio de estado) ------------------
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($id > 0 && bo_status_is_allowed($newStatus)) {
     if ($action === 'order_status') {
-      $st = mysqli_prepare($db, "UPDATE orders SET status=? WHERE id=?");
+      $st = mysqli_prepare($db, "UPDATE reservas SET payment_status=? WHERE id=?");
       if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
       mysqli_stmt_bind_param($st, 'si', $newStatus, $id);
       mysqli_stmt_execute($st);
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'prod_status') {
-      $st = mysqli_prepare($db, "UPDATE production_requests SET status=? WHERE id=?");
+      $st = mysqli_prepare($db, "UPDATE carrito_production_requests SET status=? WHERE id=?");
       if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
       mysqli_stmt_bind_param($st, 'si', $newStatus, $id);
       mysqli_stmt_execute($st);
@@ -92,10 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($tab === 'clientes') {
-  $sql = "SELECT id, rut, nombre, email, telefono, region, comuna, created_at
-          FROM customers
-          WHERE (?='' OR nombre LIKE ? OR email LIKE ? OR rut LIKE ?)
-          ORDER BY id DESC
+  $sql = "SELECT id_cliente, rut, nombre, mail, telefono, region, comuna
+          FROM clientes
+          WHERE (?='' OR nombre LIKE ? OR mail LIKE ? OR rut LIKE ?)
+          ORDER BY id_cliente DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
@@ -104,35 +104,36 @@ if ($tab === 'clientes') {
   mysqli_stmt_bind_param($st, 'ssss', $qq, $lk, $lk, $lk);
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
-  while ($r = $rs->fetch_assoc()) $customers[] = $r;
+  while ($r = $rs->fetch_assoc()) $clientes[] = $r;
   mysqli_stmt_close($st);
 }
 
 if ($tab === 'pedidos') {
-  $sql = "SELECT id, order_code, customer_id, customer_nombre, customer_email, customer_telefono, customer_rut,
-                 status, subtotal_clp, shipping_cost_clp, total_clp, created_at
-          FROM orders
-          WHERE (?='' OR order_code LIKE ? OR customer_nombre LIKE ? OR customer_email LIKE ? OR customer_rut LIKE ? OR customer_telefono LIKE ? OR status LIKE ?)
-          ORDER BY id DESC
+  $sql = "SELECT r.id, r.id_cliente, r.payment_status AS status, r.subtotal_clp, r.shipping_cost_clp, r.total_clp, r.created_at,
+                 c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
+          FROM reservas r
+          LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
+          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ? OR r.payment_status LIKE ?)
+          ORDER BY r.id DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
   $qq = $q;
   $lk = like($q);
-  mysqli_stmt_bind_param($st, 'sssssss', $qq, $lk, $lk, $lk, $lk, $lk, $lk);
+  mysqli_stmt_bind_param($st, 'ssssss', $qq, $lk, $lk, $lk, $lk, $lk);
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
-  while ($r = $rs->fetch_assoc()) $orders[] = $r;
+  while ($r = $rs->fetch_assoc()) $reservas[] = $r;
   mysqli_stmt_close($st);
 }
 
 if ($tab === 'produccion') {
-  $sql = "SELECT pr.id, pr.request_code, pr.customer_id, pr.status, pr.total_units, pr.total_amount_clp, pr.created_at,
-                 c.nombre AS customer_nombre, c.email AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
-          FROM production_requests pr
-          LEFT JOIN customers c ON c.id=pr.customer_id
-          WHERE (?='' OR pr.request_code LIKE ? OR CAST(pr.customer_id AS CHAR) LIKE ? OR pr.status LIKE ? OR c.nombre LIKE ? OR c.email LIKE ? OR c.rut LIKE ?)
-          ORDER BY id DESC
+  $sql = "SELECT pr.id, pr.request_code, pr.id_cliente, pr.status, pr.total_units, pr.total_amount_clp, pr.created_at,
+                 c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
+          FROM carrito_production_requests pr
+          LEFT JOIN clientes c ON c.id_cliente=pr.id_cliente
+          WHERE (?='' OR pr.request_code LIKE ? OR CAST(pr.id_cliente AS CHAR) LIKE ? OR pr.status LIKE ? OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ?)
+          ORDER BY pr.id DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
@@ -192,7 +193,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
           <?php if ($tab === 'kpis'): ?>
             <div class="kpis">
               <div class="kpi"><div class="t">Clientes</div><div class="v"><?=number_format($kpi['clientes'],0,',','.')?></div></div>
-              <div class="kpi"><div class="t">Pedidos stock</div><div class="v"><?=number_format($kpi['orders'],0,',','.')?></div></div>
+              <div class="kpi"><div class="t">Pedidos stock</div><div class="v"><?=number_format($kpi['reservas'],0,',','.')?></div></div>
               <div class="kpi"><div class="t">Pedidos producción</div><div class="v"><?=number_format($kpi['prodreq'],0,',','.')?></div></div>
             </div>
             <div style="height:12px"></div>
@@ -206,7 +207,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 <th>ID</th><th>RUT</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Región</th><th>Comuna</th><th>Alta</th>
               </tr></thead>
               <tbody>
-              <?php foreach ($customers as $c): ?>
+              <?php foreach ($clientes as $c): ?>
                 <tr>
                   <td><a href="index.php?tab=clientes&q=<?=bo_h((string)$c['rut'])?>"><?=bo_h((string)$c['id'])?></a></td>
                   <td><?=bo_h((string)$c['rut'])?></td>
@@ -227,10 +228,9 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 <th>ID</th><th>Código</th><th>Cliente</th><th>Estado</th><th>Subtotal</th><th>Envío</th><th>Total</th><th>Fecha</th><th></th>
               </tr></thead>
               <tbody>
-              <?php foreach ($orders as $o): ?>
+              <?php foreach ($reservas as $o): ?>
                 <tr>
                   <td><a href="index.php?tab=pedidos&order_id=<?=bo_h((string)$o['id'])?>"><?=bo_h((string)$o['id'])?></a></td>
-                  <td class="mono"><?=bo_h((string)$o['order_code'])?></td>
                   <td>
                     <div style="font-weight:800"><?=bo_h((string)$o['customer_nombre'])?></div>
                     <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_email'])?></div>
@@ -249,7 +249,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
             <?php if ($viewOrderId > 0): ?>
               <?php
-                $st = mysqli_prepare($db, "SELECT * FROM orders WHERE id=?");
+                $st = mysqli_prepare($db, "SELECT * FROM reservas WHERE id=?");
                 if ($st) {
                   mysqli_stmt_bind_param($st, 'i', $viewOrderId);
                   mysqli_stmt_execute($st);
@@ -259,7 +259,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 } else { $od = null; }
                 $items=[];
                 if ($od) {
-                  $st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM order_items WHERE order_id=? ORDER BY id ASC");
+                  $st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM carrito_order_items WHERE order_id=? ORDER BY id ASC");
                   if ($st2) {
                     mysqli_stmt_bind_param($st2, 'i', $viewOrderId);
                     mysqli_stmt_execute($st2);
@@ -275,7 +275,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   <div class="card-h">
                     <div>
                       <div class="muted" style="font-weight:800">Detalle pedido</div>
-                      <div class="h1" style="margin:0">#<?=bo_h((string)$od['id'])?> • <?=bo_h((string)$od['order_code'])?></div>
+                      <div class="h1" style="margin:0">#<?=bo_h((string)$od['id'])?></div>
                     </div>
                     <a class="btn" href="index.php?tab=pedidos">Cerrar</a>
                   </div>
@@ -348,7 +348,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   <td><a href="index.php?tab=produccion&pr_id=<?=bo_h((string)$p['id'])?>"><?=bo_h((string)$p['id'])?></a></td>
                   <td><b><?=bo_h((string)$p['request_code'])?></b></td>
                   <td>
-                    <div style="font-weight:800"><?=bo_h((string)($p['customer_nombre'] ?? ('ID '.$p['customer_id'])))?></div>
+                    <div style="font-weight:800"><?=bo_h((string)($p['customer_nombre'] ?? ('ID '.$p['id_cliente'])))?></div>
                     <div class="muted" style="font-size:12px"><?=bo_h((string)($p['customer_email'] ?? ''))?></div>
                   </td>
                   <td><span class="pill"><?=bo_h(bo_status_label((string)$p['status']))?></span></td>
@@ -363,9 +363,9 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
             <?php if ($viewProdId > 0): ?>
               <?php
-                $st = mysqli_prepare($db, "SELECT pr.*, c.nombre AS customer_nombre, c.email AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
-                                            FROM production_requests pr
-                                            LEFT JOIN customers c ON c.id=pr.customer_id
+                $st = mysqli_prepare($db, "SELECT pr.*, c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
+                                            FROM carrito_production_requests pr
+                                            LEFT JOIN clientes c ON c.id_cliente=pr.id_cliente
                                             WHERE pr.id=?");
                 if ($st) {
                   mysqli_stmt_bind_param($st, 'i', $viewProdId);
@@ -377,7 +377,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
                 $pitems=[];
                 if ($pd) {
-                  $st2 = mysqli_prepare($db, "SELECT product_name, product_id, qty, unit_price_clp, line_total_clp FROM production_request_items WHERE request_id=? ORDER BY id ASC");
+                  $st2 = mysqli_prepare($db, "SELECT product_name, product_id, qty, unit_price_clp, line_total_clp FROM carrito_production_request_items WHERE request_id=? ORDER BY id ASC");
                   if ($st2) {
                     mysqli_stmt_bind_param($st2, 'i', $viewProdId);
                     mysqli_stmt_execute($st2);

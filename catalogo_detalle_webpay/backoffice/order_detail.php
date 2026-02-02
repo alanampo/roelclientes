@@ -9,7 +9,7 @@ require_admin();
 $db = db();
 
 $id = bo_int(bo_q('id', 0), 0);
-if ($id <= 0) { header('Location: orders.php'); exit; }
+if ($id <= 0) { header('Location: reservas.php'); exit; }
 
 $err=''; $ok='';
 
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   $newStatus = trim((string)bo_post('status',''));
   if ($newStatus==='') $err='Estado inválido.';
   else {
-    $st = mysqli_prepare($db, "UPDATE orders SET status=? WHERE id=?");
+    $st = mysqli_prepare($db, "UPDATE reservas SET payment_status=? WHERE id=?");
     mysqli_stmt_bind_param($st, 'si', $newStatus, $id);
     if (!mysqli_stmt_execute($st)) $err = mysqli_stmt_error($st);
     else $ok = 'Estado actualizado.';
@@ -27,16 +27,19 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   }
 }
 
-$st = mysqli_prepare($db, "SELECT * FROM orders WHERE id=?");
+$st = mysqli_prepare($db, "SELECT r.*, c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.id_cliente AS customer_id
+                            FROM reservas r
+                            LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
+                            WHERE r.id=?");
 mysqli_stmt_bind_param($st,'i',$id);
 mysqli_stmt_execute($st);
 $res = mysqli_stmt_get_result($st);
 $o = $res ? mysqli_fetch_assoc($res) : null;
 mysqli_stmt_close($st);
-if (!$o) { header('Location: orders.php'); exit; }
+if (!$o) { header('Location: index.php?tab=pedidos'); exit; }
 
 $items=[];
-$st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM order_items WHERE order_id=? ORDER BY id ASC");
+$st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM carrito_order_items WHERE order_id=? ORDER BY id ASC");
 mysqli_stmt_bind_param($st2,'i',$id);
 mysqli_stmt_execute($st2);
 $res2 = mysqli_stmt_get_result($st2);
@@ -44,9 +47,9 @@ while ($res2 && ($r=mysqli_fetch_assoc($res2))) $items[]=$r;
 mysqli_stmt_close($st2);
 
 $statuses=[];
-$rs=mysqli_query($db,"SELECT DISTINCT status FROM orders ORDER BY status");
+$rs=mysqli_query($db,"SELECT DISTINCT payment_status FROM reservas ORDER BY payment_status");
 if($rs){while($x=mysqli_fetch_row($rs)) $statuses[]=$x[0];}
-if(!in_array($o['status'],$statuses,true)) $statuses[]=$o['status'];
+if(!in_array($o['payment_status'],$statuses,true)) $statuses[]=$o['payment_status'];
 
 bo_header('Pedido stock');
 ?>
@@ -54,7 +57,7 @@ bo_header('Pedido stock');
   <section class="card">
     <div class="card-h">
       <h1 class="h1">Pedido #<?= h($o['id']) ?></h1>
-      <a class="btn" href="orders.php">Volver</a>
+      <a class="btn" href="reservas.php">Volver</a>
     </div>
     <div class="card-b">
       <?php if($err): ?><div class="alert bad"><?= h($err) ?></div><div style="height:10px"></div><?php endif; ?>
@@ -62,12 +65,12 @@ bo_header('Pedido stock');
 
       <div class="row">
         <div>
-          <div class="small muted">Código</div>
-          <div class="mono" style="font-weight:900"><?= h((string)$o['order_code']) ?></div>
+          <div class="small muted">ID Reserva</div>
+          <div class="mono" style="font-weight:900">#<?= h((string)$o['id']) ?></div>
         </div>
         <div>
           <div class="small muted">Estado</div>
-          <div><?= bo_badge((string)$o['status']) ?></div>
+          <div><?= bo_badge((string)$o['payment_status']) ?></div>
         </div>
       </div>
 
@@ -79,7 +82,7 @@ bo_header('Pedido stock');
           <div class="small muted">Cambiar estado</div>
           <select class="inp" name="status">
             <?php foreach($statuses as $s): ?>
-              <option value="<?= h($s) ?>" <?= $s===$o['status']?'selected':'' ?>><?= h($s) ?></option>
+              <option value="<?= h($s) ?>" <?= $s===$o['payment_status']?'selected':'' ?>><?= h($s) ?></option>
             <?php endforeach; ?>
           </select>
         </div>

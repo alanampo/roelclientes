@@ -27,9 +27,9 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   }
 }
 
-$sql="SELECT pr.*, c.nombre AS customer_name, c.email AS customer_email, c.telefono AS customer_phone
+$sql="SELECT pr.*, c.nombre AS customer_name, c.mail AS customer_email, c.telefono AS customer_phone
       FROM carrito_production_requests pr
-      LEFT JOIN clientes c ON c.id=pr.id_cliente
+      LEFT JOIN clientes c ON c.id_cliente=pr.id_cliente
       WHERE pr.id=?";
 $st=mysqli_prepare($db,$sql);
 mysqli_stmt_bind_param($st,'i',$id);
