@@ -223,33 +223,13 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
             </table>
 
           <?php elseif ($tab === 'pedidos'): ?>
-            <table class="table">
-              <thead><tr>
-                <th>ID</th><th>Código</th><th>Cliente</th><th>Estado</th><th>Subtotal</th><th>Envío</th><th>Total</th><th>Fecha</th><th></th>
-              </tr></thead>
-              <tbody>
-              <?php foreach ($reservas as $o): ?>
-                <tr>
-                  <td><a href="index.php?tab=pedidos&order_id=<?=bo_h((string)$o['id'])?>"><?=bo_h((string)$o['id'])?></a></td>
-                  <td>
-                    <div style="font-weight:800"><?=bo_h((string)$o['customer_nombre'])?></div>
-                    <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_email'])?></div>
-                    <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_telefono'])?></div>
-                  </td>
-                  <td><span class="pill"><?=bo_h(bo_status_label((string)$o['status']))?></span></td>
-                  <td>$<?=number_format((int)$o['subtotal_clp'],0,',','.')?></td>
-                  <td>$<?=number_format((int)$o['shipping_cost_clp'],0,',','.')?></td>
-                  <td><b>$<?=number_format((int)$o['total_clp'],0,',','.')?></b></td>
-                  <td><?=bo_h((string)$o['created_at'])?></td>
-                  <td><a class="btn" href="index.php?tab=pedidos&order_id=<?=bo_h((string)$o['id'])?>">Detalle</a></td>
-                </tr>
-              <?php endforeach; ?>
-              </tbody>
-            </table>
 
             <?php if ($viewOrderId > 0): ?>
               <?php
-                $st = mysqli_prepare($db, "SELECT * FROM reservas WHERE id=?");
+                $st = mysqli_prepare($db, "SELECT r.*, c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
+                                            FROM reservas r
+                                            LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
+                                            WHERE r.id=?");
                 if ($st) {
                   mysqli_stmt_bind_param($st, 'i', $viewOrderId);
                   mysqli_stmt_execute($st);
@@ -259,7 +239,11 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 } else { $od = null; }
                 $items=[];
                 if ($od) {
-                  $st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM carrito_order_items WHERE order_id=? ORDER BY id ASC");
+                  $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty, v.precio_detalle AS unit_price_clp, (rp.cantidad * v.precio_detalle) AS line_total_clp
+                                              FROM reservas_productos rp
+                                              LEFT JOIN variedades_producto v ON v.id = rp.id_variedad
+                                              WHERE rp.id_reserva=?
+                                              ORDER BY rp.id ASC");
                   if ($st2) {
                     mysqli_stmt_bind_param($st2, 'i', $viewOrderId);
                     mysqli_stmt_execute($st2);
@@ -274,13 +258,14 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 <div class="card" style="border:1px solid rgba(255,255,255,.08)">
                   <div class="card-h">
                     <div>
-                      <div class="muted" style="font-weight:800">Detalle pedido</div>
+                      <div class="muted" style="font-weight:800">Detalle Reserva Stock</div>
                       <div class="h1" style="margin:0">#<?=bo_h((string)$od['id'])?></div>
+                      <div class="muted" style="font-size:12px"><?=bo_h((string)$od['created_at'])?></div>
                     </div>
                     <a class="btn" href="index.php?tab=pedidos">Cerrar</a>
                   </div>
                   <div class="card-b">
-                    <div class="row">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
                       <div>
                         <div class="small muted">Cliente</div>
                         <div style="font-weight:900"><?=bo_h((string)$od['customer_nombre'])?></div>
@@ -289,37 +274,60 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                         <div class="muted" style="font-size:12px"><?=bo_h((string)$od['customer_rut'])?></div>
                       </div>
                       <div>
-                        <div class="small muted">Totales</div>
-                        <div class="muted" style="font-size:12px">Subtotal: $<?=number_format((int)$od['subtotal_clp'],0,',','.')?></div>
-                        <div class="muted" style="font-size:12px">Envío: $<?=number_format((int)$od['shipping_cost_clp'],0,',','.')?></div>
-                        <div style="font-weight:900">Total: $<?=number_format((int)$od['total_clp'],0,',','.')?></div>
-                        <div class="muted" style="font-size:12px"><?=bo_h((string)$od['created_at'])?></div>
+                        <div class="small muted">Método de envío</div>
+                        <?php
+                          $envioInfo = 'No especificado';
+                          if (!empty($od['observaciones']) && strpos($od['observaciones'], 'Envío:') !== false) {
+                            preg_match('/Envío:\s*([^|]+)/', $od['observaciones'], $matches);
+                            if (!empty($matches[1])) {
+                              $envioInfo = trim($matches[1]);
+                            }
+                          }
+                        ?>
+                        <div style="font-weight:900"><?=bo_h($envioInfo)?></div>
+                        <div class="muted" style="font-size:12px">Estado pago: <span style="color:#fff"><?=bo_h((string)$od['payment_status'])?></span></div>
                       </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
+                        <div class="small muted">Subtotal</div>
+                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['subtotal_clp'],0,',','.')?></div>
+                      </div>
+                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
+                        <div class="small muted">Packing</div>
+                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['packing_cost_clp'],0,',','.')?></div>
+                      </div>
+                      <div style="background:rgba(255,255,255,.06);padding:12px;border-radius:10px">
+                        <div class="small muted">Envío</div>
+                        <div style="font-weight:900;font-size:18px">$<?=number_format((int)$od['shipping_cost_clp'],0,',','.')?></div>
+                      </div>
+                    </div>
+
+                    <div style="background:rgba(15,107,90,.2);padding:14px;border-radius:10px;border:1px solid rgba(15,107,90,.4);margin-bottom:16px">
+                      <div class="small muted">TOTAL</div>
+                      <div style="font-weight:900;font-size:24px;color:#5fe5d0">$<?=number_format((int)$od['total_clp'],0,',','.')?></div>
                     </div>
 
                     <div style="height:12px"></div>
 
-                    <form method="post" class="row">
-                      <input type="hidden" name="_csrf" value="<?=bo_h($csrf)?>">
-                      <input type="hidden" name="action" value="order_status">
-                      <input type="hidden" name="id" value="<?=bo_h((string)$od['id'])?>">
-                      <div>
-                        <div class="small muted">Cambiar estado</div>
-                        <select class="inp" name="status">
-                          <?php foreach (bo_status_options() as $code=>$label): ?>
-                            <option value="<?=bo_h($code)?>" <?= strtolower((string)$od['status'])===$code?'selected':'' ?>><?=bo_h($label)?></option>
-                          <?php endforeach; ?>
-                        </select>
+                    <div style="background:rgba(255,255,255,.04);padding:12px;border-radius:10px;margin-bottom:16px">
+                      <div class="small muted">Dirección de envío</div>
+                      <div style="font-size:13px;line-height:1.5;margin-top:6px"><?=bo_h((string)$od['shipping_address'] ?: '—')?></div>
+                      <div class="small muted" style="margin-top:8px"><?=bo_h((string)$od['shipping_commune'] ?: '—')?></div>
+                    </div>
+
+                    <?php if (!empty($od['observaciones'])): ?>
+                      <div style="background:rgba(255,255,255,.04);padding:12px;border-radius:10px;margin-bottom:16px;border-left:3px solid #f39c12">
+                        <div class="small muted">Observaciones</div>
+                        <div style="font-size:13px;line-height:1.5;margin-top:6px;white-space:pre-wrap"><?=bo_h((string)$od['observaciones'])?></div>
                       </div>
-                      <div style="max-width:220px; align-self:flex-end">
-                        <button class="btn btn-primary" type="submit">Guardar</button>
-                      </div>
-                    </form>
+                    <?php endif; ?>
 
                     <div style="height:12px"></div>
 
                     <table class="table">
-                      <thead><tr><th>Producto</th><th>Cant.</th><th>Unit</th><th>Total</th></tr></thead>
+                      <thead><tr><th>Producto</th><th>Cant.</th><th>Precio Unit</th><th>Total</th></tr></thead>
                       <tbody>
                         <?php foreach($items as $it): ?>
                           <tr>
@@ -335,6 +343,30 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   </div>
                 </div>
               <?php endif; ?>
+            <?php else: ?>
+              <table class="table">
+                <thead><tr>
+                  <th>ID</th><th>Cliente</th><th>Estado</th><th>Subtotal</th><th>Envío</th><th>Total</th><th>Fecha</th><th></th>
+                </tr></thead>
+                <tbody>
+                <?php foreach ($reservas as $o): ?>
+                  <tr>
+                    <td><a href="index.php?tab=pedidos&order_id=<?=bo_h((string)$o['id'])?>"><?=bo_h((string)$o['id'])?></a></td>
+                    <td>
+                      <div style="font-weight:800"><?=bo_h((string)$o['customer_nombre'])?></div>
+                      <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_email'])?></div>
+                      <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_telefono'])?></div>
+                    </td>
+                    <td><span class="pill"><?=bo_h(bo_status_label((string)$o['status']))?></span></td>
+                    <td>$<?=number_format((int)$o['subtotal_clp'],0,',','.')?></td>
+                    <td>$<?=number_format((int)$o['shipping_cost_clp'],0,',','.')?></td>
+                    <td><b>$<?=number_format((int)$o['total_clp'],0,',','.')?></b></td>
+                    <td><?=bo_h((string)$o['created_at'])?></td>
+                    <td><a class="btn" href="index.php?tab=pedidos&order_id=<?=bo_h((string)$o['id'])?>">Detalle</a></td>
+                  </tr>
+                <?php endforeach; ?>
+                </tbody>
+              </table>
             <?php endif; ?>
 
           <?php else: ?>
