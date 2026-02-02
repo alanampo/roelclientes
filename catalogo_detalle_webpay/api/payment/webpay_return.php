@@ -80,7 +80,7 @@ $st = $db->prepare("UPDATE webpay_transactions SET status = ?, authorized = ?, a
                     buy_order = ?, installments_number = ?, confirmed_at = NOW()
                     WHERE id = ?");
 if ($st) {
-  $st->bind_param('sisssssiii', $status, $authorized, $authCode, $cardNumber, $vci, $responseCode,
+  $st->bind_param('sisssisii', $status, $authorized, $authCode, $cardNumber, $vci, $responseCode,
                   $transactionDate, $buyOrder, $installmentsNumber, $transactionId);
   $st->execute();
   $st->close();
