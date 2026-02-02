@@ -36,7 +36,16 @@ function login_unificado(mysqli $db, string $email, string $password) {
 
   if (!$row) unauthorized('Credenciales inválidas');
   if ((int)$row['inhabilitado'] === 1) unauthorized('Usuario inactivo');
-  if (!password_verify($password, (string)$row['password'])) unauthorized('Credenciales inválidas');
+
+  // Intentar con password_verify (hash password_hash)
+  $passValid = password_verify($password, (string)$row['password']);
+
+  // Si falla, intentar con comparación directa (texto plano)
+  if (!$passValid) {
+    $passValid = hash_equals((string)$row['password'], (string)$password);
+  }
+
+  if (!$passValid) unauthorized('Credenciales inválidas');
 
   $usuarioId = (int)$row['id'];
   $clienteId = (int)$row['id_cliente'];
