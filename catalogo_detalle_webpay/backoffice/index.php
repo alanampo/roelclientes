@@ -299,7 +299,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                             <div class="muted" style="font-size:11px;margin-bottom:6px">Detalles Webpay:</div>
 
                             <?php if (!empty($wpTx['token'])): ?>
-                              <div class="muted">Token: <span style="font-family:monospace;font-size:10px"><?=bo_h(substr((string)$wpTx['token'], 0, 16))?>...</span></div>
+                              <div class="muted">Token: <span style="font-family:monospace;font-size:10px"><?=bo_h((string)$wpTx['token'])?></span></div>
                             <?php endif; ?>
 
                             <?php if (!empty($wpTx['buy_order'])): ?>
