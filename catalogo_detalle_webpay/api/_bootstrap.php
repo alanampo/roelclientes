@@ -227,24 +227,8 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
 
 
 function cart_snapshot(mysqli $db, int $cartId): array {
-  $q = "SELECT ci.id, ci.id_variedad, ci.referencia, ci.nombre, ci.imagen_url, ci.unit_price_clp, ci.qty,
-                GROUP_CONCAT(DISTINCT
-                  CASE
-                    WHEN a.nombre IS NULL THEN NULL
-                    WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
-                    WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
-                    ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
-                  END
-                  ORDER BY a.nombre
-                  SEPARATOR '||'
-                ) AS attrs_activos
-         FROM " . CART_ITEMS_TABLE . " ci
-         LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = ci.id_variedad
-         LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
-         LEFT JOIN atributos a ON a.id = av.id_atributo
-         WHERE ci.cart_id=?
-         GROUP BY ci.id
-         ORDER BY ci.updated_at DESC";
+  $q = "SELECT id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty
+        FROM " . CART_ITEMS_TABLE . " WHERE cart_id=? ORDER BY updated_at DESC";
   $st = $db->prepare($q);
   $st->bind_param('i', $cartId);
   $st->execute();
@@ -259,16 +243,41 @@ function cart_snapshot(mysqli $db, int $cartId): array {
     $line = $qty * $price;
     $total += $line;
     $count += $qty;
+
+    // Obtener atributos del producto
+    $id_var = (int)$r['id_variedad'];
+    $attrs = '';
+    $qAttr = "SELECT CONCAT(a.nombre, ': ', TRIM(av.valor)) as attr
+              FROM atributos_valores_variedades avv
+              JOIN atributos_valores av ON av.id = avv.id_atributo_valor
+              JOIN atributos a ON a.id = av.id_atributo
+              WHERE avv.id_variedad = ?
+              AND a.nombre != 'TIPO DE PLANTA'
+              AND TRIM(av.valor) != ''
+              ORDER BY a.nombre";
+    $stAttr = $db->prepare($qAttr);
+    if ($stAttr) {
+      $stAttr->bind_param('i', $id_var);
+      $stAttr->execute();
+      $resAttr = $stAttr->get_result();
+      $attrList = [];
+      while ($rAttr = $resAttr->fetch_assoc()) {
+        $attrList[] = $rAttr['attr'];
+      }
+      $attrs = implode('||', $attrList);
+      $stAttr->close();
+    }
+
     $items[] = [
       'item_id'=>(int)$r['id'],
-      'id_variedad'=>(int)$r['id_variedad'],
+      'id_variedad'=>$id_var,
       'referencia'=>(string)$r['referencia'],
       'nombre'=>(string)$r['nombre'],
       'imagen_url'=>$r['imagen_url'],
       'unit_price_clp'=>$price,
       'qty'=>$qty,
       'line_total_clp'=>$line,
-      'attrs_activos'=>(string)($r['attrs_activos'] ?? ''),
+      'attrs_activos'=>$attrs,
     ];
   }
 
