@@ -226,6 +226,87 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
 }
 
 
+// Detectar si producto tiene maceta/bolsa especial (MAC-10 a MAC-15, BOL-10 a BOL-15)
+function has_special_packing_attrs(string $attrsActivos): bool {
+  if (empty($attrsActivos)) return false;
+
+  $attrs = explode('||', $attrsActivos);
+  foreach ($attrs as $attr) {
+    $attr = trim($attr);
+    $attrUpper = strtoupper($attr);
+
+    // Buscar "MACETA:" o "BOLSA:"
+    if (strpos($attrUpper, 'MACETA:') !== false || strpos($attrUpper, 'BOLSA:') !== false) {
+      // Extraer el valor después de los dos puntos
+      $parts = explode(':', $attr, 2);
+      if (count($parts) === 2) {
+        $value = trim(strtoupper($parts[1]));
+        // Verificar si es MAC-10 a MAC-15 o BOL-10 a BOL-15
+        if (preg_match('/^(MAC|BOL)-(1[0-5])$/', $value)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Calcular packing diferenciado
+function calculate_packing(array $items): array {
+  $qtySpecial = 0;
+  $qtyNormal = 0;
+
+  foreach ($items as $it) {
+    $qty = (int)($it['qty'] ?? 0);
+    $attrs = (string)($it['attrs_activos'] ?? '');
+
+    if (has_special_packing_attrs($attrs)) {
+      $qtySpecial += $qty;
+    } else {
+      $qtyNormal += $qty;
+    }
+  }
+
+  $packingCost = 0;
+  $packingLabel = '';
+  $details = [];
+
+  // Calcular packing para productos especiales (cajas medianas, 25 por caja)
+  if ($qtySpecial > 0) {
+    $cajasEspeciales = (int)ceil($qtySpecial / 25);
+    $costoEspecial = $cajasEspeciales * 4000;
+    $packingCost += $costoEspecial;
+    $details[] = "{$cajasEspeciales} caja(s) mediana(s) para macetas/bolsas ({$qtySpecial} unid)";
+  }
+
+  // Calcular packing para productos normales (lógica original)
+  if ($qtyNormal > 0) {
+    if ($qtyNormal <= 50) {
+      $packingCost += 2500;
+      $details[] = '1 caja chica para otros productos (1-50 unid)';
+    } elseif ($qtyNormal <= 100) {
+      $packingCost += 4000;
+      $details[] = '1 caja mediana para otros productos (51-100 unid)';
+    } else {
+      $packs = (int)ceil($qtyNormal / 100);
+      $packingCost += 4500 * $packs;
+      $details[] = "{$packs} caja(s) grande(s) para otros productos (cada 100 unid)";
+    }
+  }
+
+  $packingLabel = implode(' + ', $details);
+  if (empty($packingLabel)) {
+    $packingLabel = 'sin packing';
+  }
+
+  return [
+    'cost' => $packingCost,
+    'label' => $packingLabel,
+    'qty_special' => $qtySpecial,
+    'qty_normal' => $qtyNormal,
+  ];
+}
+
 // Detectar y aplicar descuento desde atributo
 function apply_discount_from_attrs(int $price, string $attrsActivos): array {
   $discountAmount = 0;

@@ -85,27 +85,10 @@ $shippingCost = 0;
 // Totales
 $subtotal = (int)($cart['total_clp'] ?? 0);
 
-// Packing automático según cantidad total de unidades en el carrito.
-// Reglas:
-//  1-50   => caja chica  $2.500
-// 51-100  => caja mediana $4.000
-// 101+    => $4.500 por cada 100 unidades (redondeo hacia arriba)
-$qtyTotal = 0;
-foreach (($cart['items'] ?? []) as $it) { $qtyTotal += (int)($it['qty'] ?? 0); }
-
-$packingCost = 0;
-$packingLabel = 'sin packing';
-if ($qtyTotal > 0 && $qtyTotal <= 50) {
-  $packingCost = 2500;
-  $packingLabel = 'caja chica (1-50)';
-} elseif ($qtyTotal <= 100) {
-  $packingCost = 4000;
-  $packingLabel = 'caja mediana (51-100)';
-} else {
-  $packs = (int)ceil($qtyTotal / 100);
-  $packingCost = 4500 * $packs;
-  $packingLabel = 'caja grande x'.$packs.' (cada 100 unid.)';
-}
+// Packing diferenciado (productos especiales MAC/BOL vs productos normales)
+$packingInfo = calculate_packing($items);
+$packingCost = $packingInfo['cost'];
+$packingLabel = $packingInfo['label'];
 
 $total = $subtotal + $shippingCost + $packingCost;
 

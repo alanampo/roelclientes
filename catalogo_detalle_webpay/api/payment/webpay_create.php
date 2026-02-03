@@ -141,22 +141,11 @@ try {
 
   // Calcular totales
   $subtotal = (int)($cart['total_clp'] ?? 0);
-  $qtyTotal = array_reduce($items, fn($acc, $it) => $acc + (int)($it['qty'] ?? 0), 0);
 
-  // Packing
-  $packingCost = 0;
-  $packingLabel = 'sin packing';
-  if ($qtyTotal > 0 && $qtyTotal <= 50) {
-    $packingCost = 2500;
-    $packingLabel = 'caja chica (1-50)';
-  } elseif ($qtyTotal <= 100) {
-    $packingCost = 4000;
-    $packingLabel = 'caja mediana (51-100)';
-  } else {
-    $packs = (int)ceil($qtyTotal / 100);
-    $packingCost = 4500 * $packs;
-    $packingLabel = 'caja grande x'.$packs.' (cada 100 unid.)';
-  }
+  // Packing diferenciado (productos especiales MAC/BOL vs productos normales)
+  $packingInfo = calculate_packing($items);
+  $packingCost = $packingInfo['cost'];
+  $packingLabel = $packingInfo['label'];
 
   $total = $subtotal + $packingCost + $shippingCost;
 

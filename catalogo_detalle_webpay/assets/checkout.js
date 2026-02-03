@@ -57,13 +57,80 @@
     return '$' + Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
 
-  function packingForQty(qtyTotal) {
-    const q = Number(qtyTotal || 0);
-    if (q <= 0) return { cost: 0, label: '' };
-    if (q <= 50) return { cost: 2500, label: 'caja chica (1-50)' };
-    if (q <= 100) return { cost: 4000, label: 'caja mediana (51-100)' };
-    const packs = Math.ceil(q / 100);
-    return { cost: 4500 * packs, label: `caja grande x${packs} (cada 100 unid.)` };
+  // Detectar si producto tiene maceta/bolsa especial (MAC-10 a MAC-15, BOL-10 a BOL-15)
+  function hasSpecialPackingAttrs(attrsActivos) {
+    if (!attrsActivos) return false;
+
+    const attrs = attrsActivos.split('||');
+    for (const attr of attrs) {
+      const attrTrimmed = attr.trim();
+      const attrUpper = attrTrimmed.toUpperCase();
+
+      // Buscar "MACETA:" o "BOLSA:"
+      if (attrUpper.includes('MACETA:') || attrUpper.includes('BOLSA:')) {
+        const parts = attrTrimmed.split(':', 2);
+        if (parts.length === 2) {
+          const value = parts[1].trim().toUpperCase();
+          // Verificar si es MAC-10 a MAC-15 o BOL-10 a BOL-15
+          if (/^(MAC|BOL)-(1[0-5])$/.test(value)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // Calcular packing diferenciado
+  function calculatePacking(items) {
+    let qtySpecial = 0;
+    let qtyNormal = 0;
+
+    for (const it of items) {
+      const qty = Number(it.qty || 0);
+      const attrs = String(it.attrs_activos || '');
+
+      if (hasSpecialPackingAttrs(attrs)) {
+        qtySpecial += qty;
+      } else {
+        qtyNormal += qty;
+      }
+    }
+
+    let packingCost = 0;
+    const details = [];
+
+    // Calcular packing para productos especiales (cajas medianas, 25 por caja)
+    if (qtySpecial > 0) {
+      const cajasEspeciales = Math.ceil(qtySpecial / 25);
+      const costoEspecial = cajasEspeciales * 4000;
+      packingCost += costoEspecial;
+      details.push(`${cajasEspeciales} caja(s) mediana(s) para macetas/bolsas (${qtySpecial} unid)`);
+    }
+
+    // Calcular packing para productos normales (lógica original)
+    if (qtyNormal > 0) {
+      if (qtyNormal <= 50) {
+        packingCost += 2500;
+        details.push('1 caja chica para otros productos (1-50 unid)');
+      } else if (qtyNormal <= 100) {
+        packingCost += 4000;
+        details.push('1 caja mediana para otros productos (51-100 unid)');
+      } else {
+        const packs = Math.ceil(qtyNormal / 100);
+        packingCost += 4500 * packs;
+        details.push(`${packs} caja(s) grande(s) para otros productos (cada 100 unid)`);
+      }
+    }
+
+    const packingLabel = details.length > 0 ? details.join(' + ') : 'sin packing';
+
+    return {
+      cost: packingCost,
+      label: packingLabel,
+      qty_special: qtySpecial,
+      qty_normal: qtyNormal
+    };
   }
 
   // Especificaciones de cajas (IDÉNTICAS al backend)
@@ -73,36 +140,63 @@
     grande: { height: 26, width: 29, depth: 54, weight: 3.0 }
   };
 
-  // Calcular dimensiones y peso (MISMA LÓGICA que backend)
-  function calculateShippingDimensions(qtyTotal) {
-    const q = Number(qtyTotal || 0);
-
-    if (q <= 0) {
+  // Calcular dimensiones y peso (con lógica de packing diferenciado)
+  function calculateShippingDimensions(items) {
+    if (!items || items.length === 0) {
       return { boxType: '', boxCount: 0, weight: 0, height: 0, width: 0, depth: 0 };
     }
 
-    let boxType, boxCount;
+    // Separar productos especiales de normales
+    let qtySpecial = 0;
+    let qtyNormal = 0;
 
-    if (q <= 50) {
-      boxType = 'pequeña';
-      boxCount = 1;
-    } else if (q <= 100) {
-      boxType = 'mediana';
-      boxCount = 1;
-    } else {
-      boxType = 'grande';
-      boxCount = Math.ceil(q / 100);
+    for (const it of items) {
+      const qty = Number(it.qty || 0);
+      const attrs = String(it.attrs_activos || '');
+
+      if (hasSpecialPackingAttrs(attrs)) {
+        qtySpecial += qty;
+      } else {
+        qtyNormal += qty;
+      }
     }
 
-    const specs = BOX_SPECS[boxType];
-    const totalWeight = specs.weight * boxCount;
-    const totalHeight = specs.height * boxCount;
-    const totalWidth = specs.width;
-    const totalDepth = specs.depth;
+    let totalWeight = 0;
+    let totalHeight = 0;
+    let totalWidth = 29; // Ancho estándar
+    let totalDepth = 54; // Profundidad máxima estándar
+
+    // Cajas medianas para productos especiales (25 por caja)
+    if (qtySpecial > 0) {
+      const cajasEspeciales = Math.ceil(qtySpecial / 25);
+      const specsMediana = BOX_SPECS.mediana;
+      totalWeight += specsMediana.weight * cajasEspeciales;
+      totalHeight += specsMediana.height * cajasEspeciales;
+    }
+
+    // Cajas para productos normales (lógica original)
+    if (qtyNormal > 0) {
+      let boxType, boxCount;
+
+      if (qtyNormal <= 50) {
+        boxType = 'pequeña';
+        boxCount = 1;
+      } else if (qtyNormal <= 100) {
+        boxType = 'mediana';
+        boxCount = 1;
+      } else {
+        boxType = 'grande';
+        boxCount = Math.ceil(qtyNormal / 100);
+      }
+
+      const specs = BOX_SPECS[boxType];
+      totalWeight += specs.weight * boxCount;
+      totalHeight += specs.height * boxCount;
+    }
 
     return {
-      boxType,
-      boxCount,
+      boxType: 'mixta', // Tipo mixto porque puede haber combinación
+      boxCount: Math.ceil(qtySpecial / 25) + (qtyNormal > 0 ? 1 : 0),
       weight: totalWeight,
       height: totalHeight,
       width: totalWidth,
@@ -293,14 +387,14 @@
     }
 
     try {
-      // Obtener carrito para calcular cantidad total
+      // Obtener carrito para calcular dimensiones
       const cartResp = await fetchJson(buildApiUrl('cart/get.php'), { method: 'GET' });
       const cart = cartResp.cart || {};
       const items = cart.items || [];
       const qtyTotal = items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
       // Calcular dimensiones localmente (rápido, sin esperar al backend)
-      const dimensions = calculateShippingDimensions(qtyTotal);
+      const dimensions = calculateShippingDimensions(items);
 
       // Origen: usar configuración desde .env
       const originCityCodeDls = state.starkenOriginCityCodeDls;
@@ -394,14 +488,14 @@
     }
 
     try {
-      // Obtener carrito para calcular cantidad total
+      // Obtener carrito para calcular dimensiones
       const cartResp = await fetchJson(buildApiUrl('cart/get.php'), { method: 'GET' });
       const cart = cartResp.cart || {};
       const items = cart.items || [];
       const qtyTotal = items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
       // Calcular dimensiones localmente
-      const dimensions = calculateShippingDimensions(qtyTotal);
+      const dimensions = calculateShippingDimensions(items);
 
       // Origen: usar configuración desde .env
       const originCityCodeDls = state.starkenOriginCityCodeDls;
@@ -679,8 +773,7 @@
       items.forEach((it) => cartItems.appendChild(cartItemRow(it)));
     }
 
-    const qtyTotal = items.reduce((acc,it)=>acc+Number(it.qty||0),0);
-    const pack = packingForQty(qtyTotal);
+    const pack = calculatePacking(items);
     state.packingCost = pack.cost;
     state.packingLabel = pack.label;
     sumSubtotal.textContent = fmtCLP(total);
