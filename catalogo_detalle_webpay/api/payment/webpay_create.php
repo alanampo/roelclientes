@@ -186,21 +186,21 @@ try {
   if (!$stReserva) throw new RuntimeException('Prepare reserva failed: ' . $dbStock->error);
 
   $stReserva->bind_param(
-    'isiiiiisssisi',
-    $cid,
-    $reservaObs,
-    $idUsuario,
-    $subtotal,
-    $packingCost,
-    $shippingCost,
-    $total,
-    $shippingMethod,
-    $shippingAddress,
-    $shippingCommune,
-    $shippingAgencyCodeDls,
-    $shippingAgencyName,
-    $shippingAgencyAddress,
-    $cartId
+    'isiiiiiisssisi',
+    $cid,               // i - id_cliente
+    $reservaObs,        // s - observaciones
+    $idUsuario,         // i - id_usuario
+    $subtotal,          // i - subtotal_clp
+    $packingCost,       // i - packing_cost_clp
+    $shippingCost,      // i - shipping_cost_clp
+    $total,             // i - total_clp
+    $shippingMethod,    // s - shipping_method
+    $shippingAddress,   // s - shipping_address
+    $shippingCommune,   // s - shipping_commune
+    $shippingAgencyCodeDls,  // i - shipping_agency_code_dls
+    $shippingAgencyName,     // s - shipping_agency_name
+    $shippingAgencyAddress,  // s - shipping_agency_address
+    $cartId             // i - cart_id
   );
 
   if (!$stReserva->execute()) {
