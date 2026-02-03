@@ -669,6 +669,8 @@
     const count = Number(cart.item_count || 0);
     const total = Number(cart.total_clp || 0);
 
+    console.log('CART DATA FROM SERVER:', { cart, items });
+
     cartMeta.textContent = `${count} item(s) en carrito`;
 
     if (!items.length) {
