@@ -205,7 +205,21 @@ try {
                         webpay_token='{$token}',
                         updated_at=NOW()
                     WHERE id={$idReserva}";
-    mysqli_query($dbStock, $updateQuery);
+    $updateResult = mysqli_query($dbStock, $updateQuery);
+    $affectedRows = mysqli_affected_rows($dbStock);
+    $updateError = mysqli_error($dbStock);
+
+    // LOG: Debug del UPDATE de reservas
+    $reservaUpdateLog = [
+      'timestamp' => date('Y-m-d H:i:s'),
+      'update_result' => $updateResult,
+      'affected_rows' => $affectedRows,
+      'error' => $updateError,
+      'id_reserva' => $idReserva,
+      'dbStock_connected' => ($dbStock && mysqli_ping($dbStock)),
+      'query' => $updateQuery
+    ];
+    @file_put_contents($logFile, "RESERVA UPDATE LOG: " . json_encode($reservaUpdateLog, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
 
     // Actualizar estado=0 (pago aceptado) en todos los productos de la reserva
     $queryUpdateEstado = "UPDATE reservas_productos SET estado=0 WHERE id_reserva=?";
