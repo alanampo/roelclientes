@@ -20,6 +20,12 @@
     shippingAgencyQuotedCodeDls: null,  // Código de la sucursal cotizada
     canPayButton: false,  // Si el botón pagar está habilitado
     starkenOriginCityCodeDls: null,  // Ciudad de origen para cotizaciones (desde .env)
+    ivaPercentage: 19,  // Porcentaje de IVA (se carga desde .env)
+    packingPrices: {  // Precios de packing con IVA incluido (se cargan desde BD)
+      chica: Math.round(2500 * 1.19),
+      mediana: Math.round(4000 * 1.19),
+      grande: Math.round(4500 * 1.19)
+    }
   };
 
   const $ = (id) => document.getElementById(id);
@@ -83,6 +89,8 @@
 
   // Calcular packing diferenciado
   function calculatePacking(items) {
+    const prices = state.packingPrices;
+
     let qtySpecial = 0;
     let qtyNormal = 0;
 
@@ -103,7 +111,7 @@
     // Calcular packing para productos especiales (cajas medianas, 25 por caja)
     if (qtySpecial > 0) {
       const cajasEspeciales = Math.ceil(qtySpecial / 25);
-      const costoEspecial = cajasEspeciales * 4000;
+      const costoEspecial = cajasEspeciales * prices.mediana;
       packingCost += costoEspecial;
       details.push(`${cajasEspeciales} caja(s) mediana(s) para macetas/bolsas (${qtySpecial} unid)`);
     }
@@ -111,14 +119,14 @@
     // Calcular packing para productos normales (lógica original)
     if (qtyNormal > 0) {
       if (qtyNormal <= 50) {
-        packingCost += 2500;
+        packingCost += prices.chica;
         details.push('1 caja chica para otros productos (1-50 unid)');
       } else if (qtyNormal <= 100) {
-        packingCost += 4000;
+        packingCost += prices.mediana;
         details.push('1 caja mediana para otros productos (51-100 unid)');
       } else {
         const packs = Math.ceil(qtyNormal / 100);
-        packingCost += 4500 * packs;
+        packingCost += prices.grande * packs;
         details.push(`${packs} caja(s) grande(s) para otros productos (cada 100 unid)`);
       }
     }
@@ -215,6 +223,25 @@
   function hideAlert() {
     if (!alertBox) return;
     alertBox.classList.add('hidden');
+  }
+
+  async function loadPackingPrices() {
+    try {
+      const j = await fetchJson(buildApiUrl('config/packing_prices.php'), { method: 'GET' });
+      if (j.ok && j.prices) {
+        state.packingPrices = j.prices;
+        if (j.iva_percentage) {
+          state.ivaPercentage = j.iva_percentage;
+        }
+        console.log('Packing prices loaded:', {
+          prices: j.prices,
+          iva: state.ivaPercentage + '%'
+        });
+      }
+    } catch (e) {
+      console.error('Error loading packing prices:', e.message);
+      // Usar fallbacks ya definidos en state
+    }
   }
 
   async function loadStarkenConfig() {
@@ -1152,6 +1179,7 @@
   async function init() {
     try {
       bindEvents();
+      await loadPackingPrices();
       await loadStarkenConfig();
       await refreshMe();
       await loadCart();

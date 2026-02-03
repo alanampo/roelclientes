@@ -517,10 +517,11 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                           }
 
                           // Aplicar descuento de atributos si existe
+                          $ivaMultiplier = get_iva_multiplier();
                           $priceUnitario = (int)$it['unit_price_clp'];
                           $discountInfo = apply_discount_from_attrs($priceUnitario, $attrsRaw);
                           $precioFinal = $discountInfo['final_price'];
-                          $precioConIvaFinal = round($precioFinal * 1.19);
+                          $precioConIvaFinal = round($precioFinal * $ivaMultiplier);
                           $totalConIvaFinal = (int)$it['qty'] * $precioConIvaFinal;
                           $subtotalProductos += $totalConIvaFinal;
 
@@ -528,7 +529,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                           $priceHtml = '$' . number_format($precioConIvaFinal, 0, ',', '.');
                           if ($discountInfo['discount_amount'] > 0) {
                             $discountPercent = $discountInfo['discount_percent'];
-                            $originalPrice = round($priceUnitario * 1.19);
+                            $originalPrice = round($priceUnitario * $ivaMultiplier);
                             $originalTotal = (int)$it['qty'] * $originalPrice;
                             $discountLabel = $discountPercent > 0 ? "-{$discountPercent}%" : "-$" . number_format($discountInfo['discount_amount'], 0, ',', '.');
                             $priceHtml = '<div style="text-decoration:line-through;color:#999;font-size:12px">$' . number_format($originalPrice, 0, ',', '.') . '</div>'

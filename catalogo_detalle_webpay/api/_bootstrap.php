@@ -226,6 +226,63 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
 }
 
 
+// Obtener porcentaje de IVA desde .env (fallback 19%)
+function get_iva_percentage(): int {
+  $iva = (int)(getenv('IVA_PERCENTAGE') ?: 19);
+  return $iva > 0 ? $iva : 19;
+}
+
+// Obtener multiplicador de IVA (ej: 1.19 para 19%)
+function get_iva_multiplier(): float {
+  return 1 + (get_iva_percentage() / 100);
+}
+
+// Obtener precios de packing desde la base de datos (con IVA incluido)
+function get_packing_prices(mysqli $db): array {
+  // Obtener IVA
+  $ivaPercent = get_iva_percentage();
+  $ivaMultiplier = 1 + ($ivaPercent / 100);
+
+  // Fallbacks hardcodeados (sin IVA)
+  $pricesBase = [
+    'chica' => 2500,
+    'mediana' => 4000,
+    'grande' => 4500,
+  ];
+
+  // Intentar obtener desde la BD
+  $query = "SELECT nombre, COALESCE(precio, precio_mayorista, 0) AS precio_final
+            FROM variedades_producto
+            WHERE nombre IN ('PACKING CAJA CHICA', 'PACKING CAJA MEDIANA', 'PACKING CAJA GRANDE')";
+
+  $result = mysqli_query($db, $query);
+  if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+      $nombre = strtoupper(trim((string)$row['nombre']));
+      $precio = (int)$row['precio_final'];
+
+      if ($precio > 0) {
+        if ($nombre === 'PACKING CAJA CHICA') {
+          $pricesBase['chica'] = $precio;
+        } elseif ($nombre === 'PACKING CAJA MEDIANA') {
+          $pricesBase['mediana'] = $precio;
+        } elseif ($nombre === 'PACKING CAJA GRANDE') {
+          $pricesBase['grande'] = $precio;
+        }
+      }
+    }
+  }
+
+  // Aplicar IVA a todos los precios
+  $prices = [
+    'chica' => (int)round($pricesBase['chica'] * $ivaMultiplier),
+    'mediana' => (int)round($pricesBase['mediana'] * $ivaMultiplier),
+    'grande' => (int)round($pricesBase['grande'] * $ivaMultiplier),
+  ];
+
+  return $prices;
+}
+
 // Detectar si producto tiene maceta/bolsa especial (MAC-10 a MAC-15, BOL-10 a BOL-15)
 function has_special_packing_attrs(string $attrsActivos): bool {
   if (empty($attrsActivos)) return false;
@@ -252,7 +309,10 @@ function has_special_packing_attrs(string $attrsActivos): bool {
 }
 
 // Calcular packing diferenciado
-function calculate_packing(array $items): array {
+function calculate_packing(mysqli $db, array $items): array {
+  // Obtener precios desde BD (con fallbacks)
+  $prices = get_packing_prices($db);
+
   $qtySpecial = 0;
   $qtyNormal = 0;
 
@@ -274,7 +334,7 @@ function calculate_packing(array $items): array {
   // Calcular packing para productos especiales (cajas medianas, 25 por caja)
   if ($qtySpecial > 0) {
     $cajasEspeciales = (int)ceil($qtySpecial / 25);
-    $costoEspecial = $cajasEspeciales * 4000;
+    $costoEspecial = $cajasEspeciales * $prices['mediana'];
     $packingCost += $costoEspecial;
     $details[] = "{$cajasEspeciales} caja(s) mediana(s) para macetas/bolsas ({$qtySpecial} unid)";
   }
@@ -282,14 +342,14 @@ function calculate_packing(array $items): array {
   // Calcular packing para productos normales (lógica original)
   if ($qtyNormal > 0) {
     if ($qtyNormal <= 50) {
-      $packingCost += 2500;
+      $packingCost += $prices['chica'];
       $details[] = '1 caja chica para otros productos (1-50 unid)';
     } elseif ($qtyNormal <= 100) {
-      $packingCost += 4000;
+      $packingCost += $prices['mediana'];
       $details[] = '1 caja mediana para otros productos (51-100 unid)';
     } else {
       $packs = (int)ceil($qtyNormal / 100);
-      $packingCost += 4500 * $packs;
+      $packingCost += $prices['grande'] * $packs;
       $details[] = "{$packs} caja(s) grande(s) para otros productos (cada 100 unid)";
     }
   }

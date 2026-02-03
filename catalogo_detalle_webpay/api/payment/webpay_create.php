@@ -143,7 +143,7 @@ try {
   $subtotal = (int)($cart['total_clp'] ?? 0);
 
   // Packing diferenciado (productos especiales MAC/BOL vs productos normales)
-  $packingInfo = calculate_packing($items);
+  $packingInfo = calculate_packing($dbStock, $items);
   $packingCost = $packingInfo['cost'];
   $packingLabel = $packingInfo['label'];
 

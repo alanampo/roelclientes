@@ -192,10 +192,11 @@ if($refParam !== ''){
   }
 
   if($found){
+    $ivaMultiplier = get_iva_multiplier();
     $nameOg  = (string)($found['variedad'] ?? '');
     $stockOg = (int)($found['disponible_para_reservar'] ?? 0);
-    $pdOg = isset($found['precio_detalle']) ? number_format(((float)$found['precio_detalle'])*1.19,0,',','.') : '';
-    $pmOg = number_format(((float)($found['precio'] ?? 0))*1.19,0,',','.');
+    $pdOg = isset($found['precio_detalle']) ? number_format(((float)$found['precio_detalle'])*$ivaMultiplier,0,',','.') : '';
+    $pmOg = number_format(((float)($found['precio'] ?? 0))*$ivaMultiplier,0,',','.');
     $precioVisibleOg = $pdOg ? ('$'.$pdOg.' (Detalle, imp. incl.)') : ('$'.$pmOg.' (Mayorista, imp. incl.)');
     $descOg = trim((string)($found['descripcion'] ?? ''));
     $descOg = $descOg ? truncar($descOg, 140) : '';
@@ -222,14 +223,15 @@ $ogImageH = htmlspecialchars($ogImage, ENT_QUOTES, 'UTF-8');
 
 /* -------- Render Cards -------- */
 function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil):void{
+  $ivaMultiplier = get_iva_multiplier();
   foreach($ps as $p){
     $pdNum = isset($p['precio_detalle']) ? (float)$p['precio_detalle'] : 0;
     $pmNum = isset($p['precio']) ? (float)$p['precio'] : 0;
 
-    $pd = $pdNum>0 ? number_format($pdNum*1.19,0,',','.') : '';
-    $pm = number_format($pmNum*1.19,0,',','.');
+    $pd = $pdNum>0 ? number_format($pdNum*$ivaMultiplier,0,',','.') : '';
+    $pm = number_format($pmNum*$ivaMultiplier,0,',','.');
 
-    $unitPriceClpInt = (int)round(($pdNum>0?$pdNum:$pmNum)*1.19);
+    $unitPriceClpInt = (int)round(($pdNum>0?$pdNum:$pmNum)*$ivaMultiplier);
 
     // Procesar atributos
     $attrsRaw = trim((string)($p['attrs_activos'] ?? ''));

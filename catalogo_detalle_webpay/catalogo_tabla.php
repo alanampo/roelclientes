@@ -331,9 +331,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </tr>
         </thead>
         <tbody>
-            <?php while($row = mysqli_fetch_assoc($resultado)):
+            <?php
+                $ivaMultiplier = get_iva_multiplier();
+                while($row = mysqli_fetch_assoc($resultado)):
                 $precio_detalle = isset($row['precio_detalle'])
-                    ? number_format($row['precio_detalle'] * 1.19, 0, ',', '.')
+                    ? number_format($row['precio_detalle'] * $ivaMultiplier, 0, ',', '.')
                     : '';
 
                 // Procesar atributos
