@@ -306,10 +306,24 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 if ($od) {
                   $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty,
                                               COALESCE(v.precio_detalle, v.precio, 0) AS unit_price_clp,
-                                              (rp.cantidad * COALESCE(v.precio_detalle, v.precio, 0)) AS line_total_clp
+                                              (rp.cantidad * COALESCE(v.precio_detalle, v.precio, 0)) AS line_total_clp,
+                                              GROUP_CONCAT(DISTINCT
+                                                CASE
+                                                  WHEN a.nombre IS NULL THEN NULL
+                                                  WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+                                                  WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+                                                  ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+                                                END
+                                                ORDER BY a.nombre
+                                                SEPARATOR '||'
+                                              ) AS attrs_activos
                                               FROM reservas_productos rp
                                               LEFT JOIN variedades_producto v ON v.id = rp.id_variedad
+                                              LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = rp.id_variedad
+                                              LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
+                                              LEFT JOIN atributos a ON a.id = av.id_atributo
                                               WHERE rp.id_reserva=?
+                                              GROUP BY rp.id, rp.id_variedad, rp.cantidad, v.nombre, v.precio_detalle, v.precio
                                               ORDER BY rp.id ASC");
                   if ($st2) {
                     mysqli_stmt_bind_param($st2, 'i', $viewOrderId);
@@ -491,9 +505,26 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                           $precioConIva = round((int)$it['unit_price_clp'] * 1.19);
                           $totalConIva = (int)$it['qty'] * $precioConIva;
                           $subtotalProductos += $totalConIva;
+
+                          // Procesar atributos
+                          $attrsRaw = (string)($it['attrs_activos'] ?? '');
+                          $attrsHtml = '';
+                          if (!empty($attrsRaw)) {
+                            $attrs = array_filter(array_map('trim', explode('||', $attrsRaw)));
+                            if (!empty($attrs)) {
+                              $attrsHtml = '<div style="margin-top:4px;font-size:11px;color:#999">';
+                              foreach ($attrs as $attr) {
+                                $attrsHtml .= '<div>' . bo_h($attr) . '</div>';
+                              }
+                              $attrsHtml .= '</div>';
+                            }
+                          }
                         ?>
                           <tr>
-                            <td><?=bo_h((string)$it['product_name'])?></td>
+                            <td>
+                              <div><?=bo_h((string)$it['product_name'])?></div>
+                              <?=$attrsHtml?>
+                            </td>
                             <td><?=bo_h((string)$it['qty'])?></td>
                             <td>$<?=number_format($precioConIva,0,',','.')?></td>
                             <td>$<?=number_format($totalConIva,0,',','.')?></td>
