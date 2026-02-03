@@ -131,7 +131,7 @@ if ($st) {
 @file_put_contents($logFile, "UPDATE LOG: " . json_encode($updateLog, JSON_PRETTY_PRINT) . "\n\n", FILE_APPEND);
 
 if (!$authorized) {
-  // Pago rechazado - actualizar reserva (estado en reservas_productos se queda en 100)
+  // Pago rechazado - eliminar la reserva y sus productos
   if ($idReserva > 0) {
     // Conectar a BD de producción
     $conectaPaths = [
@@ -144,7 +144,10 @@ if (!$authorized) {
         require $p;
         $dbStock = @mysqli_connect($host, $user, $password, $dbname);
         if ($dbStock) {
-          mysqli_query($dbStock, "UPDATE reservas SET payment_status='failed', updated_at=NOW() WHERE id={$idReserva}");
+          // Eliminar productos de la reserva
+          mysqli_query($dbStock, "DELETE FROM reservas_productos WHERE id_reserva={$idReserva}");
+          // Eliminar la reserva
+          mysqli_query($dbStock, "DELETE FROM reservas WHERE id={$idReserva}");
           mysqli_close($dbStock);
         }
         break;
