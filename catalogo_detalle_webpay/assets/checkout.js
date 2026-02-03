@@ -592,6 +592,20 @@
     const qty = Number(it.qty || 0);
     const unit = Number(it.unit_price_clp || 0);
     const line = Number(it.line_total_clp || (qty * unit));
+    const attrsRaw = (it.attrs_activos || '').trim();
+
+    // Procesar atributos
+    let attrsHtml = '';
+    if (attrsRaw !== '') {
+      const attrs = attrsRaw.split('||').map(a => a.trim()).filter(a => a !== '');
+      if (attrs.length > 0) {
+        attrsHtml = '<div style="margin-top:6px;font-size:12px;color:#666">';
+        attrs.forEach(attr => {
+          attrsHtml += `<div>${attr}</div>`;
+        });
+        attrsHtml += '</div>';
+      }
+    }
 
     const d = document.createElement('div');
     d.className = 'cart-item';
@@ -600,6 +614,7 @@
       <div class="ci-main" style="width: 70%;">
         <div class="ci-title">${name}</div>
         <div class="ci-sub muted">${ref}</div>
+        ${attrsHtml}
       </div>
       <div class="ci-right" style="
           width: 20%;

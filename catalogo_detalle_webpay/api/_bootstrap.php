@@ -227,7 +227,24 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
 
 
 function cart_snapshot(mysqli $db, int $cartId): array {
-  $q = "SELECT id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty\n        FROM " . CART_ITEMS_TABLE . " WHERE cart_id=? ORDER BY updated_at DESC";
+  $q = "SELECT ci.id, ci.id_variedad, ci.referencia, ci.nombre, ci.imagen_url, ci.unit_price_clp, ci.qty,
+                GROUP_CONCAT(DISTINCT
+                  CASE
+                    WHEN a.nombre IS NULL THEN NULL
+                    WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+                    WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+                    ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+                  END
+                  ORDER BY a.nombre
+                  SEPARATOR '||'
+                ) AS attrs_activos
+         FROM " . CART_ITEMS_TABLE . " ci
+         LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = ci.id_variedad
+         LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
+         LEFT JOIN atributos a ON a.id = av.id_atributo
+         WHERE ci.cart_id=?
+         GROUP BY ci.id
+         ORDER BY ci.updated_at DESC";
   $st = $db->prepare($q);
   $st->bind_param('i', $cartId);
   $st->execute();
@@ -251,6 +268,7 @@ function cart_snapshot(mysqli $db, int $cartId): array {
       'unit_price_clp'=>$price,
       'qty'=>$qty,
       'line_total_clp'=>$line,
+      'attrs_activos'=>(string)($r['attrs_activos'] ?? ''),
     ];
   }
 
