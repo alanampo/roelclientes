@@ -502,10 +502,6 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                         <?php
                         $subtotalProductos = 0;
                         foreach($items as $it):
-                          $precioConIva = round((int)$it['unit_price_clp'] * 1.19);
-                          $totalConIva = (int)$it['qty'] * $precioConIva;
-                          $subtotalProductos += $totalConIva;
-
                           // Procesar atributos
                           $attrsRaw = (string)($it['attrs_activos'] ?? '');
                           $attrsHtml = '';
@@ -519,6 +515,26 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                               $attrsHtml .= '</div>';
                             }
                           }
+
+                          // Aplicar descuento de atributos si existe
+                          $priceUnitario = (int)$it['unit_price_clp'];
+                          $discountInfo = apply_discount_from_attrs($priceUnitario, $attrsRaw);
+                          $precioFinal = $discountInfo['final_price'];
+                          $precioConIvaFinal = round($precioFinal * 1.19);
+                          $totalConIvaFinal = (int)$it['qty'] * $precioConIvaFinal;
+                          $subtotalProductos += $totalConIvaFinal;
+
+                          // Mostrar precio original tachado si hay descuento
+                          $priceHtml = '$' . number_format($precioConIvaFinal, 0, ',', '.');
+                          if ($discountInfo['discount_amount'] > 0) {
+                            $discountPercent = $discountInfo['discount_percent'];
+                            $originalPrice = round($priceUnitario * 1.19);
+                            $originalTotal = (int)$it['qty'] * $originalPrice;
+                            $discountLabel = $discountPercent > 0 ? "-{$discountPercent}%" : "-$" . number_format($discountInfo['discount_amount'], 0, ',', '.');
+                            $priceHtml = '<div style="text-decoration:line-through;color:#999;font-size:12px">$' . number_format($originalPrice, 0, ',', '.') . '</div>'
+                                      . '<div style="color:#5fe5d0;font-weight:bold">$' . number_format($precioConIvaFinal, 0, ',', '.') . '</div>'
+                                      . '<div style="font-size:11px;color:#f39c12">' . $discountLabel . '</div>';
+                          }
                         ?>
                           <tr>
                             <td>
@@ -526,8 +542,8 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                               <?=$attrsHtml?>
                             </td>
                             <td><?=bo_h((string)$it['qty'])?></td>
-                            <td>$<?=number_format($precioConIva,0,',','.')?></td>
-                            <td>$<?=number_format($totalConIva,0,',','.')?></td>
+                            <td><?=$priceHtml?></td>
+                            <td>$<?=number_format($totalConIvaFinal,0,',','.')?></td>
                           </tr>
                         <?php endforeach; ?>
 

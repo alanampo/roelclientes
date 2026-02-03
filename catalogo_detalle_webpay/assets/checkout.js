@@ -591,6 +591,9 @@
     const name = it.nombre || '';
     const qty = Number(it.qty || 0);
     const unit = Number(it.unit_price_clp || 0);
+    const originalUnit = Number(it.original_price_clp || unit);
+    const discountAmount = Number(it.discount_amount || 0);
+    const discountPercent = Number(it.discount_percent || 0);
     const line = Number(it.line_total_clp || (qty * unit));
     const attrsRaw = (it.attrs_activos || '').trim();
 
@@ -607,6 +610,18 @@
       }
     }
 
+    // Mostrar precio con descuento tachado si aplica
+    let priceHtml = `${fmtCLP(line)}`;
+    if (discountAmount > 0) {
+      const originalLine = qty * originalUnit;
+      const discountLabel = discountPercent > 0 ? `-${discountPercent}%` : `-${fmtCLP(discountAmount)}`;
+      priceHtml = `
+        <div style="text-decoration:line-through;color:#999;font-size:12px">${fmtCLP(originalLine)}</div>
+        <div style="color:#5fe5d0;font-weight:bold">${fmtCLP(line)}</div>
+        <div style="font-size:11px;color:#f39c12">${discountLabel}</div>
+      `;
+    }
+
     const d = document.createElement('div');
     d.className = 'cart-item';
     d.innerHTML = `
@@ -620,10 +635,11 @@
           width: 20%;
           text-align: right;
           display: flex;
-          justify-content: end;
-          gap: 20px;">
-        <div class="ci-qty">x${qty}</div>
-        <div class="ci-price">${fmtCLP(line)}</div>
+          flex-direction: column;
+          justify-content: center;
+          gap: 4px;">
+        <div class="ci-qty" style="font-size:12px">x${qty}</div>
+        <div class="ci-price">${priceHtml}</div>
       </div>
     `;
     return d;

@@ -226,6 +226,46 @@ function cart_get_or_create(mysqli $db, int $customerId): int {
 }
 
 
+// Detectar y aplicar descuento desde atributo
+function apply_discount_from_attrs(int $price, string $attrsActivos): array {
+  $discountAmount = 0;
+  $discountPercent = 0;
+  $finalPrice = $price;
+
+  if (!empty($attrsActivos)) {
+    $attrs = explode('||', $attrsActivos);
+    foreach ($attrs as $attr) {
+      $attr = trim($attr);
+      if (strpos($attr, 'DESCUENTO:') === 0) {
+        $descPart = trim(substr($attr, strlen('DESCUENTO:')));
+
+        // Si tiene %, es porcentaje
+        if (strpos($descPart, '%') !== false) {
+          $discountPercent = (int)$descPart;
+          $discountAmount = (int)round($price * $discountPercent / 100);
+        } else {
+          // Si es número > 50, es monto fijo
+          $discountNum = (int)$descPart;
+          if ($discountNum > 50) {
+            $discountAmount = $discountNum;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  $finalPrice = $price - $discountAmount;
+  if ($finalPrice < 0) $finalPrice = 0;
+
+  return [
+    'original_price' => $price,
+    'discount_amount' => $discountAmount,
+    'discount_percent' => $discountPercent,
+    'final_price' => $finalPrice,
+  ];
+}
+
 function cart_snapshot(mysqli $db, int $cartId): array {
   $q = "SELECT ci.id, ci.id_variedad, ci.referencia, ci.nombre, ci.imagen_url, ci.unit_price_clp, ci.qty,
                 GROUP_CONCAT(DISTINCT
@@ -257,19 +297,28 @@ function cart_snapshot(mysqli $db, int $cartId): array {
   while ($r = $res->fetch_assoc()) {
     $qty = (int)$r['qty'];
     $price = (int)$r['unit_price_clp'];
-    $line = $qty * $price;
+    $attrsActivos = (string)($r['attrs_activos'] ?? '');
+
+    // Aplicar descuento si existe
+    $discountInfo = apply_discount_from_attrs($price, $attrsActivos);
+    $finalPrice = $discountInfo['final_price'];
+    $line = $qty * $finalPrice;
     $total += $line;
     $count += $qty;
+
     $items[] = [
       'item_id'=>(int)$r['id'],
       'id_variedad'=>(int)$r['id_variedad'],
       'referencia'=>(string)$r['referencia'],
       'nombre'=>(string)$r['nombre'],
       'imagen_url'=>$r['imagen_url'],
-      'unit_price_clp'=>$price,
+      'unit_price_clp'=>$finalPrice,
+      'original_price_clp'=>$discountInfo['original_price'],
+      'discount_amount'=>$discountInfo['discount_amount'],
+      'discount_percent'=>$discountInfo['discount_percent'],
       'qty'=>$qty,
       'line_total_clp'=>$line,
-      'attrs_activos'=>(string)($r['attrs_activos'] ?? ''),
+      'attrs_activos'=>$attrsActivos,
     ];
   }
 
