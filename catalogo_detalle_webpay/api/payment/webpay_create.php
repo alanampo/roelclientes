@@ -172,6 +172,14 @@ try {
   // Iniciar transacción en BD de producción
   $dbStock->begin_transaction();
 
+  // Escapar todos los valores para MySQL
+  $reservaObsEsc = mysqli_real_escape_string($dbStock, $reservaObs);
+  $shippingMethodEsc = mysqli_real_escape_string($dbStock, $shippingMethod);
+  $shippingAddressEsc = mysqli_real_escape_string($dbStock, $shippingAddress);
+  $shippingCommuneEsc = mysqli_real_escape_string($dbStock, $shippingCommune);
+  $shippingAgencyNameEsc = mysqli_real_escape_string($dbStock, $shippingAgencyName);
+  $shippingAgencyAddressEsc = mysqli_real_escape_string($dbStock, $shippingAgencyAddress);
+
   // Crear reserva en BD de producción con payment_status='pending'
   $queryReserva = "INSERT INTO reservas
     (fecha, id_cliente, observaciones, id_usuario,
@@ -180,34 +188,32 @@ try {
      shipping_method, shipping_address, shipping_commune,
      shipping_agency_code_dls, shipping_agency_name, shipping_agency_address,
      cart_id, created_at)
-    VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 'pending', 'webpay', ?, ?, ?, ?, ?, ?, ?, NOW())";
+    VALUES (
+      NOW(),
+      {$cid},
+      '{$reservaObsEsc}',
+      {$idUsuario},
+      {$subtotal},
+      {$packingCost},
+      {$shippingCost},
+      {$total},
+      0,
+      'pending',
+      'webpay',
+      '{$shippingMethodEsc}',
+      '{$shippingAddressEsc}',
+      '{$shippingCommuneEsc}',
+      {$shippingAgencyCodeDls},
+      '{$shippingAgencyNameEsc}',
+      '{$shippingAgencyAddressEsc}',
+      {$cartId},
+      NOW()
+    )";
 
-  $stReserva = $dbStock->prepare($queryReserva);
-  if (!$stReserva) throw new RuntimeException('Prepare reserva failed: ' . $dbStock->error);
-
-  $stReserva->bind_param(
-    'isiiiiiisssisi',
-    $cid,               // i - id_cliente
-    $reservaObs,        // s - observaciones
-    $idUsuario,         // i - id_usuario
-    $subtotal,          // i - subtotal_clp
-    $packingCost,       // i - packing_cost_clp
-    $shippingCost,      // i - shipping_cost_clp
-    $total,             // i - total_clp
-    $shippingMethod,    // s - shipping_method
-    $shippingAddress,   // s - shipping_address
-    $shippingCommune,   // s - shipping_commune
-    $shippingAgencyCodeDls,  // i - shipping_agency_code_dls
-    $shippingAgencyName,     // s - shipping_agency_name
-    $shippingAgencyAddress,  // s - shipping_agency_address
-    $cartId             // i - cart_id
-  );
-
-  if (!$stReserva->execute()) {
-    throw new RuntimeException('Execute reserva failed: ' . $stReserva->error);
+  if (!mysqli_query($dbStock, $queryReserva)) {
+    throw new RuntimeException('Execute reserva failed: ' . mysqli_error($dbStock));
   }
-  $idReserva = (int)$stReserva->insert_id;
-  $stReserva->close();
+  $idReserva = (int)mysqli_insert_id($dbStock);
 
   // Insertar productos de la reserva
   $queryProd = "INSERT INTO reservas_productos (id_reserva, id_variedad, cantidad, comentario, estado, origen, id_usuario)
