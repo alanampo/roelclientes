@@ -27,6 +27,44 @@ $link = mysqli_connect($host,$user,$password,$dbname);
 if(!$link) die("Error conexión: ".mysqli_connect_error());
 mysqli_set_charset($link,'utf8');
 
+// Cargar .env para IVA
+$envPaths = [
+  __DIR__ . '/../.env',
+  __DIR__ . '/../../.env',
+];
+foreach ($envPaths as $envPath) {
+  if (is_file($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+      if (strpos(trim($line), '#') === 0) continue;
+      if (strpos($line, '=') !== false) {
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        if ((strpos($value, '"') === 0 && strrpos($value, '"') === strlen($value) - 1) ||
+            (strpos($value, "'") === 0 && strrpos($value, "'") === strlen($value) - 1)) {
+          $value = substr($value, 1, -1);
+        }
+        if (!getenv($key)) {
+          putenv("{$key}={$value}");
+        }
+      }
+    }
+    break;
+  }
+}
+
+// Función para obtener porcentaje de IVA
+function get_iva_percentage(): int {
+  $iva = (int)(getenv('IVA_PERCENTAGE') ?: 19);
+  return $iva > 0 ? $iva : 19;
+}
+
+// Función para obtener multiplicador de IVA
+function get_iva_multiplier(): float {
+  return 1 + (get_iva_percentage() / 100);
+}
+
 /* ====== CONFIG OGIMG (cambia este secreto por uno largo y aleatorio) ====== */
 const OGIMG_SECRET = 'CAMBIA-ESTO-POR-UN-SECRETO-LARGO-Y-ALEATORIO-32+CHARS';
 
