@@ -281,7 +281,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                 if ($od && !empty($od['shipping_commune'])) {
                   $communeCodeDls = (int)$od['shipping_commune'];
                   if ($communeCodeDls > 0) {
-                    $stCache = mysqli_query($db, "SELECT communes_json FROM starken_cache WHERE cache_key = 'communes' LIMIT 1");
+                    $stCache = mysqli_query($db, "SELECT communes_json FROM starken_cache WHERE id = 1 LIMIT 1");
                     if ($stCache && ($rowCache = mysqli_fetch_assoc($stCache))) {
                       $communes = json_decode((string)$rowCache['communes_json'], true);
                       if (is_array($communes)) {
