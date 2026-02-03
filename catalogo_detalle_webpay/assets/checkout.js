@@ -595,6 +595,9 @@
     const discountAmount = Number(it.discount_amount || 0);
     const discountPercent = Number(it.discount_percent || 0);
     const line = Number(it.line_total_clp || (qty * unit));
+
+    // DEBUG
+    console.log('Item:', { name, unit, originalUnit, discountAmount, discountPercent, line, ...it });
     const attrsRaw = (it.attrs_activos || '').trim();
 
     // Procesar atributos

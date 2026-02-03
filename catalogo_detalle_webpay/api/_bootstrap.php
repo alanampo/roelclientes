@@ -236,7 +236,11 @@ function apply_discount_from_attrs(int $price, string $attrsActivos): array {
     $attrs = explode('||', $attrsActivos);
     foreach ($attrs as $attr) {
       $attr = trim($attr);
-      if (strpos($attr, 'DESCUENTO:') === 0) {
+      $attrUpper = strtoupper($attr);
+
+      // Buscar "DESCUENTO:" al inicio (case-insensitive)
+      if (strpos($attrUpper, 'DESCUENTO:') === 0) {
+        // Extraer la parte después de "DESCUENTO:"
         $descPart = trim(substr($attr, strlen('DESCUENTO:')));
 
         // Si tiene %, es porcentaje
