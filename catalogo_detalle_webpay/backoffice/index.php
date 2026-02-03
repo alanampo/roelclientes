@@ -293,7 +293,16 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                       <div>
                         <div class="small muted">Información de pago</div>
                         <div style="font-weight:900"><?=bo_h((string)$od['payment_method'] ?: 'No especificado')?></div>
-                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$od['payment_status']==='paid'?'#5fe5d0':($od['payment_status']==='failed'?'#f87171':'#fbbf24')?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h((string)$od['payment_status'])?></span></div>
+                        <?php
+                          $paymentStatusLabels = [
+                            'paid' => 'Pagado',
+                            'pending' => 'Pendiente de pago',
+                            'failed' => 'Fallido',
+                            'refunded' => 'Reembolsado'
+                          ];
+                          $statusLabel = $paymentStatusLabels[$od['payment_status']] ?? $od['payment_status'];
+                        ?>
+                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$od['payment_status']==='paid'?'#5fe5d0':($od['payment_status']==='failed'?'#f87171':'#fbbf24')?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h($statusLabel)?></span></div>
 
                         <?php if ($od['payment_method'] === 'webpay' && $wpTx): ?>
                           <!-- Detalles de transacción Webpay desde webpay_transactions -->
@@ -424,16 +433,32 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
                     <div class="small muted" style="margin-bottom:8px">Productos comprados</div>
                     <table class="table">
-                      <thead><tr><th>Producto</th><th>Cant.</th><th>Precio Unit</th><th>Total</th></tr></thead>
+                      <thead><tr><th>Producto</th><th>Cant.</th><th>Precio Unit (IVA inc.)</th><th>Total</th></tr></thead>
                       <tbody>
-                        <?php foreach($items as $it): ?>
+                        <?php
+                        $subtotalProductos = 0;
+                        foreach($items as $it):
+                          $precioConIva = round((int)$it['unit_price_clp'] * 1.19);
+                          $totalConIva = (int)$it['qty'] * $precioConIva;
+                          $subtotalProductos += $totalConIva;
+                        ?>
                           <tr>
                             <td><?=bo_h((string)$it['product_name'])?></td>
                             <td><?=bo_h((string)$it['qty'])?></td>
-                            <td>$<?=number_format((int)$it['unit_price_clp'],0,',','.')?></td>
-                            <td>$<?=number_format((int)$it['line_total_clp'],0,',','.')?></td>
+                            <td>$<?=number_format($precioConIva,0,',','.')?></td>
+                            <td>$<?=number_format($totalConIva,0,',','.')?></td>
                           </tr>
                         <?php endforeach; ?>
+
+                        <?php if ((int)$od['packing_cost_clp'] > 0): ?>
+                          <tr style="border-top:1px solid rgba(255,255,255,0.1)">
+                            <td><i>Packing</i></td>
+                            <td>1</td>
+                            <td>$<?=number_format((int)$od['packing_cost_clp'],0,',','.')?></td>
+                            <td>$<?=number_format((int)$od['packing_cost_clp'],0,',','.')?></td>
+                          </tr>
+                        <?php endif; ?>
+
                         <?php if (!count($items)): ?><tr><td colspan="4" class="muted">Sin ítems.</td></tr><?php endif; ?>
                       </tbody>
                     </table>
