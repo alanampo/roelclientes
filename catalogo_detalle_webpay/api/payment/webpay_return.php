@@ -181,19 +181,28 @@ try {
     // Determinar tipo de tarjeta usando payment_type_code: VD=Débito, VN/VC/etc=Crédito
     $cardType = (!empty($vci)) ? 'Débito' : 'Crédito';
 
+    // Convertir fecha ISO 8601 a formato MySQL
+    $transactionDateMysql = '';
+    if (!empty($transactionDate)) {
+      $timestamp = strtotime($transactionDate);
+      if ($timestamp !== false) {
+        $transactionDateMysql = date('Y-m-d H:i:s', $timestamp);
+      }
+    }
+
     // Escapar valores para MySQL
     $cardType = mysqli_real_escape_string($dbStock, $cardType);
     $cardLastDigits = mysqli_real_escape_string($dbStock, $cardLastDigits);
     $authCode = mysqli_real_escape_string($dbStock, $authCode);
     $status = mysqli_real_escape_string($dbStock, $status);
     $buyOrder = mysqli_real_escape_string($dbStock, $buyOrder);
-    $transactionDate = mysqli_real_escape_string($dbStock, $transactionDate);
+    $transactionDateMysql = mysqli_real_escape_string($dbStock, $transactionDateMysql);
     $token = mysqli_real_escape_string($dbStock, $token);
 
     $updateQuery = "UPDATE reservas
                     SET payment_status='paid',
                         paid_clp={$amount},
-                        webpay_transaction_date='{$transactionDate}',
+                        webpay_transaction_date='{$transactionDateMysql}',
                         webpay_card_type='{$cardType}',
                         webpay_installment_count={$installmentsNumber},
                         webpay_card_last_digits='{$cardLastDigits}',
