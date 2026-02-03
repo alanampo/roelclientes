@@ -251,7 +251,7 @@ function get_packing_prices(mysqli $db): array {
   ];
 
   // Intentar obtener desde la BD
-  $query = "SELECT nombre, COALESCE(precio, precio_mayorista, 0) AS precio_final
+  $query = "SELECT nombre, COALESCE(precio, precio_detalle, 0) AS precio_final
             FROM variedades_producto
             WHERE nombre IN ('PACKING CAJA CHICA', 'PACKING CAJA MEDIANA', 'PACKING CAJA GRANDE')";
 
