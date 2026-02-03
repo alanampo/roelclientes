@@ -44,6 +44,17 @@ $shippingAgencyName = trim((string)($payload['shipping_agency_name'] ?? ''));
 $shippingAgencyAddress = trim((string)($payload['shipping_agency_address'] ?? ''));
 $notes = trim((string)($payload['notes'] ?? ''));
 
+// LOG TEMPORAL: Ver qué datos de envío llegan
+$logFile = __DIR__ . '/../../logs/webpay_debug.log';
+$logDir = dirname($logFile);
+if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
+@file_put_contents($logFile, "PAYLOAD RECIBIDO: " . json_encode([
+  'timestamp' => date('Y-m-d H:i:s'),
+  'shipping_method' => $shippingMethod,
+  'shipping_cost' => $shippingCost,
+  'full_payload' => $payload
+], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
+
 // Validar método de envío
 if (empty($shippingMethod)) {
   bad_request('Método de envío es requerido');

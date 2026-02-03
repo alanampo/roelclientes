@@ -254,7 +254,9 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
                 $items=[];
                 if ($od) {
-                  $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty, v.precio_detalle AS unit_price_clp, (rp.cantidad * v.precio_detalle) AS line_total_clp
+                  $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty,
+                                              COALESCE(v.precio_detalle, v.precio, 0) AS unit_price_clp,
+                                              (rp.cantidad * COALESCE(v.precio_detalle, v.precio, 0)) AS line_total_clp
                                               FROM reservas_productos rp
                                               LEFT JOIN variedades_producto v ON v.id = rp.id_variedad
                                               WHERE rp.id_reserva=?
