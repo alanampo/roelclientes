@@ -276,6 +276,32 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   }
                 }
 
+                // Obtener nombre de comuna desde starken_cache si shipping_commune es un code_dls
+                $communeName = '';
+                if ($od && !empty($od['shipping_commune'])) {
+                  $communeCodeDls = (int)$od['shipping_commune'];
+                  if ($communeCodeDls > 0) {
+                    $stCache = mysqli_query($db, "SELECT communes_json FROM starken_cache WHERE cache_key = 'communes' LIMIT 1");
+                    if ($stCache && ($rowCache = mysqli_fetch_assoc($stCache))) {
+                      $communes = json_decode((string)$rowCache['communes_json'], true);
+                      if (is_array($communes)) {
+                        foreach ($communes as $comm) {
+                          if ((int)($comm['code_dls'] ?? 0) === $communeCodeDls) {
+                            $communeName = (string)($comm['name'] ?? '');
+                            if (!empty($comm['city_name']) && $comm['city_name'] !== $communeName) {
+                              $communeName .= ' (' . $comm['city_name'] . ')';
+                            }
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
+                  if (empty($communeName)) {
+                    $communeName = (string)$od['shipping_commune']; // fallback al código
+                  }
+                }
+
                 $items=[];
                 if ($od) {
                   $st2 = mysqli_prepare($db, "SELECT v.nombre AS product_name, rp.cantidad AS qty,
@@ -412,8 +438,8 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                           <?php endif; ?>
                         <?php elseif ($od['shipping_method'] === 'domicilio' && !empty($od['shipping_address'])): ?>
                           <div class="muted" style="font-size:12px">Dirección: <?=bo_h((string)$od['shipping_address'])?></div>
-                          <?php if (!empty($od['shipping_commune'])): ?>
-                            <div class="muted" style="font-size:12px">Comuna: <?=bo_h((string)$od['shipping_commune'])?></div>
+                          <?php if (!empty($communeName)): ?>
+                            <div class="muted" style="font-size:12px">Comuna: <?=bo_h($communeName)?></div>
                           <?php endif; ?>
                         <?php elseif ($od['shipping_method'] === 'vivero'): ?>
                           <div class="muted" style="font-size:12px">Retiro en vivero</div>
