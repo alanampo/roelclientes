@@ -39,6 +39,30 @@ function bo_status_is_allowed(string $code): bool {
   return isset($map[$k]);
 }
 
+/**
+ * Etiquetas para payment_status
+ */
+function bo_payment_status_label(string $status): string {
+  $labels = [
+    'paid' => 'Pago aceptado',
+    'pending' => 'Pendiente',
+    'failed' => 'Rechazado',
+    'refunded' => 'Reembolsado'
+  ];
+  $k = strtolower(trim($status));
+  return $labels[$k] ?? $status;
+}
+
+/**
+ * Color de fondo para payment_status (mismo que en detalle)
+ */
+function bo_payment_status_color(string $status): string {
+  $k = strtolower(trim($status));
+  if ($k === 'paid') return '#5fe5d0';
+  if ($k === 'failed') return '#f87171';
+  return '#fbbf24'; // pending y otros
+}
+
 function like(string $q): string { return '%' . $q . '%'; }
 
 // KPIs rápidos
@@ -479,7 +503,11 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                       <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_email'])?></div>
                       <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_telefono'])?></div>
                     </td>
-                    <td><span class="pill"><?=bo_h(bo_status_label((string)$o['status']))?></span></td>
+                    <td>
+                      <span style="color:#111;background:<?=bo_payment_status_color((string)$o['status'])?>;padding:2px 8px;border-radius:4px;font-weight:900;font-size:11px;white-space:nowrap">
+                        <?=bo_h(bo_payment_status_label((string)$o['status']))?>
+                      </span>
+                    </td>
                     <td>$<?=number_format((int)$o['subtotal_clp'],0,',','.')?></td>
                     <td>$<?=number_format((int)$o['shipping_cost_clp'],0,',','.')?></td>
                     <td><b>$<?=number_format((int)$o['total_clp'],0,',','.')?></b></td>
