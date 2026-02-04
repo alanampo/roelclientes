@@ -3,10 +3,10 @@
 // Fix: IDs alignment + field mapping + rendering list
 
 (async function(){
-  const me = await fetch('api/me.php').then(r=>r.json()).catch(()=>({logged:false}));
+  const me = await fetch(buildApiUrl('me.php')).then(r=>r.json()).catch(()=>({logged:false}));
   if(!me.logged){
     const rt = encodeURIComponent('produccion.php');
-    location.href = 'index.php?openAuth=1&return_to='+rt;
+    location.href = buildUrl('index.php?openAuth=1&return_to='+rt);
     return;
   }
 
@@ -52,7 +52,7 @@
   }
 
   async function load(){
-    const res = await fetch('api/production/list.php').then(r=>r.json());
+    const res = await fetch(buildApiUrl('production/list.php')).then(r=>r.json());
     if(!res.ok){ empty.style.display='block'; return; }
     items = res.items.map(x=>({
       id: x.id,

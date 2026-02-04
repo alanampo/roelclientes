@@ -96,6 +96,29 @@ textarea{
 .footer-actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
 .footer-actions .btn{flex:1;min-width:220px}
 
+/* Estilos para botón de pagar con transición */
+.btn-pay-disabled{
+  background:#fff !important;
+  border-color:var(--border) !important;
+  color:var(--text) !important;
+  transition: all 0.3s ease;
+}
+
+.btn-pay-enabled{
+  background:#28a745 !important;
+  border-color:#28a745 !important;
+  color:#fff !important;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-pay-enabled:hover{
+  background:#218838 !important;
+  border-color:#1e7e34 !important;
+  box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+  transform: translateY(-1px);
+}
+
 .toast{
   position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
   background:#0b1220;color:#fff;padding:10px 14px;border-radius:999px;

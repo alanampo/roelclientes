@@ -9,7 +9,7 @@ require_admin();
 $db = db();
 
 $id = bo_int(bo_q('id', 0), 0);
-if ($id <= 0) { header('Location: production_requests.php'); exit; }
+if ($id <= 0) { header('Location: carrito_production_requests.php'); exit; }
 
 $err=''; $ok='';
 
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   $newStatus = trim((string)bo_post('status',''));
   if ($newStatus==='') $err='Estado inválido.';
   else {
-    $st = mysqli_prepare($db, "UPDATE production_requests SET status=? WHERE id=?");
+    $st = mysqli_prepare($db, "UPDATE carrito_production_requests SET status=? WHERE id=?");
     mysqli_stmt_bind_param($st, 'si', $newStatus, $id);
     if (!mysqli_stmt_execute($st)) $err = mysqli_stmt_error($st);
     else $ok = 'Estado actualizado.';
@@ -27,9 +27,9 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   }
 }
 
-$sql="SELECT pr.*, c.nombre AS customer_name, c.email AS customer_email, c.telefono AS customer_phone
-      FROM production_requests pr
-      LEFT JOIN customers c ON c.id=pr.customer_id
+$sql="SELECT pr.*, c.nombre AS customer_name, c.mail AS customer_email, c.telefono AS customer_phone
+      FROM carrito_production_requests pr
+      LEFT JOIN clientes c ON c.id_cliente=pr.id_cliente
       WHERE pr.id=?";
 $st=mysqli_prepare($db,$sql);
 mysqli_stmt_bind_param($st,'i',$id);
@@ -37,10 +37,10 @@ mysqli_stmt_execute($st);
 $res=mysqli_stmt_get_result($st);
 $p=$res?mysqli_fetch_assoc($res):null;
 mysqli_stmt_close($st);
-if(!$p){ header('Location: production_requests.php'); exit; }
+if(!$p){ header('Location: carrito_production_requests.php'); exit; }
 
 $items=[];
-$st2=mysqli_prepare($db,"SELECT product_name, qty, unit_price_clp, line_total_clp, product_id FROM production_request_items WHERE request_id=? ORDER BY id ASC");
+$st2=mysqli_prepare($db,"SELECT product_name, qty, unit_price_clp, line_total_clp, product_id FROM carrito_production_request_items WHERE request_id=? ORDER BY id ASC");
 mysqli_stmt_bind_param($st2,'i',$id);
 mysqli_stmt_execute($st2);
 $res2=mysqli_stmt_get_result($st2);
@@ -48,7 +48,7 @@ while($res2 && ($r=mysqli_fetch_assoc($res2))) $items[]=$r;
 mysqli_stmt_close($st2);
 
 $statuses=[];
-$rs=mysqli_query($db,"SELECT DISTINCT status FROM production_requests ORDER BY status");
+$rs=mysqli_query($db,"SELECT DISTINCT status FROM carrito_production_requests ORDER BY status");
 if($rs){while($x=mysqli_fetch_row($rs)) $statuses[]=$x[0];}
 if(!in_array($p['status'],$statuses,true)) $statuses[]=$p['status'];
 
@@ -58,7 +58,7 @@ bo_header('Pedido producción');
   <section class="card">
     <div class="card-h">
       <h1 class="h1">Producción #<?= h($p['id']) ?></h1>
-      <a class="btn" href="production_requests.php">Volver</a>
+      <a class="btn" href="carrito_production_requests.php">Volver</a>
     </div>
     <div class="card-b">
       <?php if($err): ?><div class="alert bad"><?= h($err) ?></div><div style="height:10px"></div><?php endif; ?>
@@ -100,8 +100,8 @@ bo_header('Pedido producción');
           <div style="font-weight:900"><?= h((string)($p['customer_name'] ?? '')) ?></div>
           <div class="muted small"><?= h((string)($p['customer_email'] ?? '')) ?></div>
           <div class="muted small"><?= h((string)($p['customer_phone'] ?? '')) ?></div>
-          <?php if ((int)$p['customer_id']>0): ?>
-            <div class="small"><a href="customer_detail.php?id=<?= h((int)$p['customer_id']) ?>">Abrir ficha cliente</a></div>
+          <?php if ((int)($p['id_cliente']??0)>0): ?>
+            <div class="small"><a href="customer_detail.php?id=<?= h((int)$p['id_cliente']) ?>">Abrir ficha cliente</a></div>
           <?php endif; ?>
         </div>
         <div>

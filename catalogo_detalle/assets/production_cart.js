@@ -1,19 +1,20 @@
-// assets/production_cart.js (v9.1)
+// assets/production_cart.js (v10)
 // Carrito de producción: permite múltiples especies.
 // Reglas: cada especie >= 50 unidades y total >= 200 unidades (o más). Precio: mayorista.
+// Paginación: 20 items por página
 
 (async function(){
   const $ = (id)=>document.getElementById(id);
   const money = (n)=>'$'+Number(n||0).toLocaleString('es-CL');
 
   // Login check (reutiliza sesión del sitio)
-  const me = await fetch('api/me.php', { credentials: 'same-origin' })
+  const me = await fetch(buildApiUrl('me.php'), { credentials: 'same-origin' })
     .then(r=>r.json())
     .catch(()=>({logged:false}));
 
   if(!me.logged){
     const rt = encodeURIComponent('produccion.php');
-    location.href = 'index.php?openAuth=1&return_to=' + rt;
+    location.href = buildUrl('index.php?openAuth=1&return_to=' + rt);
     return;
   }
 
@@ -42,8 +43,15 @@
   const progBar = $('progBar');
   const progTxt = $('progTxt');
 
+  const pagination = $('pagination');
+  const pageInfo = $('pageInfo');
+  const prevBtn = $('prevBtn');
+  const nextBtn = $('nextBtn');
+
   let items = [];
   let cart = {};
+  let currentPage = 1;
+  const itemsPerPage = 20;
 
   const toast = (el, msg)=>{
     if(!el) return;
@@ -166,12 +174,20 @@
         empty.style.display='block';
         empty.textContent='Sin resultados.';
       }
+      if(pagination) pagination.style.display='none';
       return;
     }
 
     if(empty) empty.style.display='none';
 
-    filtered.forEach(i=>{
+    // Paginación
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const endIdx = startIdx + itemsPerPage;
+    const pageItems = filtered.slice(startIdx, endIdx);
+
+    // Renderizar solo items de la página actual
+    pageItems.forEach(i=>{
       const uid = String(i.uid);
       const already = inCart(uid);
       const qty = already ? (cart[uid].qty||50) : 50;
@@ -225,6 +241,24 @@
       list.appendChild(card);
     });
 
+    // Actualizar controles de paginación
+    if(pagination && totalPages > 1){
+      pagination.style.display='flex';
+      if(pageInfo) pageInfo.textContent = `Página ${currentPage} de ${totalPages} (${filtered.length} especies)`;
+      if(prevBtn){
+        prevBtn.disabled = currentPage <= 1;
+        prevBtn.style.opacity = currentPage <= 1 ? '0.5' : '1';
+        prevBtn.style.cursor = currentPage <= 1 ? 'not-allowed' : 'pointer';
+      }
+      if(nextBtn){
+        nextBtn.disabled = currentPage >= totalPages;
+        nextBtn.style.opacity = currentPage >= totalPages ? '0.5' : '1';
+        nextBtn.style.cursor = currentPage >= totalPages ? 'not-allowed' : 'pointer';
+      }
+    } else {
+      if(pagination) pagination.style.display='none';
+    }
+
     kpis();
   }
 
@@ -235,7 +269,7 @@
     }
     if(list) list.innerHTML='';
 
-    const res = await fetch('api/production/list.php', { credentials:'same-origin' })
+    const res = await fetch(buildApiUrl('production/list.php'), { credentials:'same-origin' })
       .then(r=>r.json())
       .catch(()=>null);
 
@@ -261,7 +295,29 @@
   }
 
   if(reloadBtn) reloadBtn.onclick = load;
-  if(q) q.addEventListener('input', renderList);
+  if(q) q.addEventListener('input', ()=>{
+    currentPage = 1; // Resetear a página 1 al buscar
+    renderList();
+  });
+
+  if(prevBtn) prevBtn.onclick = ()=>{
+    if(currentPage > 1){
+      currentPage--;
+      renderList();
+      if(list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  if(nextBtn) nextBtn.onclick = ()=>{
+    const term = (q?.value || '').toLowerCase().trim();
+    const filtered = items.filter(i => !term || i.nombre.toLowerCase().includes(term));
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    if(currentPage < totalPages){
+      currentPage++;
+      renderList();
+      if(list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   if(clearBtn) clearBtn.onclick = ()=>{
     cart = {};
@@ -285,7 +341,7 @@
       notes: (notesEl?.value || '').trim()
     };
 
-    const res = await fetch('api/production/request_create.php', {
+    const res = await fetch(buildApiUrl('production/request_create.php'), {
       method: 'POST',
       credentials: 'same-origin',
       headers: {

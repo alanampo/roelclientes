@@ -1,5 +1,5 @@
 <?php
-// catalogo_detalle/index.php (CATÁLOGO AL DETALLE) – FIX + ATRIBUTOS + BUSCADOR
+// catalogo_detalle/index.php
 // ===== No cache =====
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
@@ -27,14 +27,52 @@ $link = mysqli_connect($host,$user,$password,$dbname);
 if(!$link) die("Error conexión: ".mysqli_connect_error());
 mysqli_set_charset($link,'utf8');
 
+// Cargar .env para IVA
+$envPaths = [
+  __DIR__ . '/../.env',
+  __DIR__ . '/../../.env',
+];
+foreach ($envPaths as $envPath) {
+  if (is_file($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+      if (strpos(trim($line), '#') === 0) continue;
+      if (strpos($line, '=') !== false) {
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        if ((strpos($value, '"') === 0 && strrpos($value, '"') === strlen($value) - 1) ||
+            (strpos($value, "'") === 0 && strrpos($value, "'") === strlen($value) - 1)) {
+          $value = substr($value, 1, -1);
+        }
+        if (!getenv($key)) {
+          putenv("{$key}={$value}");
+        }
+      }
+    }
+    break;
+  }
+}
+
+// Función para obtener porcentaje de IVA
+function get_iva_percentage(): int {
+  $iva = (int)(getenv('IVA_PERCENTAGE') ?: 19);
+  return $iva > 0 ? $iva : 19;
+}
+
+// Función para obtener multiplicador de IVA
+function get_iva_multiplier(): float {
+  return 1 + (get_iva_percentage() / 100);
+}
+
 /* ====== CONFIG OGIMG (cambia este secreto por uno largo y aleatorio) ====== */
 const OGIMG_SECRET = 'CAMBIA-ESTO-POR-UN-SECRETO-LARGO-Y-ALEATORIO-32+CHARS';
 
 /* -------- Query: catálogo detalle (solo lectura a tu BD stock) --------
-   FIX: antes ANY_VALUE(av.valor) podía "tomar" un valor de otro atributo y romper tipo_planta.
-   Ahora:
-   - tipo_planta se obtiene por agregación condicional (MAX + CASE)
-   - attrs_activos agrupa atributos distintos a TIPO DE PLANTA (para mostrar en card / modal / buscador)
+   FIX: Obtiene atributos de forma correcta:
+   - tipo_planta se obtiene con MAX(CASE) para evitar confusiones
+   - attrs_activos agrupa otros atributos sin TIPO DE PLANTA
+   - Permite búsqueda y filtrado por atributos
 -------- */
 $sql = "
 SELECT
@@ -59,8 +97,8 @@ SELECT
     SEPARATOR '||'
   ) AS attrs_activos,
 
-  ANY_VALUE(img.nombre_archivo) AS imagen,
-  ANY_VALUE(v.descripcion)      AS descripcion
+  MIN(img.nombre_archivo) AS imagen,
+  MIN(v.descripcion)      AS descripcion
 FROM
 (
   SELECT
@@ -163,7 +201,7 @@ function _pretty_attr_label(string $k): string {
 }
 
 /* -------- Constantes URL -------- */
-$catalogoBase = 'https://clientes.roelplant.cl/catalogo_detalle/';
+$catalogoBase = 'https://clientes.roelplant.cl/catalogo_detalle_webpay/';
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $baseUrl = $scheme.'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 $priceValidUntil = (new DateTime('+14 days'))->format('Y-m-d');
@@ -192,14 +230,12 @@ if($refParam !== ''){
   }
 
   if($found){
+    $ivaMultiplier = get_iva_multiplier();
     $nameOg  = (string)($found['variedad'] ?? '');
     $stockOg = (int)($found['disponible_para_reservar'] ?? 0);
-
-    $pdOg = isset($found['precio_detalle']) ? number_format(((float)$found['precio_detalle'])*1.19,0,',','.') : '';
-    $pmOg = isset($found['precio']) ? number_format(((float)$found['precio'])*1.19,0,',','.') : '';
-
-    $precioVisibleOg = $pdOg ? ('$'.$pdOg.' (Detalle, imp. incl.)') : ($pmOg ? ('$'.$pmOg.' (Mayorista, imp. incl.)') : '');
-
+    $pdOg = isset($found['precio_detalle']) ? number_format(((float)$found['precio_detalle'])*$ivaMultiplier,0,',','.') : '';
+    $pmOg = number_format(((float)($found['precio'] ?? 0))*$ivaMultiplier,0,',','.');
+    $precioVisibleOg = $pdOg ? ('$'.$pdOg.' (Detalle, imp. incl.)') : ('$'.$pmOg.' (Mayorista, imp. incl.)');
     $descOg = trim((string)($found['descripcion'] ?? ''));
     $descOg = $descOg ? truncar($descOg, 140) : '';
 
@@ -225,17 +261,17 @@ $ogImageH = htmlspecialchars($ogImage, ENT_QUOTES, 'UTF-8');
 
 /* -------- Render Cards -------- */
 function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil):void{
+  $ivaMultiplier = get_iva_multiplier();
   foreach($ps as $p){
-
     $pdNum = isset($p['precio_detalle']) ? (float)$p['precio_detalle'] : 0;
     $pmNum = isset($p['precio']) ? (float)$p['precio'] : 0;
 
-    $pd = $pdNum>0 ? number_format($pdNum*1.19,0,',','.') : '';
-    $pm = $pmNum>0 ? number_format($pmNum*1.19,0,',','.') : '';
+    $pd = $pdNum>0 ? number_format($pdNum*$ivaMultiplier,0,',','.') : '';
+    $pm = number_format($pmNum*$ivaMultiplier,0,',','.');
 
-    $unitBase = $pdNum>0 ? $pdNum : $pmNum;
-    $unitPriceClpInt = (int)round($unitBase*1.19);
+    $unitPriceClpInt = (int)round(($pdNum>0?$pdNum:$pmNum)*$ivaMultiplier);
 
+    // Procesar atributos
     $attrsRaw = trim((string)($p['attrs_activos'] ?? ''));
     $attrs = [];
     if($attrsRaw !== ''){
@@ -265,7 +301,7 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
     $prodUrl = $catalogoBase.'?ref='.$refUrl;
     $prodUrlAttr = htmlspecialchars($prodUrl, ENT_QUOTES, 'UTF-8');
 
-    $precioVisibleTxt = $pd ? ('$'.$pd.' (Detalle, imp. incl.)') : ($pm ? ('$'.$pm.' (Mayorista, imp. incl.)') : 'Precio no disponible');
+    $precioVisibleTxt = $pd ? ('$'.$pd.' (Detalle, imp. incl.)') : ('$'.$pm.' (Mayorista, imp. incl.)');
     $precioVisibleAttr = htmlspecialchars($precioVisibleTxt, ENT_QUOTES, 'UTF-8');
     ?>
     <div class="producto" role="button" tabindex="0"
@@ -311,10 +347,6 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 
         <?php if($pd): ?>
           <p><strong>Precio detalle:</strong> <?= '$'.$pd ?> Imp. incl.</p>
-        <?php elseif($pm): ?>
-          <p><strong>Precio:</strong> <?= '$'.$pm ?> Imp. incl.</p>
-        <?php else: ?>
-          <p><strong>Precio:</strong> No disponible</p>
         <?php endif; ?>
 
         <?php if($dSnip):?><p class="descripcion-snippet"><?= $dSnip ?></p><?php endif; ?>
@@ -333,7 +365,7 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
         "image": [<?= json_encode($img) ?>],
         "sku": <?= json_encode($refRaw) ?>,
         "brand": {"@type":"Brand","name":"Roelplant"},
-        "category": <?= json_encode($p['tipo'] ?? "PLANTINES") ?>,
+        "category": <?= json_encode($p['tipo'] ?? "PLANTINES INTERIOR") ?>,
         "description": <?= json_encode($d ?: $name) ?>,
         "url": <?= json_encode($prodUrl) ?>,
         "offers":{
@@ -356,6 +388,9 @@ function render_catalogo(array $ps,string $catalogoBase,string $priceValidUntil)
 <html lang="es">
 <head>
 
+<!-- Configuración de rutas dinámicas (DEBE SER LO PRIMERO) -->
+<?php include __DIR__ . '/config/routes.php'; ?>
+
 <!-- Meta Pixel Code -->
 <script>
 !function(f,b,e,v,n,t,s)
@@ -366,11 +401,11 @@ n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '1221777653233095');
+fbq('init', '8850593125018234');
 fbq('track', 'PageView');
 </script>
 <noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id=1221777653233095&ev=PageView&noscript=1"
+src="https://www.facebook.com/tr?id=8850593125018234&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Meta Pixel Code -->
 
@@ -438,7 +473,7 @@ src="https://www.facebook.com/tr?id=1221777653233095&ev=PageView&noscript=1"
   "@context":"https://schema.org",
   "@type":"WebSite",
   "name":"Roelplant",
-  "url":"https://clientes.roelplant.cl/catalogo_detalle/",
+  "url":"https://clientes.roelplant.cl/catalogo_detalle_webpay/",
   "potentialAction":{
     "@type":"SearchAction",
     "target":"https://clientes.roelplant.cl/catalogo_detalle/?s={search_term_string}",
@@ -476,9 +511,7 @@ foreach($all as $p){
 }
 </script>
 
-<link rel="stylesheet" href="assets/styles.css?v=4">
-<link rel="stylesheet" href="assets/carrusel.css?v=2">
-
+<link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/styles.css?v=4'), ENT_QUOTES, 'UTF-8'); ?>">
 
 <style>
 /* ====== BUSCADOR TOP (no interfiere con assets/styles.css) ====== */
@@ -508,7 +541,6 @@ foreach($all as $p){
 .attr-line + .attr-line{ margin-top:4px; }
 .attr-line strong{ color:#374151; }
 </style>
-
 </head>
 <body>
 
@@ -520,9 +552,9 @@ foreach($all as $p){
   </div>
 
   <!-- Buscador (filtra tarjetas por nombre/ref/atributos/desc) -->
-  <div class="top-search" role="search" aria-label="Buscar productos">
-    <input id="catalogSearch" class="top-search-input" type="search" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off">
-  </div>
+  <form class="top-search" role="search" aria-label="Buscar productos" onsubmit="return false;" autocomplete="off" style="all: unset; display: block; flex: 1 1 320px; max-width: 520px; min-width: 240px;">
+    <input id="catalogSearch" class="top-search-input" type="text" placeholder="Buscar por nombre, referencia o atributo…" autocomplete="off" spellcheck="false">
+  </form>
 
   <div class="actions">
     <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
@@ -534,123 +566,6 @@ foreach($all as $p){
     <button class="btn-top danger" id="btnLogout" type="button" style="display:none" onclick="doLogout()">Salir</button>
   </div>
 </div>
-
-
-<!-- HERO CAROUSEL (4 imágenes) -->
-<section class="hero-carousel" aria-label="Carrusel de destacados Roelplant">
-  <div class="c-inner" data-carousel tabindex="0" aria-roledescription="carousel" data-interval="5200">
-    <div class="c-track" aria-live="polite">
-
-      <!-- Slide 1 -->
-      <article class="c-slide" aria-hidden="false">
-        <a class="c-link"
-           href="https://clientes.roelplant.cl/catalogo_detalle/?ref=E1004"
-           target="_blank" rel="noopener"
-           aria-label="Ir a Plantines de Veronica Brillantísima">
-          <img
-            class="c-img"
-            src="https://clientes.roelplant.cl/catalogo_detalle/assets/img/brillantisima.png"
-            alt="Plantines de Veronica Brillantísima, belleza y color para tu jardín"
-            width="1600"
-            height="600"
-            loading="eager"
-            fetchpriority="high"
-            decoding="async"
-          >
-          <div class="c-caption">
-            <h2>Plantines de Veronica Brillantísima</h2>
-            <p>Belleza y color en tu jardín</p>
-          </div>
-        </a>
-      </article>
-
-      <!-- Slide 2 -->
-      <article class="c-slide" aria-hidden="true">
-        <a class="c-link"
-           href="https://clientes.roelplant.cl/catalogo_detalle/?ref=E0002"
-           target="_blank" rel="noopener"
-           aria-label="Ir a Plantines Veronica buxifolia">
-          <img
-            class="c-img"
-            src="https://clientes.roelplant.cl/catalogo_detalle/assets/img/veronica_buxifolia.png"
-            alt="Plantines de Veronica buxifolia, exuberante y resistente"
-            width="1600"
-            height="600"
-            loading="lazy"
-            decoding="async"
-          >
-          <div class="c-caption">
-            <h2>Plantines Veronica buxifolia</h2>
-            <p>Exuberante y resistente</p>
-          </div>
-        </a>
-      </article>
-
-      <!-- Slide 3 -->
-      <article class="c-slide" aria-hidden="true">
-        <a class="c-link"
-           href="https://clientes.roelplant.cl/catalogo_mayorista/"
-           target="_blank" rel="noopener"
-           aria-label="Ir a Plantines al por mayor sobre 200 unidades">
-          <img
-            class="c-img"
-            src="https://clientes.roelplant.cl/catalogo_detalle/assets/img/plantines_por_mayor.png"
-            alt="Plantines al por mayor sobre 200 unidades, excelentes precios por volumen"
-            width="1600"
-            height="600"
-            loading="lazy"
-            decoding="async"
-          >
-          <div class="c-caption">
-            <h2>Plantines al por mayor</h2>
-            <p>Sobre 200 unidades</p>
-          </div>
-        </a>
-      </article>
-
-      <!-- Slide 4 -->
-      <article class="c-slide" aria-hidden="true">
-        <a class="c-link"
-           href="https://clientes.roelplant.cl/catalogo_mayorista/"
-           target="_blank" rel="noopener"
-           aria-label="Ir a Producción a medida: regístrate y solicita una producción">
-          <img
-            class="c-img"
-            src="https://clientes.roelplant.cl/catalogo_detalle/assets/img/pedidos_produccion.png"
-            alt="Haz tu producción con nosotros: regístrate y solicita una producción a medida"
-            width="1600"
-            height="600"
-            loading="lazy"
-            decoding="async"
-          >
-          <div class="c-caption">
-            <h2>Haz tu producción con nosotros</h2>
-            <p>Regístrate y solicita una producción a medida</p>
-          </div>
-        </a>
-      </article>
-
-    </div>
-
-    <button class="c-nav prev" type="button" aria-label="Anterior">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M15.5 19.5 8 12l7.5-7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-
-    <button class="c-nav next" type="button" aria-label="Siguiente">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M8.5 4.5 16 12l-7.5 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-
-    <div class="c-dots" role="tablist" aria-label="Seleccionar slide"></div>
-  </div>
-</section>
-
-
-
-
 
 <h1>Catálogo Al detalle Roelplant</h1>
 
@@ -738,9 +653,8 @@ $secciones=[
       <h3 id="modalTitle"></h3>
       <p id="mRef"></p>
       <p id="mStock"></p>
-      <p id="mPrecioDetalle"></p>
-      <p id="mPrecioMayorista" style="display:none"></p>
-      <div id="mAttrs" class="attrs" style="display:none"></div>
+      <p id="mPrecioDetalle" style="display:none"></p>
+      <p id="mPrecioMayorista"></p>
       <div id="mDesc" class="modal-desc"></div>
       <div class="acciones-modal">
         <div class="qty-ctl">
@@ -784,11 +698,14 @@ $secciones=[
         <input class="inp" id="regRut" placeholder="RUT (12.345.678-5)">
         <input class="inp" id="regEmail" type="email" placeholder="Email (correo@dominio.com)">
 
-        <input class="inp" id="regNombre" placeholder="Nombre">
-        <input class="inp" id="regTelefono" placeholder="Teléfono +56XXXXXXXX">
+        <input class="inp" id="regNombre" placeholder="Nombre completo">
+        <input class="inp" id="regTelefono" placeholder="Teléfono">
 
         <select class="inp" id="regRegion" aria-label="Región"><option value="">Selecciona Región</option></select>
         <select class="inp" id="regComuna" aria-label="Comuna" disabled><option value="">Selecciona Comuna</option></select>
+
+        <input class="inp span2" id="regCiudad" placeholder="Ciudad">
+        <input class="inp span2" id="regDomicilio" placeholder="Domicilio / Dirección">
 
         <input class="inp span2" id="regPass" type="password" placeholder="Contraseña (mín 8)">
       </div>
@@ -813,26 +730,35 @@ $secciones=[
       <div id="cartTotal">$0</div>
     </div>
     <div class="form-actions" style="justify-content:flex-end;gap:10px;margin-top:12px;">
-      <button class="btn-top primary" type="button" id="btnGoCheckout">Generar compra</button>
-    </div>
-    <div class="small" style="margin-top:6px;color:#6b7280;">
-      Revisa tu carrito y luego genera tu compra para enviar el pedido por WhatsApp.
-    </div>
+  <button class="btn-top primary" type="button" id="btnGoCheckout">Generar compra</button>
+</div>
+<div class="small" style="margin-top:6px;color:#6b7280;">
+  Revisa tu carrito y luego genera tu compra para enviar el pedido por WhatsApp.
+</div>
   </div>
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="assets/locations_cl.js?v=1"></script>
-<script src="assets/app.js?v=5"></script>
-<script src="assets/carrusel.js?v=1" defer></script>
-
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/locations_cl.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/app.js?v=5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 <!-- Buscador (filtrado local) + Modal attrs (sin tocar backend JS) -->
 <script>
 (function(){
   const inp = document.getElementById('catalogSearch');
   if(!inp) return;
+
+  // Desactivar autocomplete agresivamente
+  inp.autocomplete = 'off';
+  inp.setAttribute('autocomplete', 'off');
+  inp.addEventListener('focus', () => {
+    inp.autocomplete = 'off';
+    inp.setAttribute('autocomplete', 'off');
+  });
+  inp.addEventListener('input', () => {
+    inp.setAttribute('autocomplete', 'off');
+  });
 
   const norm = (s) => String(s||'')
     .toLowerCase()

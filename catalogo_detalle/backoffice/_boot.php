@@ -9,6 +9,13 @@ if ($ROOT === false) {
   exit;
 }
 
+// Detecta dinámicamente la ruta base del backoffice desde $_SERVER['SCRIPT_NAME']
+// Ejemplo: /catalogo_detalle_webpay/backoffice/login.php => /catalogo_detalle_webpay/backoffice
+$BACKOFFICE_PATH = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+if ($BACKOFFICE_PATH === '.') {
+  $BACKOFFICE_PATH = '';
+}
+
 // Carga bootstrap del proyecto (carrito)
 $BOOT = $ROOT . '/api/_bootstrap.php';
 if (!is_file($BOOT)) {
@@ -42,7 +49,7 @@ function bo_is_logged(): bool {
 
 function bo_require_login(): void {
   if (!bo_is_logged()) {
-    header('Location: login.php');
+    header('Location: ' . $GLOBALS['BACKOFFICE_PATH'] . '/login.php');
     exit;
   }
 }

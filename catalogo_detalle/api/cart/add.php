@@ -23,7 +23,7 @@ $qty   = (int)($in['qty'] ?? 1);
 if ($idVar<=0 || $ref==='' || $name==='' || $price<=0) bad_request('Producto inválido');
 if ($qty<=0) $qty=1;
 
-$ins = $db->prepare("INSERT INTO cart_items (cart_id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty)
+$ins = $db->prepare("INSERT INTO " . CART_ITEMS_TABLE . " (cart_id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty)
 VALUES (?,?,?,?,?,?,?)
 ON DUPLICATE KEY UPDATE
   qty = qty + VALUES(qty),

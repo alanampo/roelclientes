@@ -2,6 +2,7 @@
 // catalogo_detalle/produccion.php
 declare(strict_types=1);
 
+require __DIR__ . '/config/routes.php';
 require __DIR__ . '/api/_bootstrap.php';
 header('Content-Type: text/html; charset=utf-8');
 $csrf = csrf_token();
@@ -12,21 +13,35 @@ $csrf = csrf_token();
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Producción a pedido</title>
-  <link rel="stylesheet" href="assets/app.css?v=1">
+  <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/styles.css?v=4'), ENT_QUOTES, 'UTF-8'); ?>">
   <style>
-    .wrap{max-width:1200px;margin:0 auto;padding:24px 16px}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
-    .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px}
-    @media(max-width:980px){.grid{grid-template-columns:1fr}}
+    body{background:#f8fafc;font-family:system-ui,-apple-system,sans-serif;padding-left:20px!important;padding-top:20px!important}
+    .prod-wrap{max-width:1200px;width:100%;margin:0 auto;padding:20px 16px}
+    .page-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+    .page-header h1{margin:0;font-size:32px;font-weight:800;color:#0f172a}
+    .page-navbtns{display:flex;gap:10px;flex-wrap:wrap}
+    .info-banner{background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 18px;margin-bottom:20px}
+    .info-banner p{margin:0;color:#0c4a6e;font-size:14px;line-height:1.6}
+    .info-banner b{font-weight:700;color:#075985}
+    .prod-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;width:100%;margin-top:20px}
+    @media(max-width:980px){
+      .prod-grid{grid-template-columns:1fr}
+      .page-header{gap:12px}
+      .page-header h1{font-size:24px;width:100%}
+      .page-navbtns{width:100%}
+      .page-navbtns .btn{flex:1;justify-content:center}
+    }
     .card{background:#fff;border:1px solid #e7eef4;border-radius:18px;box-shadow:0 8px 24px rgba(22,34,51,.06)}
     .card-h{padding:16px 18px;border-bottom:1px solid #eef3f7;display:flex;align-items:center;justify-content:space-between;gap:12px}
     .card-b{padding:16px 18px}
     .muted{color:#6b7a8a}
-    .pill{display:inline-flex;align-items:center;gap:8px;background:#eef9f6;color:#0f6b5a;border-radius:999px;padding:8px 12px;font-weight:700}
+    .pill{display:inline-flex;align-items:center;gap:8px;background:#eef9f6;color:#0f6b5a;border-radius:999px;padding:8px 12px;font-weight:700;font-size:14px}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .inp{border:1px solid #dbe6ee;border-radius:12px;padding:10px 12px;min-width:240px}
-    .btn{border-radius:999px;padding:10px 14px;font-weight:700;border:1px solid #dbe6ee;background:#fff;cursor:pointer}
+    .inp{border:1px solid #dbe6ee;border-radius:12px;padding:10px 12px;min-width:240px;font-size:14px}
+    .btn{border-radius:999px;padding:10px 16px;font-weight:700;border:1px solid #dbe6ee;background:#fff;cursor:pointer;font-size:14px;text-decoration:none;color:#0f172a;display:inline-flex;align-items:center;gap:6px;transition:all .15s ease}
+    .btn:hover{background:#f8fafc;border-color:#cbd5e1}
     .btn-primary{background:#0f6b5a;border-color:#0f6b5a;color:#fff}
+    .btn-primary:hover{background:#0d5a4a;border-color:#0d5a4a}
     .btn-danger{background:#e94b4b;border-color:#e94b4b;color:#fff}
     .list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
     .item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #eef3f7;border-radius:16px}
@@ -41,7 +56,7 @@ $csrf = csrf_token();
     .qtyctl .btn{width:44px;height:44px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center}
     .qtyctl .inp{width:120px;min-width:120px;text-align:center}
     .kpis{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-    .kpi{background:#f5fbff;border:1px solid #e3f0fb;border-radius:999px;padding:8px 12px;font-weight:800}
+    .kpi{background:#f5fbff;border:1px solid #e3f0fb;border-radius:999px;padding:8px 12px;font-weight:800;font-size:13px}
     .kpi b{font-weight:900}
     .sep{height:1px;background:#eef3f7;margin:14px 0}
     .ok{color:#127a2a;font-weight:900}
@@ -50,27 +65,31 @@ $csrf = csrf_token();
     .toast.ok{background:#e9fff2;border:1px solid #bfead0;color:#127a2a}
     .toast.err{background:#fff0f0;border:1px solid #f1b5b5;color:#a33131}
     .prog{background:#eef3f7;border-radius:999px;height:10px;overflow:hidden}
-    .prog>div{height:10px;background:#0f6b5a;width:0%}
-    .navbtns{display:flex;gap:10px;flex-wrap:wrap}
+    .prog>div{height:10px;background:#0f6b5a;width:0%;transition:width .3s ease}
+    .pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}
+    .pagination .btn:disabled{opacity:0.5;cursor:not-allowed}
+    @media(max-width:640px){
+      .pagination{justify-content:center}
+      .pagination .btn{flex:1;min-width:120px}
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div>
-        <h1 style="margin:0">Producción a pedido</h1>
-        <div class="muted" style="margin-top:6px">
-          Arma un pedido productivo: cada especie mínimo <b>50</b> unidades y total <b>≥ 200</b> unidades (puede ser más). Precios: <b>mayorista</b>.
-        </div>
-      </div>
-      <div class="navbtns">
-        <a class="btn" href="my_production.php">Mis solicitudes</a>
-        <a class="btn" href="my_orders.php">Mis pedidos</a>
-        <a class="btn" href="index.php">Catálogo</a>
+  <div class="prod-wrap">
+    <div class="page-header">
+      <h1>Producción a pedido</h1>
+      <div class="page-navbtns">
+        <a class="btn" href="<?php echo htmlspecialchars(buildUrl('my_production.php'), ENT_QUOTES, 'UTF-8'); ?>">Mis solicitudes</a>
+        <a class="btn" href="<?php echo htmlspecialchars(buildUrl('my_orders.php'), ENT_QUOTES, 'UTF-8'); ?>">Mis compras</a>
+        <a class="btn" href="<?php echo htmlspecialchars(buildUrl('index.php'), ENT_QUOTES, 'UTF-8'); ?>">Catálogo</a>
       </div>
     </div>
 
-    <div class="grid">
+    <div class="info-banner">
+      <p>Arma un pedido productivo: cada especie mínimo <b>50</b> unidades y total <b>≥ 200</b> unidades (puede ser más). Precios: <b>mayorista</b>.</p>
+    </div>
+
+    <div class="prod-grid">
       <div class="card">
         <div class="card-h">
           <div class="pill">🌿 Especies en producción (WIP)</div>
@@ -89,6 +108,12 @@ $csrf = csrf_token();
 
           <div id="empty" class="muted" style="margin-top:12px">Cargando…</div>
           <div id="list" class="list" aria-live="polite"></div>
+
+          <div id="pagination" class="pagination" style="display:none;margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <button id="prevBtn" class="btn" type="button">← Anterior</button>
+            <div id="pageInfo" class="muted" style="font-weight:700"></div>
+            <button id="nextBtn" class="btn" type="button">Siguiente →</button>
+          </div>
         </div>
       </div>
 
@@ -148,6 +173,6 @@ $csrf = csrf_token();
 <script>
   window.ROEL_CSRF = <?php echo json_encode($csrf, JSON_UNESCAPED_UNICODE); ?>;
 </script>
-<script src="assets/production_cart.js?v=9.1"></script>
+<script src="<?php echo htmlspecialchars(buildUrl('assets/production_cart.js?v=10'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>

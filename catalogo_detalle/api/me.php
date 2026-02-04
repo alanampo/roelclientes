@@ -12,7 +12,9 @@ if ($cid <= 0) {
 }
 
 $db = db();
-$q = "SELECT id, rut, email, nombre FROM customers WHERE id=? LIMIT 1";
+
+// Obtener datos de clientes (tabla unificada de roel)
+$q = "SELECT c.id_cliente as id, c.rut, c.mail as email, c.nombre FROM clientes c WHERE c.id_cliente=? LIMIT 1";
 $st = $db->prepare($q);
 $st->bind_param('i', $cid);
 $st->execute();

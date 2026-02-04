@@ -53,23 +53,24 @@ try {
 
   // Tablas (idempotente)
   $sql1 = "
-    CREATE TABLE IF NOT EXISTS production_requests (
+    CREATE TABLE IF NOT EXISTS " . PROD_REQUESTS_TABLE . " (
       id INT AUTO_INCREMENT PRIMARY KEY,
       request_code VARCHAR(32) NOT NULL UNIQUE,
-      customer_id INT NOT NULL,
+      id_cliente INT NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'new',
       total_units INT NOT NULL DEFAULT 0,
       total_amount_clp INT NOT NULL DEFAULT 0,
       notes TEXT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      KEY idx_cliente (id_cliente)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   ";
   if (!mysqli_query($db, $sql1)) {
-    throw new RuntimeException('No se pudo crear production_requests: '.mysqli_error($db));
+    throw new RuntimeException('No se pudo crear tabla production_requests: '.mysqli_error($db));
   }
 
   $sql2 = "
-    CREATE TABLE IF NOT EXISTS production_request_items (
+    CREATE TABLE IF NOT EXISTS " . PROD_REQUEST_ITEMS_TABLE . " (
       id INT AUTO_INCREMENT PRIMARY KEY,
       request_id INT NOT NULL,
       product_id VARCHAR(64) NOT NULL,
@@ -78,13 +79,13 @@ try {
       unit_price_clp INT NOT NULL DEFAULT 0,
       line_total_clp INT NOT NULL DEFAULT 0,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT fk_pri_req FOREIGN KEY (request_id) REFERENCES production_requests(id) ON DELETE CASCADE,
+      CONSTRAINT fk_pri_req FOREIGN KEY (request_id) REFERENCES " . PROD_REQUESTS_TABLE . "(id) ON DELETE CASCADE,
       KEY idx_req (request_id),
       KEY idx_prod (product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   ";
   if (!mysqli_query($db, $sql2)) {
-    throw new RuntimeException('No se pudo crear production_request_items: '.mysqli_error($db));
+    throw new RuntimeException('No se pudo crear tabla production_request_items: '.mysqli_error($db));
   }
 
   // Genera código
@@ -94,7 +95,7 @@ try {
   mysqli_begin_transaction($db);
 
   // Insert request
-  $st = mysqli_prepare($db, "INSERT INTO production_requests (request_code, customer_id, total_units, total_amount_clp, notes) VALUES (?,?,?,?,?)");
+  $st = mysqli_prepare($db, "INSERT INTO " . PROD_REQUESTS_TABLE . " (request_code, id_cliente, total_units, total_amount_clp, notes) VALUES (?,?,?,?,?)");
   if (!$st) throw new RuntimeException('Prepare failed (requests): '.mysqli_error($db));
 
   // mysqli permite null en 's' en la práctica, pero si quieres evitar rarezas:
@@ -106,7 +107,7 @@ try {
   mysqli_stmt_close($st);
 
   // Insert items
-  $sti = mysqli_prepare($db, "INSERT INTO production_request_items (request_id, product_id, product_name, qty, unit_price_clp, line_total_clp) VALUES (?,?,?,?,?,?)");
+  $sti = mysqli_prepare($db, "INSERT INTO " . PROD_REQUEST_ITEMS_TABLE . " (request_id, product_id, product_name, qty, unit_price_clp, line_total_clp) VALUES (?,?,?,?,?,?)");
   if (!$sti) throw new RuntimeException('Prepare failed (items): '.mysqli_error($db));
 
   foreach ($cart as $c) {

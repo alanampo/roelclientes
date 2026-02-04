@@ -26,4 +26,9 @@ return [
 
   // Prefijo del código de pedido
   'ORDER_PREFIX' => 'RP',
+
+  // Configuración Webpay (Transbank)
+  'WEBPAY_ENVIRONMENT' => getenv('WEBPAY_ENVIRONMENT') ?: 'integration', // 'integration' o 'production'
+  'WEBPAY_COMMERCE_CODE' => getenv('WEBPAY_COMMERCE_CODE') ?: '597055555532', // Código de comercio
+  'WEBPAY_API_KEY' => getenv('WEBPAY_API_KEY') ?: '579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C', // Llave secreta
 ];

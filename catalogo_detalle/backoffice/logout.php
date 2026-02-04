@@ -5,5 +5,5 @@ require __DIR__ . '/_boot.php';
 
 bo_audit('logout');
 unset($_SESSION['bo_admin']);
-header('Location: login.php');
+header('Location: ' . $BACKOFFICE_PATH . '/login.php');
 exit;

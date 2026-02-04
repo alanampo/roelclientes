@@ -3,6 +3,7 @@
 // Checkout: genera pedido interno y abre WhatsApp con el detalle.
 // Ajustado para calzar con assets/checkout.js + assets/checkout.css.
 
+require __DIR__ . '/config/routes.php';
 require __DIR__ . '/api/_bootstrap.php';
 header_remove('Content-Type');
 header('Content-Type: text/html; charset=utf-8');
@@ -14,7 +15,7 @@ $customerName = '';
 if ($logged) {
   $db = db();
   $cid = (int)$_SESSION['customer_id'];
-  $stmt = $db->prepare('SELECT nombre FROM customers WHERE id = ? LIMIT 1');
+  $stmt = $db->prepare('SELECT nombre FROM clientes WHERE id_cliente = ? LIMIT 1');
   if ($stmt) {
     $stmt->bind_param('i', $cid);
     $stmt->execute();
@@ -30,8 +31,38 @@ if ($logged) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Checkout - Roelplant</title>
+  <!-- Choices.js para selects searchables -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
   <!-- checkout.css incluye layout propio, evitamos styles.css del catálogo para no romper el diseño -->
-  <link rel="stylesheet" href="assets/checkout.css" />
+  <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/checkout.css'), ENT_QUOTES, 'UTF-8'); ?>" />
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    /* Ajustes de estilo para Choices.js */
+    .choices {
+      width: 100%;
+    }
+    .choices__inner {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background-color: white;
+    }
+    .choices__list--single {
+      display: flex;
+      padding: 0;
+    }
+    .choices__item {
+      padding: 0;
+      margin: 0;
+    }
+    .choices__button {
+      padding: 0 4px;
+      margin-left: 4px;
+    }
+  </style>
 </head>
 <body>
 
@@ -86,10 +117,58 @@ if ($logged) {
         <div id="customerBox" class="muted">Cargando cliente...</div>
 
         <div class="ship">
-          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;">
-            <div>
-              <div style="font-weight:900">Despacho</div>
-              <div class="muted" style="font-size:13px">Retiro en vivero: <strong>gratis</strong> · Envío: <strong>por pagar</strong> (Starken u otro)</div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:14px">
+            <div style="width:100%">
+              <div style="font-weight:900">Método de Entrega</div>
+              <div id="shippingMethods" style="margin-top:8px">
+                <label style="display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer">
+                  <input type="radio" name="shipping_method" value="domicilio" checked style="cursor:pointer" />
+                  <span>Envío a Domicilio vía Starken</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer">
+                  <input type="radio" name="shipping_method" value="agencia" style="cursor:pointer" />
+                  <span>Retiro en Sucursal Starken</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer">
+                  <input type="radio" name="shipping_method" value="vivero" style="cursor:pointer" />
+                  <span>Retiro en Vivero (Gratis)</span>
+                </label>
+              </div>
+
+              <!-- Formulario de dirección para Envío a Domicilio -->
+              <div id="shippingAddressForm" style="margin-top:14px;padding:12px;background:#f5f5f5;border-radius:4px;display:none">
+                
+                <div style="margin-bottom:10px">
+                  <label style="display:block;margin-bottom:4px;font-weight:600">Comuna</label>
+                  <select id="shippingCommune" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box">
+                    <option value="">Seleccionar comuna...</option>
+                  </select>
+                </div>
+                <div style="margin-bottom:10px">
+                  <label style="display:block;margin-bottom:4px;font-weight:600">Dirección de Entrega</label>
+                  <input type="text" id="shippingAddress" placeholder="Calle, número, depto" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box" />
+                </div>
+                <button id="btnQuoteShipping" type="button" style="width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:3px;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">
+                  <span id="btnQuoteShippingText">Cotizar Envío</span>
+                  <span id="btnQuoteShippingSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite"></span>
+                </button>
+              </div>
+
+              <!-- Select de sucursales para Retiro en Sucursal (búsqueda por nombre) -->
+              <div id="shippingAgenciesForm" style="margin-top:14px;padding:12px;background:#f5f5f5;border-radius:4px;display:none">
+                <div style="margin-bottom:10px">
+                  <label style="display:block;margin-bottom:4px;font-weight:600">Sucursal (busca por nombre)</label>
+                  <select id="shippingAgency" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box">
+                    <option value="">Seleccionar sucursal...</option>
+                  </select>
+                </div>
+                <button id="btnQuoteAgencyShipping" type="button" style="width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:3px;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">
+                  <span id="btnQuoteAgencyShippingText">Cotizar Envío</span>
+                  <span id="btnQuoteAgencyShippingSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top:2px solid white;border-radius:50%;animation:spin 0.8s linear infinite"></span>
+                </button>
+              </div>
+
+              <div id="shippingInfo" class="muted" style="font-size:13px;margin-top:10px"></div>
             </div>
           </div>
         </div>
@@ -100,7 +179,8 @@ if ($logged) {
         <textarea id="notes" rows="4" placeholder="Ej: dejar en portería / horario de retiro / etc."></textarea>
 
         <div class="footer-actions">
-          <button id="btnCreateOrder" class="btn btn-primary" type="button">Enviar pedido por WhatsApp</button>
+          <button id="btnMakeReservation" class="btn btn-success" type="button">Pagar</button>
+          <button id="btnCreateOrder" class="btn btn-primary" style="display: none;" type="button">Enviar pedido por WhatsApp</button>
         </div>
 
         <div id="orderResult" class="muted hidden" style="margin-top:10px"></div>
@@ -115,6 +195,8 @@ if ($logged) {
       customer_name: <?= json_encode($customerName, JSON_UNESCAPED_UNICODE) ?>
     };
   </script>
-  <script src="assets/checkout.js?v=4.5"></script>
+  <!-- Choices.js para selects searchables -->
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/checkout.js?v=6'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>

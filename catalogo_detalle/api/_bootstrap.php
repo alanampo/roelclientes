@@ -84,8 +84,11 @@ function start_session(): void {
 
   // Cookie path: '/' para que la sesión sea válida aunque muevas el sistema de carpeta (cart3 -> cart4, etc.)
   // El nombre de sesión es único, así que no afecta a otros sistemas.
+  // Lifetime: 7 días (604800 segundos)
+  $sessionLifetime = 60 * 60 * 24 * 7; // 7 días
+
   session_set_cookie_params([
-    'lifetime' => 0,
+    'lifetime' => $sessionLifetime,
     'path' => '/',
     'domain' => '',
     'secure' => $secure,
@@ -197,28 +200,237 @@ function require_auth(): int {
 }
 
 function cart_get_or_create(mysqli $db, int $customerId): int {
-  // 1) buscar carrito open
-  $q = "SELECT id FROM carts WHERE customer_id=? AND status='open' LIMIT 1";
+  // 1) buscar carrito open (usa id_cliente en tabla carrito_carts de roel)
+  $q = "SELECT id FROM " . CART_TABLE . " WHERE id_cliente=? AND status='open' LIMIT 1";
   $st = $db->prepare($q);
   $st->bind_param('i', $customerId);
   $st->execute();
   $res = $st->get_result();
-  if ($row = $res->fetch_assoc()) return (int)$row['id'];
+  $row = $res->fetch_assoc();
   $st->close();
 
+  if ($row) {
+    return (int)$row['id'];
+  }
+
   // 2) crear
-  $q2 = "INSERT INTO carts (customer_id, status) VALUES (?, 'open')";
+  $q2 = "INSERT INTO " . CART_TABLE . " (id_cliente, status) VALUES (?, 'open')";
   $st2 = $db->prepare($q2);
   $st2->bind_param('i', $customerId);
   if (!$st2->execute()) {
     json_out(['ok'=>false,'error'=>'No se pudo crear carrito'], 500);
   }
-  return (int)$st2->insert_id;
+  $insertId = (int)$st2->insert_id;
+  $st2->close();
+  return $insertId;
 }
 
 
+// Obtener porcentaje de IVA desde .env (fallback 19%)
+function get_iva_percentage(): int {
+  $iva = (int)(getenv('IVA_PERCENTAGE') ?: 19);
+  return $iva > 0 ? $iva : 19;
+}
+
+// Obtener multiplicador de IVA (ej: 1.19 para 19%)
+function get_iva_multiplier(): float {
+  return 1 + (get_iva_percentage() / 100);
+}
+
+// Obtener precios de packing desde la base de datos (con IVA incluido)
+function get_packing_prices(mysqli $db): array {
+  // Obtener IVA
+  $ivaPercent = get_iva_percentage();
+  $ivaMultiplier = 1 + ($ivaPercent / 100);
+
+  // Fallbacks hardcodeados (sin IVA)
+  $pricesBase = [
+    'chica' => 2500,
+    'mediana' => 4000,
+    'grande' => 4500,
+  ];
+
+  // Intentar obtener desde la BD
+  $query = "SELECT nombre, COALESCE(precio, precio_detalle, 0) AS precio_final
+            FROM variedades_producto
+            WHERE nombre IN ('PACKING CAJA CHICA', 'PACKING CAJA MEDIANA', 'PACKING CAJA GRANDE')";
+
+  $result = mysqli_query($db, $query);
+  if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+      $nombre = strtoupper(trim((string)$row['nombre']));
+      $precio = (int)$row['precio_final'];
+
+      if ($precio > 0) {
+        if ($nombre === 'PACKING CAJA CHICA') {
+          $pricesBase['chica'] = $precio;
+        } elseif ($nombre === 'PACKING CAJA MEDIANA') {
+          $pricesBase['mediana'] = $precio;
+        } elseif ($nombre === 'PACKING CAJA GRANDE') {
+          $pricesBase['grande'] = $precio;
+        }
+      }
+    }
+  }
+
+  // Aplicar IVA a todos los precios
+  $prices = [
+    'chica' => (int)round($pricesBase['chica'] * $ivaMultiplier),
+    'mediana' => (int)round($pricesBase['mediana'] * $ivaMultiplier),
+    'grande' => (int)round($pricesBase['grande'] * $ivaMultiplier),
+  ];
+
+  return $prices;
+}
+
+// Detectar si producto tiene maceta/bolsa especial (MAC-10 a MAC-15, BOL-10 a BOL-15)
+function has_special_packing_attrs(string $attrsActivos): bool {
+  if (empty($attrsActivos)) return false;
+
+  $attrs = explode('||', $attrsActivos);
+  foreach ($attrs as $attr) {
+    $attr = trim($attr);
+    $attrUpper = strtoupper($attr);
+
+    // Buscar "MACETA:" o "BOLSA:"
+    if (strpos($attrUpper, 'MACETA:') !== false || strpos($attrUpper, 'BOLSA:') !== false) {
+      // Extraer el valor después de los dos puntos
+      $parts = explode(':', $attr, 2);
+      if (count($parts) === 2) {
+        $value = trim(strtoupper($parts[1]));
+        // Verificar si es MAC-10 a MAC-15 o BOL-10 a BOL-15
+        if (preg_match('/^(MAC|BOL)-(1[0-5])$/', $value)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Calcular packing diferenciado
+function calculate_packing(mysqli $db, array $items): array {
+  // Obtener precios desde BD (con fallbacks)
+  $prices = get_packing_prices($db);
+
+  $qtySpecial = 0;
+  $qtyNormal = 0;
+
+  foreach ($items as $it) {
+    $qty = (int)($it['qty'] ?? 0);
+    $attrs = (string)($it['attrs_activos'] ?? '');
+
+    if (has_special_packing_attrs($attrs)) {
+      $qtySpecial += $qty;
+    } else {
+      $qtyNormal += $qty;
+    }
+  }
+
+  $packingCost = 0;
+  $packingLabel = '';
+  $details = [];
+
+  // Calcular packing para productos especiales (cajas medianas, 25 por caja)
+  if ($qtySpecial > 0) {
+    $cajasEspeciales = (int)ceil($qtySpecial / 25);
+    $costoEspecial = $cajasEspeciales * $prices['mediana'];
+    $packingCost += $costoEspecial;
+    $details[] = "{$cajasEspeciales} caja(s) mediana(s) para macetas/bolsas ({$qtySpecial} unid)";
+  }
+
+  // Calcular packing para productos normales (lógica original)
+  if ($qtyNormal > 0) {
+    if ($qtyNormal <= 50) {
+      $packingCost += $prices['chica'];
+      $details[] = '1 caja chica para otros productos (1-50 unid)';
+    } elseif ($qtyNormal <= 100) {
+      $packingCost += $prices['mediana'];
+      $details[] = '1 caja mediana para otros productos (51-100 unid)';
+    } else {
+      $packs = (int)ceil($qtyNormal / 100);
+      $packingCost += $prices['grande'] * $packs;
+      $details[] = "{$packs} caja(s) grande(s) para otros productos (cada 100 unid)";
+    }
+  }
+
+  $packingLabel = implode(' + ', $details);
+  if (empty($packingLabel)) {
+    $packingLabel = 'sin packing';
+  }
+
+  return [
+    'cost' => $packingCost,
+    'label' => $packingLabel,
+    'qty_special' => $qtySpecial,
+    'qty_normal' => $qtyNormal,
+  ];
+}
+
+// Detectar y aplicar descuento desde atributo
+function apply_discount_from_attrs(int $price, string $attrsActivos): array {
+  $discountAmount = 0;
+  $discountPercent = 0;
+  $finalPrice = $price;
+
+  if (!empty($attrsActivos)) {
+    $attrs = explode('||', $attrsActivos);
+    foreach ($attrs as $attr) {
+      $attr = trim($attr);
+      $attrUpper = strtoupper($attr);
+
+      // Buscar "DESCUENTO:" al inicio (case-insensitive)
+      if (strpos($attrUpper, 'DESCUENTO:') === 0) {
+        // Extraer la parte después de "DESCUENTO:"
+        $descPart = trim(substr($attr, strlen('DESCUENTO:')));
+
+        // Si tiene %, es porcentaje
+        if (strpos($descPart, '%') !== false) {
+          $discountPercent = (int)$descPart;
+          $discountAmount = (int)round($price * $discountPercent / 100);
+        } else {
+          // Si es número > 50, es monto fijo
+          $discountNum = (int)$descPart;
+          if ($discountNum > 50) {
+            $discountAmount = $discountNum;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  $finalPrice = $price - $discountAmount;
+  if ($finalPrice < 0) $finalPrice = 0;
+
+  return [
+    'original_price' => $price,
+    'discount_amount' => $discountAmount,
+    'discount_percent' => $discountPercent,
+    'final_price' => $finalPrice,
+  ];
+}
+
 function cart_snapshot(mysqli $db, int $cartId): array {
-  $q = "SELECT id, id_variedad, referencia, nombre, imagen_url, unit_price_clp, qty\n        FROM cart_items WHERE cart_id=? ORDER BY updated_at DESC";
+  $q = "SELECT ci.id, ci.id_variedad, ci.referencia, ci.nombre, ci.imagen_url, ci.unit_price_clp, ci.qty,
+                GROUP_CONCAT(DISTINCT
+                  CASE
+                    WHEN a.nombre IS NULL THEN NULL
+                    WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+                    WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+                    ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+                  END
+                  ORDER BY a.nombre
+                  SEPARATOR '||'
+                ) AS attrs_activos
+         FROM " . CART_ITEMS_TABLE . " ci
+         LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = ci.id_variedad
+         LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
+         LEFT JOIN atributos a ON a.id = av.id_atributo
+         WHERE ci.cart_id = ?
+         GROUP BY ci.id, ci.id_variedad, ci.referencia, ci.nombre, ci.imagen_url, ci.unit_price_clp, ci.qty
+         ORDER BY ci.updated_at DESC";
+
   $st = $db->prepare($q);
   $st->bind_param('i', $cartId);
   $st->execute();
@@ -230,18 +442,28 @@ function cart_snapshot(mysqli $db, int $cartId): array {
   while ($r = $res->fetch_assoc()) {
     $qty = (int)$r['qty'];
     $price = (int)$r['unit_price_clp'];
-    $line = $qty * $price;
+    $attrsActivos = (string)($r['attrs_activos'] ?? '');
+
+    // Aplicar descuento si existe
+    $discountInfo = apply_discount_from_attrs($price, $attrsActivos);
+    $finalPrice = $discountInfo['final_price'];
+    $line = $qty * $finalPrice;
     $total += $line;
     $count += $qty;
+
     $items[] = [
       'item_id'=>(int)$r['id'],
       'id_variedad'=>(int)$r['id_variedad'],
       'referencia'=>(string)$r['referencia'],
       'nombre'=>(string)$r['nombre'],
       'imagen_url'=>$r['imagen_url'],
-      'unit_price_clp'=>$price,
+      'unit_price_clp'=>$finalPrice,
+      'original_price_clp'=>$discountInfo['original_price'],
+      'discount_amount'=>$discountInfo['discount_amount'],
+      'discount_percent'=>$discountInfo['discount_percent'],
       'qty'=>$qty,
       'line_total_clp'=>$line,
+      'attrs_activos'=>$attrsActivos,
     ];
   }
 

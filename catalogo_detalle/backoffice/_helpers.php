@@ -61,7 +61,7 @@ function is_logged_admin(): bool {
 
 function require_auth_admin(): void {
   if (!is_logged_admin()) {
-    header('Location: login.php');
+    header('Location: ' . $GLOBALS['BACKOFFICE_PATH'] . '/login.php');
     exit;
   }
 }

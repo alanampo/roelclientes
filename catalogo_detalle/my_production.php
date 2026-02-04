@@ -2,13 +2,14 @@
 // catalogo_detalle/my_production.php
 declare(strict_types=1);
 
+require __DIR__ . '/config/routes.php';
 require __DIR__ . '/api/_bootstrap.php';
 header('Content-Type: text/html; charset=utf-8');
 
 start_session();
 $cid = (int)($_SESSION['customer_id'] ?? 0);
 if ($cid <= 0) {
-  header('Location: index.php?openAuth=1&return_to=' . rawurlencode('my_production.php'));
+  header('Location: ' . buildUrl('index.php?openAuth=1&return_to=' . rawurlencode('my_production.php')));
   exit;
 }
 
@@ -16,8 +17,8 @@ $db = db();
 
 // Lista de solicitudes del cliente
 $st = $db->prepare("SELECT id, request_code, status, total_units, total_amount_clp, created_at
-                    FROM production_requests
-                    WHERE customer_id=?
+                    FROM " . PROD_REQUESTS_TABLE . "
+                    WHERE id_cliente=?
                     ORDER BY id DESC
                     LIMIT 100");
 $st->bind_param('i', $cid);
@@ -33,7 +34,7 @@ $st->close();
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mis solicitudes de producción</title>
-  <link rel="stylesheet" href="assets/app.css?v=1">
+  <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/styles.css?v=4'), ENT_QUOTES, 'UTF-8'); ?>">
   <style>
     .wrap{max-width:1100px;margin:0 auto;padding:24px 16px}
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
@@ -55,9 +56,9 @@ $st->close();
     <div class="topbar">
       <div class="brand">Roelplant · Catálogo detalle</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="btn" href="my_orders.php">Mis pedidos</a>
-        <a class="btn" href="produccion.php">Solicitar producción</a>
-        <a class="btn btn-primary" href="index.php">Catálogo</a>
+        <a class="btn" href="<?php echo htmlspecialchars(buildUrl('my_orders.php'), ENT_QUOTES, 'UTF-8'); ?>">Mis compras</a>
+        <a class="btn" href="<?php echo htmlspecialchars(buildUrl('produccion.php'), ENT_QUOTES, 'UTF-8'); ?>">Solicitar producción</a>
+        <a class="btn btn-primary" href="<?php echo htmlspecialchars(buildUrl('index.php'), ENT_QUOTES, 'UTF-8'); ?>">Catálogo</a>
       </div>
     </div>
 
@@ -94,7 +95,7 @@ $st->close();
                     <div><strong>Total estimado:</strong> $<?= number_format($amount,0,',','.') ?></div>
                   </div>
                   <div style="height:12px"></div>
-                  <a class="btn" href="production_detail.php?id=<?= $id ?>">Ver detalle</a>
+                  <a class="btn" href="<?php echo htmlspecialchars(buildUrl('production_detail.php?id=' . $id), ENT_QUOTES, 'UTF-8'); ?>">Ver detalle</a>
                 </div>
               </div>
             <?php endforeach; ?>

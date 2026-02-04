@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// Detecta dinámicamente la ruta base del backoffice desde $_SERVER['SCRIPT_NAME']
+// Ejemplo: /catalogo_detalle_webpay/backoffice/login.php => /catalogo_detalle_webpay/backoffice
+$BACKOFFICE_PATH = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+if ($BACKOFFICE_PATH === '.') {
+  $BACKOFFICE_PATH = '';
+}
+
 date_default_timezone_set('America/Santiago');
 
 require_once __DIR__ . '/../config/cart_db.php';
@@ -91,7 +98,7 @@ function require_auth_admin(): int {
   $id = bo_admin_id();
   if (!$id) {
     $to = urlencode($_SERVER['REQUEST_URI'] ?? 'index.php');
-    header('Location: login.php?next=' . $to);
+    header('Location: ' . $GLOBALS['BACKOFFICE_PATH'] . '/login.php?next=' . $to);
     exit;
   }
   return $id;
