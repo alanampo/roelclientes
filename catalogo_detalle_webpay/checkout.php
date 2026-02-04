@@ -123,7 +123,7 @@ if ($logged) {
               <div id="shippingMethods" style="margin-top:8px">
                 <label style="display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer">
                   <input type="radio" name="shipping_method" value="domicilio" checked style="cursor:pointer" />
-                  <span>Envío a Domicilio</span>
+                  <span>Envío a Domicilio vía Starken</span>
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;margin:6px 0;cursor:pointer">
                   <input type="radio" name="shipping_method" value="agencia" style="cursor:pointer" />
@@ -137,15 +137,16 @@ if ($logged) {
 
               <!-- Formulario de dirección para Envío a Domicilio -->
               <div id="shippingAddressForm" style="margin-top:14px;padding:12px;background:#f5f5f5;border-radius:4px;display:none">
-                <div style="margin-bottom:10px">
-                  <label style="display:block;margin-bottom:4px;font-weight:600">Dirección de Entrega</label>
-                  <input type="text" id="shippingAddress" placeholder="Calle, número, depto" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box" />
-                </div>
+                
                 <div style="margin-bottom:10px">
                   <label style="display:block;margin-bottom:4px;font-weight:600">Comuna</label>
                   <select id="shippingCommune" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box">
                     <option value="">Seleccionar comuna...</option>
                   </select>
+                </div>
+                <div style="margin-bottom:10px">
+                  <label style="display:block;margin-bottom:4px;font-weight:600">Dirección de Entrega</label>
+                  <input type="text" id="shippingAddress" placeholder="Calle, número, depto" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:3px;box-sizing:border-box" />
                 </div>
                 <button id="btnQuoteShipping" type="button" style="width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:3px;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px">
                   <span id="btnQuoteShippingText">Cotizar Envío</span>
@@ -179,7 +180,7 @@ if ($logged) {
 
         <div class="footer-actions">
           <button id="btnMakeReservation" class="btn btn-success" type="button">Pagar</button>
-          <button id="btnCreateOrder" class="btn btn-primary" type="button">Enviar pedido por WhatsApp</button>
+          <button id="btnCreateOrder" class="btn btn-primary" style="display: none;" type="button">Enviar pedido por WhatsApp</button>
         </div>
 
         <div id="orderResult" class="muted hidden" style="margin-top:10px"></div>
