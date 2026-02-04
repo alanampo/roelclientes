@@ -76,14 +76,48 @@ $res = $st->get_result();
 $rows = [];
 
 while($r = $res->fetch_assoc()){
-  // Determinar label de estado de pago
+  $reservaId = (int)$r['id'];
+
+  // Verificar estado de los productos de la reserva
+  $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
+  $stState = $dbStock->prepare($stateQuery);
+  $finalStatus = null;
+
+  if ($stState) {
+    $stState->bind_param('i', $reservaId);
+    $stState->execute();
+    $stateResult = $stState->get_result();
+    $states = [];
+    while ($stateRow = $stateResult->fetch_assoc()) {
+      $states[] = (int)$stateRow['estado'];
+    }
+    $stState->close();
+
+    // Determinar estado final basado en productos
+    if (!empty($states)) {
+      $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+      $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
+
+      if ($allCancelled) {
+        $finalStatus = 'CANCELADA';
+      } elseif ($allDelivered) {
+        $finalStatus = 'ENTREGADA';
+      }
+    }
+  }
+
+  // Determinar label de estado de pago (solo si no hay override)
   $paymentStatus = (string)($r['payment_status'] ?? 'pending');
-  $paymentLabel = [
-    'pending' => 'Pendiente de pago',
-    'paid' => 'Pagado',
-    'failed' => 'Pago fallido',
-    'refunded' => 'Reembolsado'
-  ][$paymentStatus] ?? $paymentStatus;
+  if ($finalStatus !== null) {
+    $paymentLabel = $finalStatus;
+  } else {
+    $paymentLabel = [
+      'pending' => 'Pendiente de pago',
+      'paid' => 'Pagado',
+      'failed' => 'Pago fallido',
+      'refunded' => 'Reembolsado'
+    ][$paymentStatus] ?? $paymentStatus;
+  }
 
   // Determinar label de método de envío
   $shippingMethod = (string)($r['shipping_method'] ?? '');
