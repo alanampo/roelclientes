@@ -38,6 +38,35 @@ $o = $res ? mysqli_fetch_assoc($res) : null;
 mysqli_stmt_close($st);
 if (!$o) { header('Location: index.php?tab=pedidos'); exit; }
 
+// Verificar estado de los productos de la reserva
+$reservaId = (int)$o['id'];
+$stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
+$stState = mysqli_prepare($db, $stateQuery);
+$displayStatus = (string)$o['payment_status'];
+
+if ($stState) {
+  mysqli_stmt_bind_param($stState, 'i', $reservaId);
+  mysqli_stmt_execute($stState);
+  $stateResult = mysqli_stmt_get_result($stState);
+  $states = [];
+  while ($stateRow = mysqli_fetch_assoc($stateResult)) {
+    $states[] = (int)$stateRow['estado'];
+  }
+  mysqli_stmt_close($stState);
+
+  // Determinar estado final basado en productos
+  if (!empty($states)) {
+    $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+    $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
+
+    if ($allCancelled) {
+      $displayStatus = 'CANCELADA';
+    } elseif ($allDelivered) {
+      $displayStatus = 'ENTREGADA';
+    }
+  }
+}
+
 $items=[];
 $st2 = mysqli_prepare($db, "SELECT product_name, qty, unit_price_clp, line_total_clp FROM carrito_order_items WHERE order_id=? ORDER BY id ASC");
 mysqli_stmt_bind_param($st2,'i',$id);
@@ -70,7 +99,7 @@ bo_header('Pedido stock');
         </div>
         <div>
           <div class="small muted">Estado</div>
-          <div><?= bo_badge((string)$o['payment_status']) ?></div>
+          <div><?= bo_badge($displayStatus) ?></div>
         </div>
       </div>
 
