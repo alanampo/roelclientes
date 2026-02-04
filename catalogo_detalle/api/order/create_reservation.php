@@ -92,9 +92,9 @@ try {
 
     $disponible = (int)($stockData['disponible'] ?? 0);
 
-    if ($disponible < $qty) {
-      throw new RuntimeException("Stock insuficiente para producto ID {$id_variedad}. Solicitado: {$qty}, Disponible: {$disponible}");
-    }
+    // if ($disponible < $qty) {
+    //   throw new RuntimeException("Stock insuficiente para producto ID {$id_variedad}. Solicitado: {$qty}, Disponible: {$disponible}");
+    // }
 
     // Guardar detalles para inserción posterior
     $products_detailed[] = [

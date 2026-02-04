@@ -147,7 +147,35 @@ if ($tab === 'pedidos') {
   mysqli_stmt_bind_param($st, 'ssssss', $qq, $lk, $lk, $lk, $lk, $lk);
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
-  while ($r = $rs->fetch_assoc()) $reservas[] = $r;
+  while ($r = $rs->fetch_assoc()) {
+    // Verificar estado de los productos de la reserva
+    $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
+    $stState = mysqli_prepare($db, $stateQuery);
+    if ($stState) {
+      $reservaId = (int)$r['id'];
+      mysqli_stmt_bind_param($stState, 'i', $reservaId);
+      mysqli_stmt_execute($stState);
+      $stateResult = mysqli_stmt_get_result($stState);
+      $states = [];
+      while ($stateRow = mysqli_fetch_assoc($stateResult)) {
+        $states[] = (int)$stateRow['estado'];
+      }
+      mysqli_stmt_close($stState);
+
+      // Determinar estado final basado en productos
+      if (!empty($states)) {
+        $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+        $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
+
+        if ($allCancelled) {
+          $r['status'] = 'CANCELADA';
+        } elseif ($allDelivered) {
+          $r['status'] = 'ENTREGADA';
+        }
+      }
+    }
+    $reservas[] = $r;
+  }
   mysqli_stmt_close($st);
 }
 
@@ -262,6 +290,35 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   mysqli_stmt_close($st);
                 } else { $od = null; }
 
+                // Verificar estado de los productos de la reserva
+                $displayOrderStatus = $od ? (string)$od['payment_status'] : '';
+                if ($od) {
+                  $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
+                  $stState = mysqli_prepare($db, $stateQuery);
+                  if ($stState) {
+                    mysqli_stmt_bind_param($stState, 'i', $viewOrderId);
+                    mysqli_stmt_execute($stState);
+                    $stateResult = mysqli_stmt_get_result($stState);
+                    $states = [];
+                    while ($stateRow = mysqli_fetch_assoc($stateResult)) {
+                      $states[] = (int)$stateRow['estado'];
+                    }
+                    mysqli_stmt_close($stState);
+
+                    // Determinar estado final basado en productos
+                    if (!empty($states)) {
+                      $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+                      $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
+
+                      if ($allCancelled) {
+                        $displayOrderStatus = 'CANCELADA';
+                      } elseif ($allDelivered) {
+                        $displayOrderStatus = 'ENTREGADA';
+                      }
+                    }
+                  }
+                }
+
                 // Obtener datos de transacción Webpay si existe
                 $wpTx = null;
                 if ($od && !empty($od['webpay_transaction_id'])) {
@@ -364,9 +421,11 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                             'failed' => 'Fallido',
                             'refunded' => 'Reembolsado'
                           ];
-                          $statusLabel = $paymentStatusLabels[$od['payment_status']] ?? $od['payment_status'];
+                          $statusLabel = ($displayOrderStatus === 'CANCELADA' || $displayOrderStatus === 'ENTREGADA')
+                            ? $displayOrderStatus
+                            : ($paymentStatusLabels[$displayOrderStatus] ?? $displayOrderStatus);
                         ?>
-                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$od['payment_status']==='paid'?'#5fe5d0':($od['payment_status']==='failed'?'#f87171':'#fbbf24')?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h($statusLabel)?></span></div>
+                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$displayOrderStatus==='paid'?'#5fe5d0':($displayOrderStatus==='failed'?'#f87171':($displayOrderStatus==='CANCELADA'?'#ef4444':($displayOrderStatus==='ENTREGADA'?'#10b981':'#fbbf24')))?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h($statusLabel)?></span></div>
 
                         <?php if ($od['payment_method'] === 'webpay' && $wpTx): ?>
                           <!-- Detalles de transacción Webpay desde webpay_transactions -->
