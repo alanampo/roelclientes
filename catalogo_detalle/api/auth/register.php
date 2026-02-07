@@ -74,9 +74,27 @@ function register_roel_unificado(mysqli $db, string $rutClean, string $rutRaw, s
   // Si domicilio no viene, usar el nombre como valor por defecto
   if ($domicilioEsc === '') $domicilioEsc = $nombreEsc;
 
-  // 1. Insertar en clientes
-  $qCliente = "INSERT INTO clientes (nombre, rut, telefono, domicilio, ciudad, region, comuna, mail, activo)
-               VALUES ('{$nombreEsc}', '{$rutRawEsc}', '{$telefonoEsc}', '{$domicilioEsc}', '{$ciudadEsc}', '{$regionEsc}', {$comunaId}, '{$emailEsc}', 1)";
+  // Obtener id_vendedor (usuario "catalogo")
+  $vendedorId = 0;
+  $qVendedor = "SELECT id FROM usuarios WHERE nombre='catalogo' LIMIT 1";
+  $resVendedor = mysqli_query($db, $qVendedor);
+  if ($resVendedor && ($rowVendedor = mysqli_fetch_assoc($resVendedor))) {
+    $vendedorId = (int)$rowVendedor['id'];
+  } else {
+    // Si no existe, crear usuario "catalogo" con datos random
+    $vendedorHash = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
+    $vendedorHashEsc = mysqli_real_escape_string($db, $vendedorHash);
+    $qVendedorInsert = "INSERT INTO usuarios (nombre, nombre_real, password, tipo_usuario, iniciales, inhabilitado)
+                        VALUES ('catalogo', 'Catalogo', '{$vendedorHashEsc}', 1, 'CAT', 0)";
+    if (!mysqli_query($db, $qVendedorInsert)) {
+      bad_request('No se pudo crear usuario vendedor', ['db_error' => mysqli_error($db)]);
+    }
+    $vendedorId = (int)mysqli_insert_id($db);
+  }
+
+  // 1. Insertar en clientes con id_vendedor
+  $qCliente = "INSERT INTO clientes (nombre, rut, telefono, domicilio, ciudad, region, comuna, mail, activo, id_vendedor)
+               VALUES ('{$nombreEsc}', '{$rutRawEsc}', '{$telefonoEsc}', '{$domicilioEsc}', '{$ciudadEsc}', '{$regionEsc}', {$comunaId}, '{$emailEsc}', 1, {$vendedorId})";
 
   if (!mysqli_query($db, $qCliente)) {
     bad_request('No se pudo crear cliente', ['db_error' => mysqli_error($db)]);
