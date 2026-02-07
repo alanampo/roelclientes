@@ -638,7 +638,7 @@ foreach($all as $p){
       </article>
 
       <article class="c-slide" aria-hidden="false">
-        <a class="c-link" href="https://clientes.roelplant.cl/catalogo_detalle/" aria-label="Ir a Plantines al detalle desde 5 unidades">
+        <a class="c-link" href="https://clientes.roelplant.cl/catalogo_mayorista/" aria-label="Ir a Plantines al detalle desde 5 unidades">
           <img class="c-img" src="assets/img/plantines_por_mayor.png" alt="Plantines al detalle desde 5 unidades" width="1600" height="600" loading="lazy" decoding="async">
           <div class="c-caption">
             <h2>Plantines al por mayor</h2>
