@@ -586,126 +586,128 @@ foreach($all as $p){
 
 /* ====== CARRUSEL HERO ====== */
 .hero-carousel{
-  position:relative;
-  width:100%;
-  max-width:1200px;
-  margin:0 auto 40px;
-  overflow:hidden;
-  border-radius:12px;
+  max-width: 1200px;
+  margin: 16px auto 18px;
+  padding: 0 14px;
 }
-.c-inner{
-  position:relative;
-  width:100%;
-  background:#f0f0f0;
-  outline:none;
+
+.hero-carousel .c-inner{
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #0b0f14;
+  box-shadow: 0 18px 45px rgba(0,0,0,.18);
 }
-.c-track{
-  display:flex;
-  transition:transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
+
+.hero-carousel .c-track{
+  display: flex;
+  will-change: transform;
+  transition: transform .55s ease;
 }
-.c-slide{
-  flex:0 0 100%;
-  position:relative;
-  width:100%;
+
+.hero-carousel .c-slide{
+  min-width: 100%;
+  position: relative;
+  aspect-ratio: 8 / 3;
 }
-.c-link{
-  display:block;
-  position:relative;
-  width:100%;
-  height:400px;
-  overflow:hidden;
-  text-decoration:none;
-  color:#fff;
+
+.hero-carousel .c-link{
+  display: block;
+  width: 100%;
+  height: 100%;
 }
-.c-img{
-  display:block;
-  width:100%;
-  height:100%;
-  object-fit:cover;
+
+.hero-carousel .c-img{
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  background: #0b0f14;
 }
-.c-caption{
-  position:absolute;
-  bottom:0;
-  left:0;
-  right:0;
-  padding:40px;
-  background:linear-gradient(to top,rgba(0,0,0,0.7),transparent);
-  color:#fff;
+
+.hero-carousel .c-caption{
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
 }
-.c-caption h2{
-  margin:0 0 8px;
-  font-size:28px;
-  font-weight:900;
+
+.hero-carousel .c-nav{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0,0,0,.28);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 5;
+  backdrop-filter: blur(6px);
 }
-.c-caption p{
-  margin:0;
-  font-size:16px;
-  opacity:0.9;
+
+.hero-carousel .c-nav svg{
+  width: 22px;
+  height: 22px;
 }
-.c-nav{
-  position:absolute;
-  top:50%;
-  transform:translateY(-50%);
-  width:48px;
-  height:48px;
-  background:rgba(255,255,255,0.7);
-  border:none;
-  border-radius:50%;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:#111;
-  z-index:10;
-  transition:all 0.3s ease;
+
+.hero-carousel .c-nav.prev{
+  left: 12px;
 }
-.c-nav:hover{
-  background:rgba(255,255,255,0.9);
-  transform:translateY(-50%) scale(1.1);
+
+.hero-carousel .c-nav.next{
+  right: 12px;
 }
-.c-nav svg{
-  width:24px;
-  height:24px;
+
+.hero-carousel .c-nav:focus{
+  outline: 3px solid rgba(59,130,246,.45);
+  outline-offset: 2px;
 }
-.c-nav.prev{
-  left:20px;
+
+.hero-carousel .c-dots{
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 6;
 }
-.c-nav.next{
-  right:20px;
+
+.hero-carousel .c-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.55);
+  background: rgba(255,255,255,.22);
+  cursor: pointer;
+  padding: 0;
 }
-.c-dots{
-  position:absolute;
-  bottom:20px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:10px;
-  z-index:10;
+
+.hero-carousel .c-dot[aria-selected="true"]{
+  width: 24px;
+  background: rgba(255,255,255,.9);
+  border-color: rgba(255,255,255,.9);
 }
-.c-dot{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.5);
-  border:none;
-  cursor:pointer;
-  transition:all 0.3s ease;
-}
-.c-dot[aria-selected="true"]{
-  background:#fff;
-  width:28px;
-  border-radius:5px;
-}
-.c-dot:hover{
-  background:rgba(255,255,255,0.8);
-}
-@media(max-width:768px){
-  .c-link{ height:300px; }
-  .c-caption{ padding:24px; }
-  .c-caption h2{ font-size:20px; }
-  .c-caption p{ font-size:14px; }
-  .c-nav{ width:40px; height:40px; }
-  .c-nav svg{ width:20px; height:20px; }
+
+@media (max-width: 680px){
+  .hero-carousel .c-inner{
+    border-radius: 16px;
+  }
+  .hero-carousel .c-nav{
+    width: 40px;
+    height: 40px;
+  }
+  .hero-carousel .c-slide{
+    aspect-ratio: 16 / 9;
+  }
 }
 </style>
 </head>
