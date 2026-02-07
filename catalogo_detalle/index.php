@@ -741,41 +741,41 @@ foreach($all as $p){
     <div class="c-track" aria-live="polite" style="transform: translate3d(-200%, 0px, 0px);">
 
       <article class="c-slide" aria-hidden="true">
-        <a class="c-link" href="?ref=I0001" aria-label="Ir a Plantines destacados">
-          <img class="c-img" src="assets/img/slide1.png" alt="Plantines de calidad superior, belleza y color para tu jardín" width="1600" height="600" loading="eager" fetchpriority="high" decoding="async">
+        <a class="c-link" href="https://clientes.roelplant.cl/catalogo_detalle/?ref=E1004" aria-label="Ir a Plantines de Veronica Brillantísima">
+          <img class="c-img" src="assets/img/brillantisima.png" alt="Plantines de Veronica Brillantísima, belleza y color para tu jardín" width="1600" height="600" loading="eager" fetchpriority="high" decoding="async">
           <div class="c-caption">
-            <h2>Plantines de Calidad</h2>
+            <h2>Plantines de Veronica Brillantísima</h2>
             <p>Belleza y color en tu jardín</p>
           </div>
         </a>
       </article>
 
       <article class="c-slide" aria-hidden="true">
-        <a class="c-link" href="?ref=I0002" aria-label="Ir a Plantines seleccionados">
-          <img class="c-img" src="assets/img/slide2.png" alt="Plantines exuberantes y resistentes" width="1600" height="600" loading="lazy" decoding="async">
+        <a class="c-link" href="?ref=E0002" aria-label="Ir a Plantines Veronica buxifolia">
+          <img class="c-img" src="assets/img/veronica_buxifolia.png" alt="Plantines de Veronica buxifolia, exuberante y resistente" width="1600" height="600" loading="lazy" decoding="async">
           <div class="c-caption">
-            <h2>Plantines Seleccionados</h2>
+            <h2>Plantines Veronica buxifolia</h2>
             <p>Exuberante y resistente</p>
           </div>
         </a>
       </article>
 
       <article class="c-slide" aria-hidden="false">
-        <a class="c-link" href="#interior" aria-label="Ir a nuestro catálogo de detalle">
-          <img class="c-img" src="assets/img/slide3.png" alt="Catálogo de detalle, variedades disponibles" width="1600" height="600" loading="lazy" decoding="async">
+        <a class="c-link" href="https://clientes.roelplant.cl/catalogo_detalle/" aria-label="Ir a Plantines al detalle desde 5 unidades">
+          <img class="c-img" src="assets/img/plantines_por_mayor.png" alt="Plantines al detalle desde 5 unidades" width="1600" height="600" loading="lazy" decoding="async">
           <div class="c-caption">
-            <h2>Catálogo de Detalle</h2>
-            <p>Encuentra lo que buscas</p>
+            <h2>Plantines al por mayor</h2>
+            <p>Sobre 200 unidades</p>
           </div>
         </a>
       </article>
 
       <article class="c-slide" aria-hidden="true">
-        <a class="c-link" href="../catalogo_mayorista/" target="_blank" rel="noopener" aria-label="Ir al catálogo mayorista">
-          <img class="c-img" src="assets/img/slide4.png" alt="Catálogo mayorista con mejores precios por volumen" width="1600" height="600" loading="lazy" decoding="async">
+        <a class="c-link" href="https://clientes.roelplant.cl/catalogo_detalle/" target="_blank" rel="noopener" aria-label="Ir a Producción a medida: regístrate y solicita una producción">
+          <img class="c-img" src="assets/img/pedidos_produccion.png" alt="Haz tu producción con nosotros: regístrate y solicita una producción a medida" width="1600" height="600" loading="lazy" decoding="async">
           <div class="c-caption">
-            <h2>Catálogo Mayorista</h2>
-            <p>Mejores precios por volumen</p>
+            <h2>Haz tu producción con nosotros</h2>
+            <p>Regístrate y solicita una producción a medida</p>
           </div>
         </a>
       </article>
