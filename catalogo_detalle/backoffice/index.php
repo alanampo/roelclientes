@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($tab === 'clientes') {
-  $sql = "SELECT id_cliente, rut, nombre, mail, telefono, region, comuna
+  $sql = "SELECT id_cliente, rut, nombre, mail, telefono, region, comuna, created_at
           FROM clientes
           WHERE (?='' OR nombre LIKE ? OR mail LIKE ? OR rut LIKE ?)
           ORDER BY id_cliente DESC
@@ -261,14 +261,14 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
               <tbody>
               <?php foreach ($clientes as $c): ?>
                 <tr>
-                  <td><a href="index.php?tab=clientes&q=<?=bo_h((string)$c['rut'])?>"><?=bo_h((string)$c['id'])?></a></td>
+                  <td><a href="index.php?tab=clientes&q=<?=bo_h((string)$c['rut'])?>"><?=bo_h((string)$c['id_cliente'])?></a></td>
                   <td><?=bo_h((string)$c['rut'])?></td>
                   <td><?=bo_h((string)$c['nombre'])?></td>
-                  <td><?=bo_h((string)$c['email'])?></td>
+                  <td><?=bo_h((string)$c['mail'])?></td>
                   <td><?=bo_h((string)$c['telefono'])?></td>
                   <td><?=bo_h((string)$c['region'])?></td>
                   <td><?=bo_h((string)$c['comuna'])?></td>
-                  <td><?=bo_h((string)$c['created_at'])?></td>
+                  <td><?=!empty($c['created_at']) ? bo_h((string)$c['created_at']) : '-'?></td>
                 </tr>
               <?php endforeach; ?>
               </tbody>
