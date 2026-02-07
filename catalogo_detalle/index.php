@@ -583,6 +583,130 @@ foreach($all as $p){
 .fab-ig:hover{
   transform:scale(1.1);
 }
+
+/* ====== CARRUSEL HERO ====== */
+.hero-carousel{
+  position:relative;
+  width:100%;
+  max-width:1200px;
+  margin:0 auto 40px;
+  overflow:hidden;
+  border-radius:12px;
+}
+.c-inner{
+  position:relative;
+  width:100%;
+  background:#f0f0f0;
+  outline:none;
+}
+.c-track{
+  display:flex;
+  transition:transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.c-slide{
+  flex:0 0 100%;
+  position:relative;
+  width:100%;
+}
+.c-link{
+  display:block;
+  position:relative;
+  width:100%;
+  height:400px;
+  overflow:hidden;
+  text-decoration:none;
+  color:#fff;
+}
+.c-img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.c-caption{
+  position:absolute;
+  bottom:0;
+  left:0;
+  right:0;
+  padding:40px;
+  background:linear-gradient(to top,rgba(0,0,0,0.7),transparent);
+  color:#fff;
+}
+.c-caption h2{
+  margin:0 0 8px;
+  font-size:28px;
+  font-weight:900;
+}
+.c-caption p{
+  margin:0;
+  font-size:16px;
+  opacity:0.9;
+}
+.c-nav{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  width:48px;
+  height:48px;
+  background:rgba(255,255,255,0.7);
+  border:none;
+  border-radius:50%;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#111;
+  z-index:10;
+  transition:all 0.3s ease;
+}
+.c-nav:hover{
+  background:rgba(255,255,255,0.9);
+  transform:translateY(-50%) scale(1.1);
+}
+.c-nav svg{
+  width:24px;
+  height:24px;
+}
+.c-nav.prev{
+  left:20px;
+}
+.c-nav.next{
+  right:20px;
+}
+.c-dots{
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:10px;
+  z-index:10;
+}
+.c-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.5);
+  border:none;
+  cursor:pointer;
+  transition:all 0.3s ease;
+}
+.c-dot[aria-selected="true"]{
+  background:#fff;
+  width:28px;
+  border-radius:5px;
+}
+.c-dot:hover{
+  background:rgba(255,255,255,0.8);
+}
+@media(max-width:768px){
+  .c-link{ height:300px; }
+  .c-caption{ padding:24px; }
+  .c-caption h2{ font-size:20px; }
+  .c-caption p{ font-size:14px; }
+  .c-nav{ width:40px; height:40px; }
+  .c-nav svg{ width:20px; height:20px; }
+}
 </style>
 </head>
 <body>
@@ -610,6 +734,69 @@ foreach($all as $p){
     <button class="btn-top danger" id="btnLogout" type="button" style="display:none" onclick="doLogout()">Salir</button>
   </div>
 </div>
+
+<!-- Carrusel Hero -->
+<section class="hero-carousel" aria-label="Carrusel de destacados Roelplant">
+  <div class="c-inner" data-carousel="" tabindex="0" aria-roledescription="carousel" data-interval="5200">
+    <div class="c-track" aria-live="polite" style="transform: translate3d(-200%, 0px, 0px);">
+
+      <article class="c-slide" aria-hidden="true">
+        <a class="c-link" href="?ref=I0001" aria-label="Ir a Plantines destacados">
+          <img class="c-img" src="assets/img/slide1.png" alt="Plantines de calidad superior, belleza y color para tu jardín" width="1600" height="600" loading="eager" fetchpriority="high" decoding="async">
+          <div class="c-caption">
+            <h2>Plantines de Calidad</h2>
+            <p>Belleza y color en tu jardín</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="c-slide" aria-hidden="true">
+        <a class="c-link" href="?ref=I0002" aria-label="Ir a Plantines seleccionados">
+          <img class="c-img" src="assets/img/slide2.png" alt="Plantines exuberantes y resistentes" width="1600" height="600" loading="lazy" decoding="async">
+          <div class="c-caption">
+            <h2>Plantines Seleccionados</h2>
+            <p>Exuberante y resistente</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="c-slide" aria-hidden="false">
+        <a class="c-link" href="#interior" aria-label="Ir a nuestro catálogo de detalle">
+          <img class="c-img" src="assets/img/slide3.png" alt="Catálogo de detalle, variedades disponibles" width="1600" height="600" loading="lazy" decoding="async">
+          <div class="c-caption">
+            <h2>Catálogo de Detalle</h2>
+            <p>Encuentra lo que buscas</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="c-slide" aria-hidden="true">
+        <a class="c-link" href="../catalogo_mayorista/" target="_blank" rel="noopener" aria-label="Ir al catálogo mayorista">
+          <img class="c-img" src="assets/img/slide4.png" alt="Catálogo mayorista con mejores precios por volumen" width="1600" height="600" loading="lazy" decoding="async">
+          <div class="c-caption">
+            <h2>Catálogo Mayorista</h2>
+            <p>Mejores precios por volumen</p>
+          </div>
+        </a>
+      </article>
+
+    </div>
+
+    <button class="c-nav prev" type="button" aria-label="Anterior">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M15.5 19.5 8 12l7.5-7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    </button>
+
+    <button class="c-nav next" type="button" aria-label="Siguiente">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8.5 4.5 16 12l-7.5 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+    </button>
+
+    <div class="c-dots" role="tablist" aria-label="Seleccionar slide"><button type="button" class="c-dot" role="tab" aria-label="Ir al slide 1" aria-selected="false"></button><button type="button" class="c-dot" role="tab" aria-label="Ir al slide 2" aria-selected="false"></button><button type="button" class="c-dot" role="tab" aria-label="Ir al slide 3" aria-selected="true"></button><button type="button" class="c-dot" role="tab" aria-label="Ir al slide 4" aria-selected="false"></button></div>
+  </div>
+</section>
 
 <h1>Catálogo Al detalle Roelplant</h1>
 
@@ -899,6 +1086,62 @@ $secciones=[
       }catch(e){}
     }
   }
+})();
+
+// ====== CARRUSEL ======
+(function(){
+  const carouselEl = document.querySelector('[data-carousel]');
+  if (!carouselEl) return;
+
+  const track = carouselEl.querySelector('.c-track');
+  const slides = carouselEl.querySelectorAll('.c-slide');
+  const dots = carouselEl.querySelectorAll('.c-dot');
+  const prevBtn = carouselEl.querySelector('.c-nav.prev');
+  const nextBtn = carouselEl.querySelector('.c-nav.next');
+
+  let current = 2; // Empieza en el slide 3 (índice 2)
+  const total = slides.length;
+  let autoplayTimer = null;
+
+  function updateCarousel() {
+    const offset = -current * 100;
+    track.style.transform = `translate3d(${offset}%, 0, 0)`;
+
+    slides.forEach((s, i) => {
+      s.setAttribute('aria-hidden', i === current ? 'false' : 'true');
+    });
+
+    dots.forEach((d, i) => {
+      d.setAttribute('aria-selected', i === current ? 'true' : 'false');
+    });
+  }
+
+  function go(n) {
+    current = (n + total) % total;
+    updateCarousel();
+    resetAutoplay();
+  }
+
+  function resetAutoplay() {
+    clearTimeout(autoplayTimer);
+    const interval = parseInt(carouselEl.getAttribute('data-interval') || 5000);
+    autoplayTimer = setTimeout(() => go(current + 1), interval);
+  }
+
+  prevBtn?.addEventListener('click', () => go(current - 1));
+  nextBtn?.addEventListener('click', () => go(current + 1));
+
+  dots.forEach((dot, i) => {
+    dot.addEventListener('click', () => go(i));
+  });
+
+  carouselEl.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') go(current - 1);
+    if (e.key === 'ArrowRight') go(current + 1);
+  });
+
+  updateCarousel();
+  resetAutoplay();
 })();
 </script>
 
