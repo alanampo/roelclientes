@@ -557,6 +557,7 @@ foreach($all as $p){
   </form>
 
   <div class="actions">
+    <a class="btn-top" href="../catalogo_mayorista/">Ir al Catálogo Mayorista</a>
     <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
       Carrito <span class="badge" id="cartCount">0</span>
     </button>
