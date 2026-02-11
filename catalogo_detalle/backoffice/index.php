@@ -137,7 +137,14 @@ if ($tab === 'pedidos') {
                  c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
           FROM reservas r
           LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
-          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ? OR r.payment_status LIKE ?)
+          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ? OR
+            LOWER(CASE
+              WHEN r.payment_status='pending' THEN 'Pendiente'
+              WHEN r.payment_status='paid' THEN 'Pago aceptado'
+              WHEN r.payment_status='failed' THEN 'Rechazado'
+              WHEN r.payment_status='refunded' THEN 'Reembolsado'
+              ELSE r.payment_status
+            END) LIKE LOWER(?))
           ORDER BY r.id DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
