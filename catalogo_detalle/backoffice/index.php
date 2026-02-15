@@ -134,20 +134,33 @@ if ($tab === 'clientes') {
 }
 
 if ($tab === 'pedidos') {
+  // Si el estado es "cancelada", "entregada" o "en-proceso", no filtramos por payment_status en SQL
+  // (se filtran después en PHP basándose en reservas_productos.estado)
+  $filterByPaymentStatus = ($status === '' || !in_array($status, ['cancelada', 'entregada', 'en-proceso']));
+
   $sql = "SELECT r.id, r.id_cliente, r.payment_status AS status, r.subtotal_clp, r.shipping_cost_clp, r.total_clp, r.created_at,
                  c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
           FROM reservas r
           LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
-          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ?)
-          AND (?='' OR r.payment_status=?)
-          ORDER BY r.id DESC
-          LIMIT 200";
+          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ?)";
+
+  if ($filterByPaymentStatus) {
+    $sql .= " AND (?='' OR r.payment_status=?)";
+  }
+
+  $sql .= " ORDER BY r.id DESC LIMIT 500";
+
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
   $qq = $q;
   $lk = like($q);
-  $ss = $status;
-  mysqli_stmt_bind_param($st, 'sssssss', $qq, $lk, $lk, $lk, $lk, $ss, $ss);
+
+  if ($filterByPaymentStatus) {
+    $ss = $status;
+    mysqli_stmt_bind_param($st, 'sssssss', $qq, $lk, $lk, $lk, $lk, $ss, $ss);
+  } else {
+    mysqli_stmt_bind_param($st, 'sssss', $qq, $lk, $lk, $lk, $lk);
+  }
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
   while ($r = $rs->fetch_assoc()) {
