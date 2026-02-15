@@ -8,6 +8,7 @@ $db = bo_db();
 
 $tab = $_GET['tab'] ?? 'kpis';
 $q   = trim((string)($_GET['q'] ?? ''));
+$status = trim((string)($_GET['status'] ?? ''));
 
 // Ver detalle
 $viewOrderId = (int)($_GET['order_id'] ?? 0);
@@ -137,21 +138,16 @@ if ($tab === 'pedidos') {
                  c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
           FROM reservas r
           LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
-          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ? OR
-            LOWER(CASE
-              WHEN r.payment_status='pending' THEN 'Pendiente'
-              WHEN r.payment_status='paid' THEN 'Pago aceptado'
-              WHEN r.payment_status='failed' THEN 'Rechazado'
-              WHEN r.payment_status='refunded' THEN 'Reembolsado'
-              ELSE r.payment_status
-            END) LIKE LOWER(?))
+          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ?)
+          AND (?='' OR r.payment_status=?)
           ORDER BY r.id DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
   $qq = $q;
   $lk = like($q);
-  mysqli_stmt_bind_param($st, 'ssssss', $qq, $lk, $lk, $lk, $lk, $lk);
+  $ss = $status;
+  mysqli_stmt_bind_param($st, 'sssssss', $qq, $lk, $lk, $lk, $lk, $ss, $ss);
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
   while ($r = $rs->fetch_assoc()) {
@@ -171,17 +167,37 @@ if ($tab === 'pedidos') {
 
       // Determinar estado final basado en productos
       if (!empty($states)) {
-        $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+        $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
+        $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
         $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
 
-        if ($allCancelled) {
+        if ($hasCancelled) {
           $r['status'] = 'CANCELADA';
+        } elseif ($hasInProcess) {
+          $r['status'] = 'En proceso';
         } elseif ($allDelivered) {
           $r['status'] = 'ENTREGADA';
         }
       }
     }
-    $reservas[] = $r;
+
+    // Aplicar filtro por estado si está seleccionado
+    $shouldInclude = true;
+    if ($status !== '') {
+      if ($status === 'cancelada' && $r['status'] !== 'CANCELADA') {
+        $shouldInclude = false;
+      } elseif ($status === 'entregada' && $r['status'] !== 'ENTREGADA') {
+        $shouldInclude = false;
+      } elseif ($status === 'en-proceso' && $r['status'] !== 'En proceso') {
+        $shouldInclude = false;
+      } elseif (in_array($status, ['pending', 'paid', 'failed', 'refunded']) && $r['status'] !== $status) {
+        $shouldInclude = false;
+      }
+    }
+
+    if ($shouldInclude) {
+      $reservas[] = $r;
+    }
   }
   mysqli_stmt_close($st);
 }
@@ -244,6 +260,18 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
           <form method="get" class="row">
             <input type="hidden" name="tab" value="<?=bo_h($tab)?>">
             <input class="inp" style="min-width:260px" name="q" value="<?=bo_h($q)?>" placeholder="Buscar…">
+            <?php if ($tab === 'pedidos'): ?>
+              <select class="inp" style="max-width:180px" name="status">
+                <option value="">Todos los estados</option>
+                <option value="pending" <?= $status==='pending'?'selected':'' ?>>Pendiente</option>
+                <option value="paid" <?= $status==='paid'?'selected':'' ?>>Pago aceptado</option>
+                <option value="failed" <?= $status==='failed'?'selected':'' ?>>Rechazado</option>
+                <option value="refunded" <?= $status==='refunded'?'selected':'' ?>>Reembolsado</option>
+                <option value="en-proceso" <?= $status==='en-proceso'?'selected':'' ?>>En proceso</option>
+                <option value="entregada" <?= $status==='entregada'?'selected':'' ?>>Entregada</option>
+                <option value="cancelada" <?= $status==='cancelada'?'selected':'' ?>>Cancelada</option>
+              </select>
+            <?php endif; ?>
             <button class="btn" type="submit">Filtrar</button>
           </form>
         </div>
@@ -314,11 +342,14 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
 
                     // Determinar estado final basado en productos
                     if (!empty($states)) {
-                      $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+                      $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
+                      $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
                       $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
 
-                      if ($allCancelled) {
+                      if ($hasCancelled) {
                         $displayOrderStatus = 'CANCELADA';
+                      } elseif ($hasInProcess) {
+                        $displayOrderStatus = 'En proceso';
                       } elseif ($allDelivered) {
                         $displayOrderStatus = 'ENTREGADA';
                       }

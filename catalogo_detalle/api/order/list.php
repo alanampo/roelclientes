@@ -95,11 +95,14 @@ while($r = $res->fetch_assoc()){
 
     // Determinar estado final basado en productos
     if (!empty($states)) {
-      $allCancelled = count(array_filter($states, fn($s) => $s === -1)) === count($states);
+      $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
+      $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
       $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
 
-      if ($allCancelled) {
+      if ($hasCancelled) {
         $finalStatus = 'CANCELADA';
+      } elseif ($hasInProcess) {
+        $finalStatus = 'En proceso';
       } elseif ($allDelivered) {
         $finalStatus = 'ENTREGADA';
       }
