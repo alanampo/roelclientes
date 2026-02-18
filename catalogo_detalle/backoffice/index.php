@@ -165,8 +165,12 @@ if ($tab === 'pedidos') {
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
   while ($r = $rs->fetch_assoc()) {
-    // Verificar estado de los productos de la reserva
-    $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
+    // Verificar estado y calcular total desde productos
+    $stateQuery = "SELECT rp.estado, SUM(rp.cantidad * COALESCE(v.precio_detalle, v.precio, 0)) AS grupo_total
+                   FROM reservas_productos rp
+                   LEFT JOIN variedades_producto v ON v.id = rp.id_variedad
+                   WHERE rp.id_reserva = ?
+                   GROUP BY rp.estado";
     $stState = mysqli_prepare($db, $stateQuery);
     if ($stState) {
       $reservaId = (int)$r['id'];
@@ -174,10 +178,19 @@ if ($tab === 'pedidos') {
       mysqli_stmt_execute($stState);
       $stateResult = mysqli_stmt_get_result($stState);
       $states = [];
+      $itemsTotal = 0.0;
       while ($stateRow = mysqli_fetch_assoc($stateResult)) {
         $states[] = (int)$stateRow['estado'];
+        $itemsTotal += (float)$stateRow['grupo_total'];
       }
       mysqli_stmt_close($stState);
+
+      // Si la reserva no tiene totales (manual/no-webpay), calcular desde productos
+      if ((int)$r['subtotal_clp'] === 0 && (int)$r['total_clp'] === 0 && $itemsTotal > 0) {
+        $ivaM = get_iva_multiplier();
+        $r['subtotal_clp'] = (int)round($itemsTotal * $ivaM);
+        $r['total_clp']    = (int)round($itemsTotal * $ivaM);
+      }
 
       // Determinar estado final basado en productos
       if (!empty($states)) {
