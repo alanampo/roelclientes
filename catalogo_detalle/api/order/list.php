@@ -75,6 +75,17 @@ $st->execute();
 $res = $st->get_result();
 $rows = [];
 
+$erpLabels = [
+  -1=>'CANCELADA', 0=>'PAGO ACEPTADO', 1=>'EN PROCESO', 2=>'ENTREGADA',
+  3=>'REVISAR STOCK', 4=>'LISTO PARA PICKING', 5=>'LISTO PARA PACKING',
+  6=>'EN TRANSPORTE', 100=>'EN ESPERA PAGO PAYPAL/FLOW', 101=>'EN ESPERA PAGO CHEQUE',
+  102=>'EN ESPERA PAGO TRANSF.', 103=>'EN ESPERA VALID. CONTRA REEMBOLSO',
+  104=>'ENTREGA REPROGRAMADA', 105=>'ENVIADO', 106=>'ERROR EN PAGO',
+  107=>'INTENTO ENTREGA FALLIDO', 108=>'ORDEN DE WHATSAPP', 109=>'PAGO REMOTO ACEPTADO',
+  110=>'PENDIENTE POR FALTA STOCK (NO PAGADO)', 111=>'PENDIENTE POR FALTA STOCK (PAGADO)',
+  112=>'PENDING PAYMENT', 113=>'REEMBOLSADO',
+];
+
 while($r = $res->fetch_assoc()){
   $reservaId = (int)$r['id'];
 
@@ -93,18 +104,18 @@ while($r = $res->fetch_assoc()){
     }
     $stState->close();
 
-    // Determinar estado final basado en productos
+    // Determinar estado ERP efectivo desde los productos
     if (!empty($states)) {
-      $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
-      $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
-      $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
-
-      if ($hasCancelled) {
-        $finalStatus = 'CANCELADA';
-      } elseif ($hasInProcess) {
-        $finalStatus = 'En proceso';
-      } elseif ($allDelivered) {
-        $finalStatus = 'ENTREGADA';
+      if (in_array(-1, $states, true)) {
+        $finalStatus = -1;
+      } else {
+        $nonCancelled = array_filter($states, fn($s) => $s !== -1);
+        if (!empty($nonCancelled) && count(array_filter($nonCancelled, fn($s) => $s === 2)) === count($nonCancelled)) {
+          $finalStatus = 2;
+        } else {
+          $pending = array_values(array_filter($states, fn($s) => $s !== -1 && $s !== 2));
+          $finalStatus = empty($pending) ? 2 : (int)min($pending);
+        }
       }
     }
   }
@@ -112,7 +123,7 @@ while($r = $res->fetch_assoc()){
   // Determinar label de estado de pago (solo si no hay override)
   $paymentStatus = (string)($r['payment_status'] ?? 'pending');
   if ($finalStatus !== null) {
-    $paymentLabel = $finalStatus;
+    $paymentLabel = $erpLabels[$finalStatus] ?? 'NO DEFINIDO';
   } else {
     $paymentLabel = [
       'pending' => 'Pendiente de pago',
@@ -139,6 +150,7 @@ while($r = $res->fetch_assoc()){
     'id' => (int)$r['id'],
     'order_code' => 'RP-' . str_pad((string)$r['id'], 6, '0', STR_PAD_LEFT), // Generar código basado en ID
     'status' => $paymentLabel,
+    'erp_estado' => $finalStatus,
     'payment_status' => $paymentStatus,
     'payment_method' => (string)($r['payment_method'] ?? ''),
     'subtotal_clp' => (int)($r['subtotal_clp'] ?? 0),

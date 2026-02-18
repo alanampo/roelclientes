@@ -80,6 +80,17 @@ if (!$o) {
   unauthorized('Reserva no encontrada');
 }
 
+$erpLabels = [
+  -1=>'CANCELADA', 0=>'PAGO ACEPTADO', 1=>'EN PROCESO', 2=>'ENTREGADA',
+  3=>'REVISAR STOCK', 4=>'LISTO PARA PICKING', 5=>'LISTO PARA PACKING',
+  6=>'EN TRANSPORTE', 100=>'EN ESPERA PAGO PAYPAL/FLOW', 101=>'EN ESPERA PAGO CHEQUE',
+  102=>'EN ESPERA PAGO TRANSF.', 103=>'EN ESPERA VALID. CONTRA REEMBOLSO',
+  104=>'ENTREGA REPROGRAMADA', 105=>'ENVIADO', 106=>'ERROR EN PAGO',
+  107=>'INTENTO ENTREGA FALLIDO', 108=>'ORDEN DE WHATSAPP', 109=>'PAGO REMOTO ACEPTADO',
+  110=>'PENDIENTE POR FALTA STOCK (NO PAGADO)', 111=>'PENDIENTE POR FALTA STOCK (PAGADO)',
+  112=>'PENDING PAYMENT', 113=>'REEMBOLSADO',
+];
+
 // Determinar label de estado de pago y estado del envío
 $paymentStatus = (string)($o['payment_status'] ?? 'pending');
 $paymentLabel = [
@@ -89,10 +100,10 @@ $paymentLabel = [
   'refunded' => 'Reembolsado'
 ][$paymentStatus] ?? $paymentStatus;
 
-// Verificar estado de los productos de la reserva
+// Verificar estado ERP de los productos de la reserva
 $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
 $stState = $dbStock->prepare($stateQuery);
-$finalStatus = null;
+$erpEstado = null;
 
 if ($stState) {
   $stState->bind_param('i', $id);
@@ -104,25 +115,25 @@ if ($stState) {
   }
   $stState->close();
 
-  // Determinar estado final basado en productos
+  // Determinar estado ERP efectivo desde los productos
   if (!empty($states)) {
-    $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
-    $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
-    $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
-
-    if ($hasCancelled) {
-      $finalStatus = 'CANCELADA';
-    } elseif ($hasInProcess) {
-      $finalStatus = 'En proceso';
-    } elseif ($allDelivered) {
-      $finalStatus = 'ENTREGADA';
+    if (in_array(-1, $states, true)) {
+      $erpEstado = -1;
+    } else {
+      $nonCancelled = array_filter($states, fn($s) => $s !== -1);
+      if (!empty($nonCancelled) && count(array_filter($nonCancelled, fn($s) => $s === 2)) === count($nonCancelled)) {
+        $erpEstado = 2;
+      } else {
+        $pending = array_values(array_filter($states, fn($s) => $s !== -1 && $s !== 2));
+        $erpEstado = empty($pending) ? 2 : (int)min($pending);
+      }
     }
   }
 }
 
-// Si hay estado final basado en productos, usarlo
-if ($finalStatus !== null) {
-  $paymentLabel = $finalStatus;
+// Si hay estado ERP, usarlo como label
+if ($erpEstado !== null) {
+  $paymentLabel = $erpLabels[$erpEstado] ?? 'NO DEFINIDO';
 }
 
 // Determinar label de método de envío
@@ -202,6 +213,7 @@ json_out([
     'id' => (int)$o['id'],
     'order_code' => 'RP-' . str_pad((string)$o['id'], 6, '0', STR_PAD_LEFT),
     'status' => $paymentLabel,
+    'erp_estado' => $erpEstado,
     'payment_status' => $paymentStatus,
     'payment_method' => (string)($o['payment_method'] ?? ''),
     'subtotal_clp' => (int)($o['subtotal_clp'] ?? 0),

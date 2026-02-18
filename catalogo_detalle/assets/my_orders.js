@@ -22,21 +22,29 @@
     return j;
   }
 
+  const ERP_COLORS = {
+    '-1': '#FA5858', '0': '#D8D8D8', '1': '#FFFF00', '2': '#A9F5BC',
+    '3': '#A9D0F5', '4': '#E0B0FF', '5': '#F5BCA9', '6': '#F5E0A9',
+    '100': '#EAEAEA', '101': '#EAEAEA', '102': '#EAEAEA', '103': '#EAEAEA',
+    '104': '#EAEAEA', '105': '#EAEAEA', '106': '#EAEAEA', '107': '#EAEAEA',
+    '108': '#EAEAEA', '109': '#EAEAEA', '110': '#EAEAEA', '111': '#EAEAEA',
+    '112': '#EAEAEA', '113': '#EAEAEA',
+  };
+
   function orderCard(o){
     const el = document.createElement('div');
     el.className = 'order-card';
     const code = o.order_code ? ('<span class="badge">'+escapeHtml(o.order_code)+'</span>') : '';
 
-    // Badge de estado de pago con color
-    const paymentStatus = o.payment_status || 'pending';
-    const badgeColors = {
-      'paid': 'background:#d4edda;color:#155724',
-      'pending': 'background:#fff3cd;color:#856404',
-      'failed': 'background:#f8d7da;color:#721c24',
-      'refunded': 'background:#e2e3e5;color:#383d41'
-    };
-    const badgeStyle = badgeColors[paymentStatus] || badgeColors.pending;
-    const statusBadge = `<span class="badge" style="${badgeStyle}">${escapeHtml(o.status || 'Pendiente')}</span>`;
+    // Badge de estado con colores ERP
+    let badgeBg;
+    if (o.erp_estado != null) {
+      badgeBg = ERP_COLORS[String(o.erp_estado)] || '#EAEAEA';
+    } else {
+      const fallback = {'paid':'#d4edda','pending':'#fff3cd','failed':'#f8d7da','refunded':'#e2e3e5'};
+      badgeBg = fallback[o.payment_status] || fallback.pending;
+    }
+    const statusBadge = `<span class="badge" style="background:${badgeBg};color:#111">${escapeHtml(o.status || 'Pendiente')}</span>`;
 
     // Label de envío
     const shippingLabel = o.shipping_label ? `<div class="muted2" style="margin-top:4px"><small>📦 ${escapeHtml(o.shipping_label)}</small></div>` : '';
