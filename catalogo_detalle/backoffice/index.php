@@ -64,6 +64,52 @@ function bo_payment_status_color(string $status): string {
   return '#fbbf24'; // pending y otros
 }
 
+/**
+ * Información de display para estados ERP de reservas_productos.estado
+ */
+function erp_estado_info(int $estado): array {
+  $map = [
+    -1  => ['label' => 'CANCELADA',                             'color' => '#FA5858'],
+    0   => ['label' => 'PAGO ACEPTADO',                         'color' => '#D8D8D8'],
+    1   => ['label' => 'EN PROCESO',                            'color' => '#FFFF00'],
+    2   => ['label' => 'ENTREGADA',                             'color' => '#A9F5BC'],
+    3   => ['label' => 'REVISAR STOCK',                         'color' => '#A9D0F5'],
+    4   => ['label' => 'LISTO PARA PICKING',                    'color' => '#E0B0FF'],
+    5   => ['label' => 'LISTO PARA PACKING',                    'color' => '#F5BCA9'],
+    6   => ['label' => 'EN TRANSPORTE',                         'color' => '#F5E0A9'],
+    100 => ['label' => 'EN ESPERA PAGO PAYPAL/FLOW',            'color' => '#EAEAEA'],
+    101 => ['label' => 'EN ESPERA PAGO CHEQUE',                 'color' => '#EAEAEA'],
+    102 => ['label' => 'EN ESPERA PAGO TRANSF.',                'color' => '#EAEAEA'],
+    103 => ['label' => 'EN ESPERA VALID. CONTRA REEMBOLSO',     'color' => '#EAEAEA'],
+    104 => ['label' => 'ENTREGA REPROGRAMADA',                  'color' => '#EAEAEA'],
+    105 => ['label' => 'ENVIADO',                               'color' => '#EAEAEA'],
+    106 => ['label' => 'ERROR EN PAGO',                         'color' => '#EAEAEA'],
+    107 => ['label' => 'INTENTO ENTREGA FALLIDO',               'color' => '#EAEAEA'],
+    108 => ['label' => 'ORDEN DE WHATSAPP',                     'color' => '#EAEAEA'],
+    109 => ['label' => 'PAGO REMOTO ACEPTADO',                  'color' => '#EAEAEA'],
+    110 => ['label' => 'PENDIENTE POR FALTA STOCK (NO PAGADO)', 'color' => '#EAEAEA'],
+    111 => ['label' => 'PENDIENTE POR FALTA STOCK (PAGADO)',    'color' => '#EAEAEA'],
+    112 => ['label' => 'PENDING PAYMENT',                       'color' => '#EAEAEA'],
+    113 => ['label' => 'REEMBOLSADO',                           'color' => '#EAEAEA'],
+  ];
+  return $map[$estado] ?? ['label' => 'NO DEFINIDO', 'color' => '#A4A4A4'];
+}
+
+/**
+ * Determina el estado ERP efectivo de una reserva a partir de los estados de sus productos.
+ * Prioridad: si hay algún -1 → CANCELADA; si todos son 2 → ENTREGADA;
+ * si no, muestra el estado mínimo de los productos pendientes (el más atrasado).
+ */
+function erp_estados_efectivo(array $states): ?int {
+  if (empty($states)) return null;
+  if (in_array(-1, $states, true)) return -1;
+  $nonCancelled = array_filter($states, fn($s) => $s !== -1);
+  if (count(array_filter($nonCancelled, fn($s) => $s === 2)) === count($nonCancelled)) return 2;
+  $pending = array_values(array_filter($states, fn($s) => $s !== -1 && $s !== 2));
+  if (empty($pending)) return 2;
+  return (int)min($pending);
+}
+
 function like(string $q): string { return '%' . $q . '%'; }
 
 // KPIs rápidos
@@ -192,32 +238,24 @@ if ($tab === 'pedidos') {
         $r['total_clp']    = (int)round($itemsTotal * $ivaM);
       }
 
-      // Determinar estado final basado en productos
-      if (!empty($states)) {
-        $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
-        $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
-        $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
-
-        if ($hasCancelled) {
-          $r['status'] = 'CANCELADA';
-        } elseif ($hasInProcess) {
-          $r['status'] = 'En proceso';
-        } elseif ($allDelivered) {
-          $r['status'] = 'ENTREGADA';
-        }
+      // Determinar estado ERP efectivo desde los productos
+      $erpEstado = erp_estados_efectivo($states);
+      if ($erpEstado !== null) {
+        $r['erp_estado'] = $erpEstado;
       }
     }
 
     // Aplicar filtro por estado si está seleccionado
     $shouldInclude = true;
     if ($status !== '') {
-      if ($status === 'cancelada' && $r['status'] !== 'CANCELADA') {
+      $erpE = $r['erp_estado'] ?? null;
+      if ($status === 'cancelada' && $erpE !== -1) {
         $shouldInclude = false;
-      } elseif ($status === 'entregada' && $r['status'] !== 'ENTREGADA') {
+      } elseif ($status === 'entregada' && $erpE !== 2) {
         $shouldInclude = false;
-      } elseif ($status === 'en-proceso' && $r['status'] !== 'En proceso') {
+      } elseif ($status === 'en-proceso' && !in_array($erpE, [0, 1], true)) {
         $shouldInclude = false;
-      } elseif (in_array($status, ['pending', 'paid', 'failed', 'refunded']) && $r['status'] !== $status) {
+      } elseif (in_array($status, ['pending', 'paid', 'failed', 'refunded']) && ($r['status'] ?? '') !== $status) {
         $shouldInclude = false;
       }
     }
@@ -352,8 +390,9 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   mysqli_stmt_close($st);
                 } else { $od = null; }
 
-                // Verificar estado de los productos de la reserva
+                // Verificar estado ERP de los productos de la reserva
                 $displayOrderStatus = $od ? (string)$od['payment_status'] : '';
+                $displayErpEstado = null;
                 if ($od) {
                   $stateQuery = "SELECT DISTINCT estado FROM reservas_productos WHERE id_reserva = ?";
                   $stState = mysqli_prepare($db, $stateQuery);
@@ -367,19 +406,9 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                     }
                     mysqli_stmt_close($stState);
 
-                    // Determinar estado final basado en productos
-                    if (!empty($states)) {
-                      $hasCancelled = count(array_filter($states, fn($s) => $s === -1)) > 0;
-                      $hasInProcess = count(array_filter($states, fn($s) => $s === 0 || $s === 1)) > 0;
-                      $allDelivered = count(array_filter($states, fn($s) => $s === 2)) === count($states);
-
-                      if ($hasCancelled) {
-                        $displayOrderStatus = 'CANCELADA';
-                      } elseif ($hasInProcess) {
-                        $displayOrderStatus = 'En proceso';
-                      } elseif ($allDelivered) {
-                        $displayOrderStatus = 'ENTREGADA';
-                      }
+                    $displayErpEstado = erp_estados_efectivo($states);
+                    if ($displayErpEstado !== null) {
+                      $displayOrderStatus = erp_estado_info($displayErpEstado)['label'];
                     }
                   }
                 }
@@ -480,17 +509,21 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                         <div class="small muted">Información de pago</div>
                         <div style="font-weight:900"><?=bo_h((string)$od['payment_method'] ?: 'No especificado')?></div>
                         <?php
-                          $paymentStatusLabels = [
-                            'paid' => 'Pagado',
-                            'pending' => 'Pendiente de pago',
-                            'failed' => 'Fallido',
-                            'refunded' => 'Reembolsado'
-                          ];
-                          $statusLabel = ($displayOrderStatus === 'CANCELADA' || $displayOrderStatus === 'ENTREGADA')
-                            ? $displayOrderStatus
-                            : ($paymentStatusLabels[$displayOrderStatus] ?? $displayOrderStatus);
+                          if ($displayErpEstado !== null) {
+                            $erpDetailInfo = erp_estado_info($displayErpEstado);
+                            $statusLabel = $erpDetailInfo['label'];
+                            $statusBg    = $erpDetailInfo['color'];
+                          } else {
+                            $paymentStatusLabels = [
+                              'paid' => 'Pagado', 'pending' => 'Pendiente de pago',
+                              'failed' => 'Fallido', 'refunded' => 'Reembolsado'
+                            ];
+                            $statusLabel = $paymentStatusLabels[$displayOrderStatus] ?? $displayOrderStatus;
+                            $statusBg = $displayOrderStatus === 'paid' ? '#5fe5d0'
+                              : ($displayOrderStatus === 'failed' ? '#f87171' : '#fbbf24');
+                          }
                         ?>
-                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=$displayOrderStatus==='paid'?'#5fe5d0':($displayOrderStatus==='failed'?'#f87171':($displayOrderStatus==='CANCELADA'?'#ef4444':($displayOrderStatus==='ENTREGADA'?'#10b981':'#fbbf24')))?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h($statusLabel)?></span></div>
+                        <div class="muted" style="font-size:12px">Estado: <span style="color:#111;background:<?=bo_h($statusBg)?>;padding:2px 6px;border-radius:4px;font-weight:900"><?=bo_h($statusLabel)?></span></div>
 
                         <?php if ($od['payment_method'] === 'webpay' && $wpTx): ?>
                           <!-- Detalles de transacción Webpay desde webpay_transactions -->
@@ -702,9 +735,14 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                       <div class="muted" style="font-size:12px"><?=bo_h((string)$o['customer_telefono'])?></div>
                     </td>
                     <td>
-                      <span style="color:#111;background:<?=bo_payment_status_color((string)$o['status'])?>;padding:2px 8px;border-radius:4px;font-weight:900;font-size:11px;white-space:nowrap">
-                        <?=bo_h(bo_payment_status_label((string)$o['status']))?>
-                      </span>
+                      <?php
+                        if (isset($o['erp_estado'])) {
+                          $erpInfo = erp_estado_info((int)$o['erp_estado']);
+                          echo '<span style="color:#111;background:'.bo_h($erpInfo['color']).';padding:2px 8px;border-radius:4px;font-weight:900;font-size:11px;white-space:nowrap">'.bo_h($erpInfo['label']).'</span>';
+                        } else {
+                          echo '<span style="color:#111;background:'.bo_h(bo_payment_status_color((string)$o['status'])).';padding:2px 8px;border-radius:4px;font-weight:900;font-size:11px;white-space:nowrap">'.bo_h(bo_payment_status_label((string)$o['status'])).'</span>';
+                        }
+                      ?>
                     </td>
                     <td>$<?=number_format((int)$o['subtotal_clp'],0,',','.')?></td>
                     <td>$<?=number_format((int)$o['shipping_cost_clp'],0,',','.')?></td>
