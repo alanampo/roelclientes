@@ -117,10 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($tab === 'clientes') {
-  $sql = "SELECT id_cliente, rut, nombre, mail, telefono, region, comuna, created_at
-          FROM clientes
-          WHERE (?='' OR nombre LIKE ? OR mail LIKE ? OR rut LIKE ?)
-          ORDER BY id_cliente DESC
+  $sql = "SELECT c.id_cliente, c.rut, c.nombre, c.mail, c.telefono, c.region, c.comuna, com.nombre AS comuna_nombre, c.created_at
+          FROM clientes c
+          LEFT JOIN comunas com ON com.id = c.comuna
+          WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ?)
+          ORDER BY c.id_cliente DESC
           LIMIT 200";
   $st = mysqli_prepare($db, $sql);
   if (!$st) { throw new RuntimeException('SQL prepare error: '.mysqli_error($db)); }
@@ -315,7 +316,7 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
                   <td><?=bo_h((string)$c['mail'])?></td>
                   <td><?=bo_h((string)$c['telefono'])?></td>
                   <td><?=bo_h((string)$c['region'])?></td>
-                  <td><?=bo_h((string)$c['comuna'])?></td>
+                  <td><?=bo_h((string)($c['comuna_nombre'] ?: $c['comuna']))?></td>
                   <td><?=!empty($c['created_at']) ? bo_h((string)$c['created_at']) : '-'?></td>
                 </tr>
               <?php endforeach; ?>
