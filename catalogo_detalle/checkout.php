@@ -250,7 +250,7 @@ if ($logged) {
 
         <div class="footer-actions">
           <button id="btnMakeReservation" class="btn btn-success" type="button">Pagar</button>
-          <button id="btnCreateOrder" class="btn btn-primary" style="display: none;" type="button">Enviar pedido por WhatsApp</button>
+          <button id="btnCreateOrder" class="btn btn-primary" type="button">Enviar pedido por WhatsApp</button>
         </div>
 
         <div id="orderResult" class="muted hidden" style="margin-top:10px"></div>
