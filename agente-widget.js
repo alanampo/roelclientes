@@ -1,0 +1,1200 @@
+// agente-widget.js - Standalone widget que usa la autenticación del catálogo
+(async function initAgenteWidget() {
+  'use strict';
+
+  console.log('[AGENTE-WIDGET] Iniciando carga del módulo...');
+  const log = window.rpLog || console.log;
+
+  // ========== AUTHENTICATION (usa sesión del catálogo) ==========
+  const btnLogout = document.getElementById('btnLogout');
+  const btnProfile = document.getElementById('btnProfile');
+  const userDisplay = document.getElementById('userDisplay');
+
+  function getUser() {
+    return window.PHP_SESSION_USER && window.PHP_SESSION_USER.id ? window.PHP_SESSION_USER : null;
+  }
+
+  function updateUserDisplay() {
+    const user = getUser();
+    if (user && userDisplay) {
+      userDisplay.textContent = `${user.username || 'Usuario'}`;
+      if (btnProfile) btnProfile.style.display = 'inline-block';
+      if (btnLogout) btnLogout.style.display = 'inline-block';
+    } else {
+      if (userDisplay) userDisplay.textContent = '';
+      if (btnProfile) btnProfile.style.display = 'none';
+      if (btnLogout) btnLogout.style.display = 'none';
+    }
+  }
+
+  function logout() {
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+      window.location.href = '/endsession.php';
+    }
+  }
+
+  if (btnLogout) btnLogout.addEventListener('click', logout);
+  updateUserDisplay();
+
+  window.roelAuth = {
+    getAccessToken: () => null,
+    getUser,
+    isAuthenticated: () => !!getUser(),
+    refreshToken: () => Promise.resolve(false)
+  };
+
+  // ========== MÓDULOS THREE.JS ==========
+  console.log('[AGENTE-WIDGET] Cargando módulos Three.js...');
+  let THREE, GLTFLoader;
+  try {
+    THREE = await import('three');
+    console.log('[AGENTE-WIDGET] Three.js cargado correctamente');
+    log('loader', 'three.module.js ok');
+  } catch (e) {
+    console.error('[AGENTE-WIDGET] Error cargando Three.js:', e);
+    log('loader', 'three.import.error', String(e), 'err');
+    return;
+  }
+
+  try {
+    // Usar ruta absoluta desde la raíz del sitio para que los imports relativos funcionen
+    const gltfLoaderPath = '/vendor/examples/js/loaders/package/examples/jsm/loaders/GLTFLoader.js?v=11';
+    console.log('[AGENTE-WIDGET] Cargando GLTFLoader desde:', gltfLoaderPath);
+    const module = await import(gltfLoaderPath);
+    GLTFLoader = module.GLTFLoader;
+    console.log('[AGENTE-WIDGET] GLTFLoader cargado correctamente');
+    log('loader', 'GLTFLoader.js ok');
+  } catch (e) {
+    console.error('[AGENTE-WIDGET] Error cargando GLTFLoader:', e);
+    log('loader', 'gltfloader.import.error', String(e), 'err');
+    return;
+  }
+
+  // ========== CONFIG ==========
+  const RPM_GLTF = 'https://models.readyplayer.me/68bf40a4c11cea25ec61c5ef.glb';
+  const SESSION_EP = '/server/realtime_session.php';
+  const TOOL_EP = '/server/tool_producto.php';
+  const DISP_EP = '/server/disponibles_proxy.php';
+  const CART_EP = '/catalogo_detalle/cart/cart_api.php';
+  const FLOW_EP = '/catalogo_detalle/cart/flow_create_payment.php';
+  const FLOW_STATUS_EP = '/catalogo_detalle/cart/flow_check_status.php';
+
+  const SYSTEM_PROMPT = `You are a sales assistant for Roelplant (Chilean plant nursery).
+
+LANGUAGE RULE: Always respond in the SAME language the customer uses:
+- If they speak Spanish → respond in Spanish AND ONLY in Spanish
+- If they speak English → respond in English AND ONLY in English
+- If they speak Italian → respond in Italian AND ONLY in Italian
+- If they speak Polish → respond in Polish AND ONLY in Polish
+- If they speak Ukrainian → respond in Ukrainian AND ONLY in Ukrainian
+
+SILENT MODE:
+- If user says "STOP", "Basta", "Silencio", "Cállate", "Callate", "Stop", "Silenzio", "Стоп" → IMMEDIATELY call "activar_modo_silencio" tool. Say nothing else.
+- This tool makes the bot stop responding until user says keywords like "price", "cart", "precio", "carrito", etc.
+
+CART - TOOL USAGE:
+1. When customer asks to ADD to cart ("agregar al carrito", "add to cart", "aggiungi al carrello", "додати до кошика"):
+   - ALWAYS use action="add_by_name" (never use update_qty for adding!)
+   - Include: name (product name), qty (quantity, default 1), tier ("retail" or "wholesale")
+   - Example: If they asked price of "Monstera" and say "add it", call carrito_operar with {action:"add_by_name", name:"Monstera Deliciosa", qty:1, tier:"retail"}
+   - The system automatically handles if product already exists in cart - it will increment the quantity
+
+2. When customer asks to CHANGE quantity of existing item:
+   - Use action="update_qty"
+   - Include: name or code, qty (new quantity, not increment)
+   - Example: {action:"update_qty", name:"Monstera Deliciosa", qty:5}
+
+3. To view cart: use action="summary"
+
+4. To remove item: use action="remove" with name or code
+
+5. To clear entire cart: use action="clear"
+
+6. IMPORTANT: After any add/update/remove, the function auto-calls summary. DO NOT call it again yourself.
+
+7. Never invent totals or quantities. The tool calculates everything.
+
+8. If customer says "add it" without prior context, ask which product they want to add.
+
+QUERIES:
+- For price/stock: use consultar_precio_producto_roelplant
+- To list available products: use consultar_disponibles_roelplant
+- To filter by type: use consultar_disponibles_por_tipo_roelplant
+
+If off-topic (not about plants): respond "I'm Roelplant's assistant. I only handle plant queries, prices, stock, orders and shipping." (or equivalent in customer's language)`;
+
+  // ========== UI ELEMENTS ==========
+  const dot = document.getElementById('dot');
+  const lat = document.getElementById('lat');
+  const chat = document.getElementById('chat');
+  const txt = document.getElementById('txt');
+  const btnSend = document.getElementById('send');
+  const btnIniciar = document.getElementById('btnIniciar');
+  const btnReactivar = document.getElementById('btnReactivar');
+  const remote = document.getElementById('remote');
+  const overlay = document.getElementById('overlay');
+  const startBig = document.getElementById('startBig');
+  const cartFloatPanel = document.getElementById('cartFloatPanel');
+  const cartFloatBody = document.getElementById('cartFloatBody');
+  const cartFloatClose = document.getElementById('cartFloatClose');
+  const cartFloatCount = document.getElementById('cartFloatCount');
+
+  const addText = (role, text) => {
+    const d = document.createElement('div');
+    d.className = 'agente-msg';
+    const prefix = role === 'user' ? 'Tú: ' : 'Asesor: ';
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    if (urlRegex.test(text)) {
+      const parts = text.split(urlRegex);
+      d.innerHTML = prefix + parts.map(part => {
+        if (/^https?:\/\//.test(part)) {
+          return `<a href="${part}" target="_blank" rel="noopener" style="color:#22d3ee;text-decoration:underline">${part}</a>`;
+        }
+        return part;
+      }).join('');
+    } else {
+      d.textContent = prefix + text;
+    }
+
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+  };
+
+  const formatCLP = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
+
+  // ========== RUT & EMAIL ==========
+  const authUser = window.roelAuth?.getUser();
+  let clientRut = authUser?.rut || localStorage.getItem('client_rut') || null;
+  let clientEmail = authUser?.email || localStorage.getItem('client_email') || null;
+
+  const normRut = r => String(r || '').trim().toUpperCase().replace(/\./g, '');
+  const isRut = r => /^[0-9]{1,8}-[0-9K]$/.test(r || '');
+  const isEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || '');
+
+  // ========== MODO SILENCIO ==========
+  let silentMode = false;
+  let pc = null;
+  let dc = null;
+
+  function setSilentMode(silent) {
+    silentMode = silent;
+    if (silent) {
+      log('mode', 'Silent mode ON - DESCONECTANDO');
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+      }
+      setTimeout(() => {
+        cleanup();
+        if (btnIniciar) btnIniciar.style.display = 'none';
+        if (btnReactivar) btnReactivar.style.display = 'inline-block';
+        setConn('closed');
+      }, 500);
+    } else {
+      log('mode', 'Silent mode OFF - RECONECTANDO');
+      if (btnReactivar) btnReactivar.style.display = 'none';
+      if (btnIniciar) btnIniciar.style.display = 'inline-block';
+    }
+  }
+
+  if (btnReactivar) {
+    btnReactivar.onclick = async () => {
+      silentMode = false;
+      addText('assistant', '[Reactivando...]');
+      await connect();
+      addText('assistant', '[Bot reactivado. ¿En qué puedo ayudarte?]');
+    };
+  }
+
+  async function ensureRut() {
+    if (clientRut && isRut(clientRut)) return clientRut;
+    const r = prompt('Para continuar con el carrito, ingresa tu RUT (formato 12345678-9 o 12345678-K):');
+    if (!r) return null;
+    const n = normRut(r);
+    if (!isRut(n)) {
+      alert('RUT inválido. Intenta nuevamente.');
+      return null;
+    }
+    clientRut = n;
+    localStorage.setItem('client_rut', n);
+    addText('assistant', `Gracias. Registraré tu RUT: ${n}.`);
+    speak('Gracias. Registraré tu RUT.');
+    return n;
+  }
+
+  async function ensureEmail() {
+    if (clientEmail && isEmail(clientEmail)) return clientEmail;
+    const e = prompt('Para generar el link de pago, ingresa tu email:');
+    if (!e) return null;
+    const trimmed = String(e).trim();
+    if (!isEmail(trimmed)) {
+      alert('Email inválido. Intenta nuevamente.');
+      return null;
+    }
+    clientEmail = trimmed;
+    localStorage.setItem('client_email', trimmed);
+    addText('assistant', `Gracias. Registraré tu email: ${trimmed}.`);
+    speak('Gracias. Registraré tu email.');
+    return trimmed;
+  }
+
+  // ========== THREE.JS AVATAR ==========
+  const canvas = document.getElementById('canvas3d');
+  if (!canvas) {
+    console.error('[AGENTE] Canvas #canvas3d not found');
+    return;
+  }
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  const scene = new THREE.Scene();
+
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+  const isMobileView = window.innerWidth <= 640;
+  const isTabletView = window.innerWidth <= 920 && window.innerWidth > 640;
+  const camZ = isMobileView ? 3.2 : (isTabletView ? 4.0 : 4.8);
+  const camY = isMobileView ? 1.4 : (isTabletView ? 1.5 : 1.6);
+  camera.position.set(0, camY, camZ);
+  camera.lookAt(0, isMobileView ? 1.5 : (isTabletView ? 1.6 : 1.7), 0);
+
+  scene.add(new THREE.HemisphereLight(0xbce7ff, 0x0b1220, 0.9));
+  const dLight = new THREE.DirectionalLight(0xffffff, 0.85);
+  dLight.position.set(2, 4, 3);
+  scene.add(dLight);
+
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(1.05, 48),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  let avatar = null;
+  let mixer = null;
+  let jawTargets = [];
+  let blinkLT = [];
+  let blinkRT = [];
+  const avatarBaseY = 0.20;
+  const clock = new THREE.Clock();
+
+  const bones = {};
+  const baseRot = {};
+  const NAMESETS = {
+    lArm: ['leftarm', 'upperarm_l', 'mixamorigleftarm', 'shoulder_l'],
+    rArm: ['rightarm', 'upperarm_r', 'mixamorigrightarm', 'shoulder_r'],
+    lFore: ['leftforearm', 'lowerarm_l', 'mixamorigleftforearm', 'forearm_l'],
+    rFore: ['rightforearm', 'lowerarm_r', 'mixamorigrightforearm', 'forearm_r'],
+    spine: ['spine1', 'spine', 'mixamorigspine1', 'mixamorigspine'],
+    neck: ['neck', 'mixamorigneck']
+  };
+
+  const toKey = s => s.toLowerCase();
+
+  function matchName(n, keys) {
+    n = toKey(n);
+    return keys.some(k => n.endsWith(k) || n.includes(k));
+  }
+
+  function capture(b) {
+    if (!b) return;
+    baseRot[b.uuid] = b.rotation.clone();
+  }
+
+  function fit() {
+    const w = canvas.clientWidth | 0;
+    const h = canvas.clientHeight | 0;
+    const pr = Math.min(devicePixelRatio || 1, 2);
+    if (renderer.getPixelRatio() !== pr) renderer.setPixelRatio(pr);
+    if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
+      renderer.setSize(w, h, false);
+      renderer.setViewport(0, 0, w, h);
+      camera.aspect = (w / h) || 1;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  function loadAvatar() {
+    const loader = new GLTFLoader();
+    loader.load(RPM_GLTF, (gltf) => {
+      avatar = gltf.scene;
+
+      const isMobile = window.innerWidth <= 640;
+      const isTablet = window.innerWidth <= 920 && window.innerWidth > 640;
+      const avatarScale = isMobile ? 0.55 : (isTablet ? 0.70 : 0.92);
+      avatar.scale.setScalar(avatarScale);
+      avatar.position.set(0, avatarBaseY, 0);
+      scene.add(avatar);
+      ground.position.set(0, avatarBaseY - 0.01, 0);
+
+      avatar.traverse(o => {
+        if (o.isMesh && o.morphTargetDictionary) {
+          const d = o.morphTargetDictionary;
+          ['jawOpen', 'viseme_aa', 'vrc.v_aa', 'MouthOpen', 'mouthOpen'].forEach(k => {
+            if (d[k] != null) jawTargets.push({ mesh: o, index: d[k] });
+          });
+          ['eyeBlinkLeft', 'blink_left', 'Blink_L', 'leftEyeClosed'].forEach(k => {
+            if (d[k] != null) blinkLT.push({ mesh: o, index: d[k] });
+          });
+          ['eyeBlinkRight', 'blink_right', 'Blink_R', 'rightEyeClosed'].forEach(k => {
+            if (d[k] != null) blinkRT.push({ mesh: o, index: d[k] });
+          });
+        }
+        if (o.isBone) {
+          const n = o.name || '';
+          if (!bones.lArm && matchName(n, NAMESETS.lArm)) bones.lArm = o;
+          if (!bones.rArm && matchName(n, NAMESETS.rArm)) bones.rArm = o;
+          if (!bones.lFore && matchName(n, NAMESETS.lFore)) bones.lFore = o;
+          if (!bones.rFore && matchName(n, NAMESETS.rFore)) bones.rFore = o;
+          if (!bones.spine && matchName(n, NAMESETS.spine)) bones.spine = o;
+          if (!bones.neck && matchName(n, NAMESETS.neck)) bones.neck = o;
+        }
+        if (o.isMesh) o.frustumCulled = false;
+      });
+
+      ['lArm', 'rArm', 'lFore', 'rFore', 'spine', 'neck'].forEach(k => capture(bones[k]));
+
+      if (gltf.animations && gltf.animations.length) {
+        mixer = new THREE.AnimationMixer(avatar);
+        const clip = THREE.AnimationClip.findByName(gltf.animations, 'idle') || gltf.animations[0];
+        mixer.clipAction(clip).play();
+      }
+      log('3d', 'bones', Object.keys(bones).filter(k => bones[k]).join(', '));
+    }, undefined, (err) => log('3d', 'avatar.error', String(err), 'err'));
+  }
+
+  // ========== AUDIO ==========
+  let audioCtx = null;
+  let analyser = null;
+  let dataArr = null;
+  let smLvl = 0;
+
+  function setupFromRemoteStream(stream) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        log('audio', 'AudioContext resumed (iOS fix)');
+      }).catch((err) => {
+        log('audio', 'Failed to resume AudioContext: ' + err, null, 'err');
+      });
+    }
+
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    dataArr = new Uint8Array(analyser.fftSize);
+    const sink = audioCtx.createGain();
+    sink.gain.value = 0;
+    src.connect(analyser);
+    analyser.connect(sink);
+    sink.connect(audioCtx.destination);
+    log('audio', 'analyser.fromRemote');
+  }
+
+  // ========== BLINK ==========
+  let blinkPhase = 0;
+  let blinkT = 0;
+  let nextBlink = performance.now() + 1500 + Math.random() * 3500;
+
+  function blinkUpdate(dt, now) {
+    let v = 0;
+    if (blinkPhase === 0 && now > nextBlink) {
+      blinkPhase = 1;
+      blinkT = 0;
+    }
+    if (blinkPhase === 1) {
+      blinkT += dt;
+      v = Math.min(1, blinkT / 0.09);
+      if (blinkT >= 0.09) {
+        blinkPhase = 2;
+        blinkT = 0;
+      }
+    } else if (blinkPhase === 2) {
+      blinkT += dt;
+      v = 1 - Math.min(1, blinkT / 0.12);
+      if (blinkT >= 0.12) {
+        blinkPhase = 0;
+        nextBlink = now + 1200 + Math.random() * 3000;
+        v = 0;
+      }
+    }
+    blinkLT.forEach(({ mesh, index }) => mesh.morphTargetInfluences[index] = v);
+    blinkRT.forEach(({ mesh, index }) => mesh.morphTargetInfluences[index] = v);
+  }
+
+  // ========== MIRADA CON MOUSE ==========
+  const look = { x: 0, y: 0 };
+  canvas.addEventListener('pointermove', e => {
+    const r = canvas.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width * 2 - 1;
+    const ny = (e.clientY - r.top) / r.height * 2 - 1;
+    look.x = nx;
+    look.y = ny;
+  });
+
+  // ========== ANIMATE ==========
+  function animate() {
+    requestAnimationFrame(animate);
+    fit();
+    const dt = clock.getDelta();
+    const now = performance.now();
+    if (mixer) mixer.update(dt);
+
+    if (analyser) {
+      analyser.getByteTimeDomainData(dataArr);
+      let sum = 0;
+      for (let i = 0; i < dataArr.length; i++) {
+        const v = (dataArr[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / dataArr.length);
+      const lvl = Math.min(1, Math.max(0, (rms - 0.02) * 8));
+      smLvl = smLvl * 0.8 + lvl * 0.2;
+      jawTargets.forEach(({ mesh, index }) => mesh.morphTargetInfluences[index] = smLvl);
+    }
+
+    blinkUpdate(dt, now);
+
+    if (avatar) {
+      avatar.position.y = avatarBaseY + Math.sin(now * 0.0006) * 0.01;
+      avatar.rotation.y = Math.sin(now * 0.00025) * 0.18;
+      ground.position.y = avatarBaseY - 0.01;
+    }
+
+    const t = now * 0.001;
+    const sway = Math.sin(t * 0.9) * 0.18;
+    const bend = Math.sin(t * 1.2) * 0.10;
+    const spineTwist = Math.sin(t * 0.5) * 0.04;
+
+    if (bones.lArm && baseRot[bones.lArm.uuid]) {
+      const b = baseRot[bones.lArm.uuid];
+      bones.lArm.rotation.set(b.x, b.y, b.z + sway);
+    }
+    if (bones.rArm && baseRot[bones.rArm.uuid]) {
+      const b = baseRot[bones.rArm.uuid];
+      bones.rArm.rotation.set(b.x, b.y, b.z - sway);
+    }
+    if (bones.lFore && baseRot[bones.lFore.uuid]) {
+      const b = baseRot[bones.lFore.uuid];
+      bones.lFore.rotation.set(b.x + bend * 0.5, b.y, b.z + bend * 0.2);
+    }
+    if (bones.rFore && baseRot[bones.rFore.uuid]) {
+      const b = baseRot[bones.rFore.uuid];
+      bones.rFore.rotation.set(b.x + bend * 0.5, b.y, b.z - bend * 0.2);
+    }
+    if (bones.spine && baseRot[bones.spine.uuid]) {
+      const b = baseRot[bones.spine.uuid];
+      bones.spine.rotation.set(b.x, b.y, b.z + spineTwist);
+    }
+    if (bones.neck && baseRot[bones.neck.uuid]) {
+      const b = baseRot[bones.neck.uuid];
+      const yaw = look.x * 0.25;
+      const pitch = -look.y * 0.15;
+      bones.neck.rotation.set(b.x + pitch, b.y + yaw, b.z);
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  // ========== REALTIME ==========
+  if (remote) {
+    remote.autoplay = true;
+    remote.playsInline = true;
+    remote.muted = false;
+  }
+
+  function tryPlay() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch((err) => {
+        log('audio', 'tryPlay resume failed: ' + err, null, 'err');
+      });
+    }
+
+    const p = remote.play();
+    if (p && p.catch) {
+      p.then(() => {
+        log('audio', 'tryPlay success');
+      }).catch((err) => {
+        log('audio', 'tryPlay failed: ' + err.message, null, 'err');
+        setTimeout(() => {
+          remote.play().catch(() => { });
+        }, 300);
+      });
+    }
+  }
+
+  let micStream = null;
+  let suppressCartText = false;
+
+  function setConn(state, latencyMs) {
+    const map = { none: '#ef4444', connecting: '#fbbf24', connected: '#22d3ee', closed: '#ef4444' };
+    if (dot) dot.style.background = map[state] || '#ef4444';
+    if (lat) lat.textContent = latencyMs != null ? `${latencyMs} ms` : (state === 'connected' ? 'conectado' : 'sin conexión');
+  }
+
+  async function getMic() {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        video: false
+      });
+      log('mic', 'ok');
+    } catch (e) {
+      log('mic', 'denegado', String(e), 'err');
+    }
+    return micStream;
+  }
+
+  async function connect() {
+    console.log('[AGENTE-WIDGET] connect() llamado');
+    if (pc) {
+      log('rtc', 'already');
+      console.log('[AGENTE-WIDGET] Ya existe conexión activa');
+      return;
+    }
+    setConn('connecting');
+    log('rtc', 'connect()');
+    let eph = '';
+    try {
+      console.log('[AGENTE-WIDGET] Solicitando sesión a:', SESSION_EP);
+      const r = await fetch(SESSION_EP, { method: 'POST' });
+      const tx = await r.text();
+      let js = {};
+      try {
+        js = JSON.parse(tx);
+      } catch { }
+      eph = js?.client_secret?.value || '';
+      log('net', 'realtime_session', eph ? 'token ok' : ('payload:' + tx), eph ? 'log' : 'err');
+      if (!eph) {
+        addText('assistant', 'No pude abrir sesión');
+        setConn('none');
+        return;
+      }
+    } catch (e) {
+      log('net', 'realtime_session.error', String(e), 'err');
+      addText('assistant', 'No pude abrir sesión');
+      setConn('none');
+      return;
+    }
+
+    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+    pc.onconnectionstatechange = () => {
+      log('rtc', 'state', pc.connectionState);
+      if (pc.connectionState === 'connected') setConn('connected');
+      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+        addText('assistant', 'Conexión finalizada');
+        cleanup();
+      }
+    };
+    pc.oniceconnectionstatechange = () => log('rtc', 'ice', pc.iceConnectionState);
+    pc.ontrack = (ev) => {
+      remote.srcObject = ev.streams[0];
+      tryPlay();
+      setupFromRemoteStream(ev.streams[0]);
+      log('rtc', 'ontrack audio');
+    };
+
+    try {
+      const mic = await getMic();
+      if (mic) mic.getTracks().forEach(t => pc.addTrack(t, mic));
+    } catch { }
+
+    dc = pc.createDataChannel('oai-events');
+    dc.onopen = () => {
+      log('dc', 'open');
+      dc.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          voice: 'alloy',
+          instructions: SYSTEM_PROMPT,
+          tools: [
+            {
+              type: 'function',
+              name: 'consultar_precio_producto_roelplant',
+              parameters: { type: 'object', properties: { nombre: { type: 'string' } }, required: ['nombre'] }
+            },
+            {
+              type: 'function',
+              name: 'consultar_disponibles_roelplant',
+              parameters: { type: 'object', properties: {} }
+            },
+            {
+              type: 'function',
+              name: 'consultar_disponibles_por_tipo_roelplant',
+              parameters: { type: 'object', properties: { tipo: { type: 'string' } }, required: ['tipo'] }
+            },
+            {
+              type: 'function',
+              name: 'carrito_operar',
+              parameters: {
+                type: 'object',
+                properties: {
+                  action: { type: 'string', enum: ['add', 'add_by_name', 'update_qty', 'remove', 'clear', 'summary', 'checkout'] },
+                  code: { type: 'string' },
+                  name: { type: 'string' },
+                  qty: { type: 'number' },
+                  tier: { type: 'string' },
+                  unit: { type: 'string' },
+                  price: { type: 'number' },
+                  image: { type: 'string' }
+                },
+                required: ['action'],
+                additionalProperties: true
+              }
+            },
+            {
+              type: 'function',
+              name: 'activar_modo_silencio',
+              description: 'Activa el modo silencio cuando el usuario dice STOP, Basta, Silencio, etc',
+              parameters: { type: 'object', properties: {}, additionalProperties: false }
+            }
+          ]
+        }
+      }));
+      addText('assistant', 'Conectado. Escribe o usa los atajos.');
+    };
+
+    const fnAcc = {};
+    dc.onmessage = async (ev) => {
+      let msg;
+      try {
+        msg = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      if (msg.type !== 'response.audio.delta') log('rx', msg.type, (msg.name || msg.role || ''));
+      if (msg.type === 'error') {
+        log('rx', 'error', JSON.stringify(msg), 'err');
+        return;
+      }
+
+      if (msg.type === 'response.function_call_arguments.delta' || msg.type === 'function_call.arguments.delta') {
+        const id = msg.call_id || msg.id;
+        if (!fnAcc[id]) fnAcc[id] = { name: '', args: '' };
+        if (msg.name) fnAcc[id].name = msg.name;
+        if (msg.delta) fnAcc[id].args += msg.delta;
+        return;
+      }
+
+      if (msg.type === 'response.function_call_arguments.done' || msg.type === 'function_call.arguments.done') {
+        const id = msg.call_id || msg.id;
+        const name = msg.name || fnAcc[id]?.name || '';
+        let args = {};
+        try {
+          args = JSON.parse(fnAcc[id]?.args || '{}');
+        } catch { }
+        log('fn', 'args.done', name + ' ' + JSON.stringify(args));
+
+        if (name === 'consultar_precio_producto_roelplant') {
+          const out = await postJSON(TOOL_EP, { nombre: String(args.nombre || '').trim() });
+          handleProducto(out);
+        } else if (name === 'consultar_disponibles_roelplant') {
+          const lst = await getJSON(DISP_EP);
+          handleLista(lst, 'Disponibles');
+        } else if (name === 'consultar_disponibles_por_tipo_roelplant') {
+          const lst = await postJSON(DISP_EP, { tipo: String(args.tipo || '').trim() });
+          handleLista(lst, `Disponibles · ${args.tipo || ''}`);
+        } else if (name === 'carrito_operar') {
+          suppressCartText = true;
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+          await handleCarrito(args);
+        } else if (name === 'activar_modo_silencio') {
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+          addText('assistant', '[Modo silencio. Click en "Reactivar Bot" para continuar]');
+          setSilentMode(true);
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok' }) }
+            }));
+          }
+        }
+        delete fnAcc[id];
+        return;
+      }
+
+      if (msg.type === 'response.completed' && msg.output && msg.output.text) {
+        if (suppressCartText) {
+          suppressCartText = false;
+          return;
+        }
+        addText('assistant', msg.output.text);
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const sdp = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + eph,
+          'Content-Type': 'application/sdp'
+        },
+        body: offer.sdp
+      });
+      const ans = await sdp.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: ans });
+      log('rtc', 'SDP ok');
+    } catch (e) {
+      log('rtc', 'SDP error', String(e), 'err');
+      addText('assistant', 'No pude establecer audio');
+    }
+  }
+
+  function cleanup() {
+    console.log('[AGENTE-WIDGET] Ejecutando cleanup...');
+
+    // Cerrar DataChannel
+    try {
+      if (dc) dc.close();
+    } catch { }
+
+    // Cerrar RTCPeerConnection
+    try {
+      if (pc) pc.close();
+    } catch { }
+
+    // Detener stream del micrófono
+    if (micStream) {
+      console.log('[AGENTE-WIDGET] Deteniendo stream del micrófono...');
+      try {
+        micStream.getTracks().forEach(track => {
+          console.log('[AGENTE-WIDGET] Deteniendo track:', track.kind, track.label);
+          track.stop();
+        });
+      } catch (e) {
+        console.error('[AGENTE-WIDGET] Error deteniendo stream:', e);
+      }
+      micStream = null;
+    }
+
+    // Detener audio remoto
+    if (remote && remote.srcObject) {
+      console.log('[AGENTE-WIDGET] Deteniendo audio remoto...');
+      try {
+        const tracks = remote.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        remote.srcObject = null;
+      } catch (e) {
+        console.error('[AGENTE-WIDGET] Error deteniendo audio remoto:', e);
+      }
+    }
+
+    pc = null;
+    dc = null;
+    setConn('none');
+    log('rtc', 'cleanup');
+    console.log('[AGENTE-WIDGET] Cleanup completado');
+  }
+
+  // ========== HTTP ==========
+  async function getJSON(url) {
+    const t0 = performance.now();
+    log('net', 'GET ' + url);
+    try {
+      const r = await fetch(url);
+      const tx = await r.text();
+      let j = {};
+      try {
+        j = JSON.parse(tx);
+      } catch { }
+      log('net', url + ' ' + r.status + ' ' + Math.round(performance.now() - t0) + 'ms', tx.slice(0, 180) + '…');
+      return j;
+    } catch (e) {
+      log('net', url + ' error', String(e), 'err');
+      return { status: 'error' };
+    }
+  }
+
+  async function postJSON(url, body) {
+    const t0 = performance.now();
+    log('net', 'POST ' + url, JSON.stringify(body));
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const tx = await r.text();
+      let j = {};
+      try {
+        j = JSON.parse(tx);
+      } catch { }
+      log('net', url + ' ' + r.status + ' ' + Math.round(performance.now() - t0) + 'ms', tx.slice(0, 180) + '…');
+      return j;
+    } catch (e) {
+      log('net', url + ' error', String(e), 'err');
+      return { status: 'error' };
+    }
+  }
+
+  // ========== CART ==========
+  function renderCart(c) {
+    const items = (c && Array.isArray(c.items)) ? c.items : [];
+    cartFloatBody.innerHTML = items.length ? items.map(it => {
+      const unitPrice = Number(it.price || 0);
+      const qty = Number(it.qty || 0);
+      const lineSub = ('subtotal' in it && it.subtotal != null) ? Number(it.subtotal) : unitPrice * qty;
+      return `
+      <div class="agente-cart-item">
+        <img src="${it.image || 'https://placehold.co/96x96?text=%F0%9F%8C%B1'}" alt="">
+        <div>
+          <div><strong>${it.name || it.code || 'Producto'}</strong></div>
+          <div class="meta">${qty} ${it.unit || 'unid.'} · ${it.tier || 'detalle'} · ${formatCLP(unitPrice)} c/u</div>
+        </div>
+        <div class="meta">${formatCLP(lineSub)}</div>
+      </div>`;
+    }).join('') : `<div class="meta" style="opacity:.75">Carrito vacío.</div>`;
+
+    const total = items.reduce((s, i) => {
+      const p = Number(i.price || 0), q = Number(i.qty || 0);
+      return s + (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q);
+    }, 0);
+    const units = items.reduce((s, i) => s + Number(i.qty || 0), 0);
+    const lines = items.length;
+
+    cartFloatBody.innerHTML += `<div class="agente-cart-total"><span>Total</span><strong>${formatCLP(total)}</strong></div>`;
+    if (cartFloatCount) cartFloatCount.textContent = lines ? `(${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${units} unid.)` : '';
+  }
+
+  function showCart(open) {
+    if (cartFloatPanel) {
+      cartFloatPanel.classList[open ? 'remove' : 'add']('hidden');
+    }
+  }
+
+  async function cartCall(payload) {
+    const currentUser = window.roelAuth?.getUser();
+    if (currentUser?.id && !payload.user_id) payload.user_id = currentUser.id;
+    if (currentUser?.username && !payload.username) payload.username = currentUser.username;
+    if (clientRut && !payload.rut) payload.rut = clientRut;
+
+    const res = await postJSON(CART_EP, payload);
+    if (res?.cart) renderCart(res.cart);
+    return res;
+  }
+
+  if (cartFloatClose) {
+    cartFloatClose.onclick = () => showCart(false);
+  }
+
+  // ========== TTS ==========
+  function speak(text) {
+    if (!dc || dc.readyState !== 'open') return;
+    log('send', 'response.create', text.slice(0, 120) + '…');
+    dc.send(JSON.stringify({
+      type: 'response.create',
+      response: { modalities: ['audio', 'text'], instructions: text }
+    }));
+  }
+
+  // ========== PRODUCTO & LISTAS ==========
+  function handleProducto(out) {
+    if (!out || out.status !== 'ok') {
+      speak('No encontré el producto solicitado.');
+      addText('assistant', 'No encontré el producto solicitado.');
+      return;
+    }
+    const qty = (out.stock ?? out.disponible_para_reservar);
+    const frase = `Precio de ${out.variedad || 'el producto'}: mayorista ${formatCLP(out.precio)}${out.unidad ? ' ' + out.unidad : ''}. Detalle ${formatCLP(out.precio_detalle)}. Disponible ${qty ?? 'no informado'} ${out.unidad || 'plantines'}.`;
+    addText('assistant', frase);
+    speak(frase);
+  }
+
+  function handleLista(lst, label) {
+    if (!lst || !Array.isArray(lst.items)) {
+      addText('assistant', 'No pude obtener la lista de disponibles.');
+      return;
+    }
+    const top = lst.items.slice(0, 6);
+    const res = top.map(x => `${x.variedad}: ${(x.stock ?? x.disponible_para_reservar) ?? '-'} ${x.unidad || 'plantines'}`).join(' · ');
+    addText('assistant', `${label}: ${lst.count || top.length} variedades. Ejemplos: ${res}.`);
+    speak(`Hay ${lst.count || top.length} variedades. ${res}.`);
+  }
+
+  const mapTier = (t) => {
+    t = String(t || '').toLowerCase();
+    if (/mayorista/.test(t) || /wholesale/.test(t)) return 'wholesale';
+    return 'retail';
+  };
+
+  function composeCartLine(c) {
+    const items = (c && Array.isArray(c.items)) ? c.items : [];
+    if (!items.length) return 'Carrito vacío.';
+    const first = items.slice(0, 4).map(it => `${it.qty}× ${it.name || it.code}`).join(' · ');
+    const tot = items.reduce((s, i) => {
+      const p = Number(i.price || 0), q = Number(i.qty || 0);
+      return s + (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q);
+    }, 0);
+    const units = items.reduce((s, i) => s + Number(i.qty || 0), 0);
+    return `Tu carrito: ${first}${items.length > 4 ? ` … (${items.length} líneas)` : ''}. Total ${formatCLP(tot)} · ${units} unid.`;
+  }
+
+  // ========== CART HANDLER ==========
+  async function handleCarrito(args) {
+    const a = (args.action || '').toLowerCase();
+
+    if (a === 'checkout') {
+      const clientData = await window.clientProfile?.getClientData();
+      const rut = clientData?.rut || await ensureRut();
+      if (!rut) {
+        addText('assistant', 'Necesito tu RUT para proceder con la compra.');
+        speak('Necesito tu RUT para proceder con la compra.');
+        return;
+      }
+
+      const email = clientData?.mail || await ensureEmail();
+      if (!email) {
+        addText('assistant', 'Necesito tu email para enviarte el link de pago.');
+        speak('Necesito tu email para enviarte el link de pago.');
+        return;
+      }
+
+      addText('assistant', 'Generando tu link de pago...');
+      speak('Generando tu link de pago.');
+
+      try {
+        const currentUser = window.roelAuth?.getUser();
+        const userId = currentUser?.id || null;
+
+        const flowResp = await postJSON(FLOW_EP, { email, rut, user_id: userId });
+
+        if (flowResp?.status === 'ok' && flowResp?.payment_url) {
+          const msg = `Link de pago generado. Monto: ${formatCLP(flowResp.amount)}. Orden: ${flowResp.order_number}. Haz click aquí: ${flowResp.payment_url}`;
+          addText('assistant', msg);
+
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+
+          speak(`Link de pago generado por ${formatCLP(flowResp.amount)}. Revisa el chat para ver el enlace.`);
+          showCart(true);
+        } else {
+          throw new Error(flowResp?.message || 'No se pudo generar el link de pago');
+        }
+      } catch (e) {
+        const errMsg = 'No pude generar el link de pago. ' + (e.message || 'Error desconocido');
+        addText('assistant', errMsg);
+
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'response.cancel' }));
+        }
+
+        speak('No pude generar el link de pago. Intenta nuevamente.');
+      }
+
+      return;
+    }
+
+    let payload;
+    if (a === 'add_by_name') {
+      let name = String(args.name || '').trim();
+      let qty = Number(args.qty || 1);
+      let tier = mapTier(args.tier || 'retail');
+      let unit = String(args.unit || '').trim();
+      let price = Number(args.price || 0);
+      let image = String(args.image || '').trim();
+      let code = String(args.code || '').trim();
+
+      if ((!price || price <= 0) && name) {
+        const p = await postJSON(TOOL_EP, { nombre: name });
+        if (p && p.status === 'ok') {
+          const pm = parseInt(p.precio, 10) || 0;
+          const pd = parseInt(p.precio_detalle, 10) || 0;
+          price = (tier === 'wholesale') ? pm : pd;
+          unit = unit || p.unidad || p.unidad_medida || 'plantines';
+          image = image || p.imagen || '';
+          code = code || p.referencia || '';
+          name = p.variedad || name;
+        }
+      }
+      payload = { action: 'add_by_name', name, qty, tier, unit, price, image, code };
+    } else if (a === 'add') {
+      payload = {
+        action: 'add',
+        code: args.code,
+        name: args.name,
+        qty: args.qty,
+        tier: mapTier(args.tier || 'retail'),
+        unit: args.unit,
+        price: args.price,
+        image: args.image
+      };
+    } else if (a === 'update_qty') {
+      payload = { action: 'update_qty', code: args.code, name: args.name, qty: args.qty };
+    } else if (a === 'remove') {
+      payload = { action: 'remove', code: args.code, name: args.name };
+    } else if (a === 'clear') {
+      payload = { action: 'clear' };
+    } else {
+      payload = { action: 'summary' };
+    }
+
+    let res = await cartCall(payload);
+
+    if (a !== 'summary') {
+      const res2 = await cartCall({ action: 'summary' });
+      if (res2?.status === 'ok') res = res2;
+    }
+
+    if (res?.status === 'ok') {
+      const c = res.cart || {};
+      const line = composeCartLine(c);
+      addText('assistant', line);
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+      }
+      speak(line);
+      showCart(true);
+    } else {
+      addText('assistant', 'No pude actualizar/leer el carrito.');
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+      }
+      speak('No pude actualizar o leer el carrito.');
+    }
+  }
+
+  // ========== NLP + ENVÍO ==========
+  const wantsPrice = (t) => /\b(precio|valor|cu[aá]nto|costo|stock\s+de|precio\s+de)\b/i.test(t);
+  const wantsDispon = (t) => /\b(disponible|disponibles|en\s+stock|hay\s+disponible|lista|cat[aá]logo)\b/i.test(t);
+  const wantsCartSummary = (t) => /\b(?:ver|mostrar|resumen|estado|mi|el|actualiza|actualizar|actualizado)\s+carrito\b/i.test(t);
+  const extractTipo = (t) => {
+    const m = t.match(/\b(plantas? de interior|plantas? de exterior|cubre\s*suelo[s]?|árboles|arboles|trepadoras|suculentas|helechos|nativas|introducidas)\b/i);
+    return m ? m[0] : null;
+  };
+
+  function sendText(q) {
+    const qn = String(q || '').trim();
+    if (!dc || dc.readyState !== 'open') {
+      addText('assistant', 'Conéctate primero con Iniciar.');
+      return;
+    }
+    addText('user', qn);
+
+    if (wantsCartSummary(qn)) {
+      handleCarrito({ action: 'summary' });
+      return;
+    }
+
+    let hint = '';
+    if (wantsDispon(qn)) {
+      const tipo = extractTipo(qn);
+      hint = tipo ? ` (usa consultar_disponibles_por_tipo_roelplant con tipo="${tipo}")` : ' (usa consultar_disponibles_roelplant)';
+    } else if (wantsPrice(qn)) {
+      hint = ' (usa consultar_precio_producto_roelplant si aplica)';
+    }
+
+    log('send', 'input_text', qn + hint);
+    dc.send(JSON.stringify({ type: 'input_text', text: qn + hint }));
+
+    if (!wantsPrice(qn) && !wantsDispon(qn)) {
+      dc.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio', 'text'] } }));
+    }
+  }
+
+  // ========== START ==========
+  function start() {
+    console.log('[AGENTE-WIDGET] start() llamado');
+    if (overlay) overlay.style.display = 'none';
+    if (btnIniciar) btnIniciar.style.display = 'none';
+    console.log('[AGENTE-WIDGET] Cargando avatar...');
+    loadAvatar();
+
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('[AGENTE-WIDGET] AudioContext creado');
+      log('audio', 'AudioContext created on user gesture');
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        log('audio', 'AudioContext resumed on start (iOS fix)');
+      }).catch((err) => {
+        log('audio', 'Failed to resume on start: ' + err, null, 'err');
+      });
+    }
+
+    console.log('[AGENTE-WIDGET] Iniciando conexión...');
+    connect().then(() => {
+      console.log('[AGENTE-WIDGET] Conexión establecida exitosamente');
+      const attemptPlay = () => {
+        const playPromise = remote.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            log('audio', 'remote.play() success');
+          }).catch((err) => {
+            log('audio', 'remote.play() failed: ' + err.message + ', retrying...', null, 'err');
+            setTimeout(attemptPlay, 500);
+          });
+        }
+      };
+      attemptPlay();
+    }).catch((err) => {
+      console.error('[AGENTE-WIDGET] Error en connect():', err);
+    });
+  }
+
+  if (btnSend) {
+    btnSend.onclick = () => {
+      const v = txt.value.trim();
+      if (!v) return;
+      txt.value = '';
+      sendText(v);
+    };
+  }
+
+  if (txt) {
+    txt.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (btnSend) btnSend.click();
+      }
+    });
+  }
+
+  console.log('[AGENTE-WIDGET] Adjuntando event listeners...');
+
+  document.querySelectorAll('.agente-chip[data-q]').forEach(el => {
+    el.addEventListener('click', () => sendText(el.getAttribute('data-q')));
+  });
+
+  if (btnIniciar) {
+    console.log('[AGENTE-WIDGET] Botón Iniciar encontrado, adjuntando onclick');
+    btnIniciar.onclick = start;
+  } else {
+    console.warn('[AGENTE-WIDGET] Botón Iniciar NO encontrado');
+  }
+
+  if (startBig) {
+    console.log('[AGENTE-WIDGET] Botón startBig encontrado, adjuntando onclick');
+    startBig.onclick = start;
+  } else {
+    console.warn('[AGENTE-WIDGET] Botón startBig NO encontrado');
+  }
+
+  // ========== CARGAR CARRITO AL INICIO ==========
+  console.log('[AGENTE-WIDGET] Cargando carrito inicial...');
+  cartCall({ action: 'summary' }).then((res) => {
+    log('net', 'POST ./cart/cart_api.php', '{"action":"summary"}');
+    console.log('[AGENTE-WIDGET] Respuesta del carrito:', res);
+    if (res?.cart?.items && Array.isArray(res.cart.items) && res.cart.items.length > 0) {
+      showCart(true);
+    }
+  }).catch(err => {
+    console.error('[AGENTE-WIDGET] Error cargando carrito:', err);
+  });
+
+  // Exponer funciones globalmente
+  window.agenteWidgetStart = start;
+  window.agenteWidgetStop = cleanup;
+
+  log('module', 'ready');
+  console.log('[AGENTE-WIDGET] Widget standalone loaded successfully');
+})();

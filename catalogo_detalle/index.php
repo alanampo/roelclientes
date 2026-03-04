@@ -548,10 +548,11 @@ foreach($all as $p){
   right:20px;
   display:flex;
   flex-direction:column;
+  align-items:flex-end;
   gap:12px;
   z-index:999;
 }
-.float-social a{
+.float-social a, .float-social button{
   display:flex;
   align-items:center;
   justify-content:center;
@@ -582,6 +583,63 @@ foreach($all as $p){
 }
 .fab-ig:hover{
   transform:scale(1.1);
+}
+.fab-agente{
+  background: linear-gradient(135deg, #14b8a6, #22d3ee);
+  border: none;
+  cursor: pointer;
+  width: auto !important;
+  height: 56px;
+  border-radius: 28px !important;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(34, 211, 238, 0.3);
+  transition: all 0.3s ease;
+}
+.fab-agente:hover{
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(34, 211, 238, 0.4);
+}
+.fab-agente svg{
+  width: 20px;
+  height: 20px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.fab-agente span{
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+@media (max-width: 768px){
+  .fab-agente span{
+    font-size: 11px;
+  }
+  .fab-agente{
+    padding: 0 16px;
+    gap: 8px;
+  }
+}
+@media (max-width: 480px){
+  .fab-agente span{
+    display: none;
+  }
+  .fab-agente{
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    padding: 0;
+  }
+  .fab-agente svg{
+    width: 24px;
+    height: 24px;
+  }
 }
 </style>
 <link rel="stylesheet" href="<?php echo htmlspecialchars(buildUrl('assets/carrusel.css'), ENT_QUOTES, 'UTF-8'); ?>">
@@ -1024,6 +1082,15 @@ $secciones=[
 
 <!-- Burbujas flotantes RRSS -->
 <div class="float-social" aria-label="Accesos rápidos">
+  <!-- Agente IA -->
+  <button id="agenteAiBtn" class="fab-agente" aria-label="Abrir Agente IA">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+      <path fill="currentColor" d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/>
+    </svg>
+    <span>AGENTE IA</span>
+  </button>
+
   <!-- WhatsApp -->
   <a class="fab-wa"
      href="https://wa.me/56984226651?text=%C2%A1Hola%21%20Quisiera%20saber%20m%C3%A1s%20sobre%20los%20servicios%20de%20producci%C3%B3n%20de%20Roelplant%20y%20la%20disponibilidad%20de%20plantines.%20%C2%BFPodr%C3%ADan%20ayudarme%3F"
@@ -1047,6 +1114,111 @@ $secciones=[
     </svg>
   </a>
 </div>
+
+
+<!-- Modal Agente AI -->
+<div class="agente-modal-overlay" id="agenteModal">
+  <div class="agente-modal">
+    <div class="agente-modal-header">
+      <div class="brand">
+        <div class="brand-icon"></div>
+        <strong>Roelplant · Avatar Asesor</strong>
+      </div>
+      <button class="agente-modal-close" id="agenteModalClose" aria-label="Cerrar">×</button>
+    </div>
+    <?php include __DIR__ . '/../agente-widget-content.php'; ?>
+  </div>
+</div>
+
+<link rel="stylesheet" href="../agente-widget.css">
+
+
+<script>
+// Abrir/cerrar modal del agente (con verificación de autenticación)
+(function() {
+  const btn = document.getElementById('agenteAiBtn');
+  const modal = document.getElementById('agenteModal');
+  const close = document.getElementById('agenteModalClose');
+
+  if (btn && modal && close) {
+    btn.onclick = () => {
+      // Verificar si el usuario está autenticado
+      if (!API || !API.me) {
+        // No está autenticado → abrir modal de login
+        console.log('[AGENTE] Usuario no autenticado, abriendo modal de login...');
+        if (typeof openAuthModal === 'function') {
+          openAuthModal();
+        } else {
+          toast('Debes iniciar sesión para usar el agente IA');
+        }
+        return;
+      }
+
+      // Usuario autenticado → abrir modal del agente
+      console.log('[AGENTE] Usuario autenticado, abriendo agente IA...');
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      // Iniciar el agente automáticamente al abrir el modal
+      if (!window.agenteInitialized) {
+        window.agenteInitialized = true;
+        // Esperar a que el modal esté visible y luego iniciar
+        setTimeout(() => {
+          if (window.agenteWidgetStart) {
+            console.log('[MODAL] Iniciando agente automáticamente...');
+            window.agenteWidgetStart();
+          } else {
+            console.warn('[MODAL] agenteWidgetStart no disponible, reintentando...');
+            // Reintentar si el módulo aún no ha cargado
+            const retry = setInterval(() => {
+              if (window.agenteWidgetStart) {
+                clearInterval(retry);
+                console.log('[MODAL] Iniciando agente automáticamente (reintento)...');
+                window.agenteWidgetStart();
+              }
+            }, 100);
+            // Timeout después de 3 segundos
+            setTimeout(() => clearInterval(retry), 3000);
+          }
+        }, 100);
+      }
+    };
+
+    // Función para cerrar el modal y detener el agente
+    const closeModal = () => {
+      console.log('[MODAL] Cerrando modal y deteniendo agente...');
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+
+      // Detener el agente y liberar recursos
+      if (window.agenteWidgetStop) {
+        console.log('[MODAL] Llamando a agenteWidgetStop...');
+        window.agenteWidgetStop();
+      }
+
+      // Resetear flag para permitir reinicialización en próxima apertura
+      window.agenteInitialized = false;
+    };
+
+    // Botón de cerrar (X)
+    close.onclick = closeModal;
+
+    // Cerrar al hacer click fuera del modal
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    };
+
+    // Cerrar con tecla ESC
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        closeModal();
+      }
+    });
+  }
+})();
+</script>
 
 </body>
 </html>

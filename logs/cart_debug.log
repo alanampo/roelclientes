@@ -193,3 +193,48 @@
     "session_id": "jaul8eee5mgpi33kafi2la233v"
 }
 
+2026-02-22 20:39:23 - Saving cart:
+{
+    "user_id": 66,
+    "cart_key": "cart_user_66",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "4329aa3124975a5f084c224de26612f3"
+}
+
+2026-02-22 21:12:20 - Saving cart:
+{
+    "user_id": 66,
+    "cart_key": "cart_user_66",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "4329aa3124975a5f084c224de26612f3"
+}
+
+2026-02-22 21:46:37 - Saving cart:
+{
+    "user_id": null,
+    "cart_key": "cart",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "4329aa3124975a5f084c224de26612f3"
+}
+
+2026-02-22 21:46:51 - Saving cart:
+{
+    "user_id": null,
+    "cart_key": "cart",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "4329aa3124975a5f084c224de26612f3"
+}
+
+2026-02-22 21:49:36 - Saving cart:
+{
+    "user_id": null,
+    "cart_key": "cart",
+    "items_count": 0,
+    "total": 0,
+    "session_id": "4329aa3124975a5f084c224de26612f3"
+}
+
