@@ -3,28 +3,18 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-session_start();
+// Usar la autenticación del catálogo
+require __DIR__ . '/../catalogo_detalle/api/_bootstrap.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type');
 
 try {
-    // Verificar sesión
-    if (!isset($_SESSION['id_usuario']) || !$_SESSION['id_usuario']) {
-        http_response_code(401);
-        echo json_encode(['status' => 'error', 'error' => 'No autenticado']);
-        exit;
-    }
+    // Verificar autenticación del catálogo
+    $customerId = require_auth();
 
-    require_once __DIR__ . '/../class_lib/class_conecta_mysql.php';
-
-    $con = mysqli_connect($host, $user, $password, $dbname);
-    if (!$con) {
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'error' => 'Error de conexión a BD']);
-        exit;
-    }
-    mysqli_query($con, "SET NAMES 'utf8'");
+    $db = db();
 
     // Leer input
     $raw = file_get_contents('php://input') ?: '';
@@ -38,55 +28,66 @@ try {
     }
 
     $ivaPct = 0.19;
-    $like = "%" . mysqli_real_escape_string($con, $nombre) . "%";
+    $like = "%" . $db->real_escape_string($nombre) . "%";
 
-    // Consultar producto con stock disponible
+    // Consultar producto con stock disponible (misma estructura que el catálogo)
     $sql = "SELECT
-                v.id AS id_variedad,
-                v.nombre AS nombre,
-                CONCAT(t.codigo, LPAD(v.id_interno, 2, '0')) AS referencia,
-                v.precio AS precio_mayorista_sin_iva,
-                v.precio_detalle AS precio_detalle_sin_iva,
+                sv.id_variedad,
+                sv.variedad AS nombre,
+                sv.referencia,
+                sv.precio AS precio_mayorista_sin_iva,
+                sv.precio_detalle AS precio_detalle_sin_iva,
+                sv.disponible_para_reservar,
                 MAX(av.valor) AS tipo_planta,
-                MAX(v.descripcion) AS descripcion,
-                (
-                    IFNULL(SUM(s.cantidad), 0) -
-                    IFNULL((SELECT SUM(r.cantidad) FROM reservas_productos r
-                            WHERE r.id_variedad = v.id AND (r.estado = 0 OR r.estado = 1)), 0) -
-                    IFNULL((SELECT SUM(e.cantidad) FROM entregas_stock e
+                MIN(v.descripcion) AS descripcion,
+                MIN(img.nombre_archivo) AS imagen_nombre
+            FROM (
+                SELECT
+                    v.id AS id_variedad,
+                    v.nombre AS variedad,
+                    CONCAT(t.codigo, LPAD(v.id_interno, 4, '0')) AS referencia,
+                    v.precio,
+                    v.precio_detalle,
+                    (
+                        SUM(s.cantidad)
+                        - IFNULL((
+                            SELECT SUM(r.cantidad)
+                            FROM reservas_productos r
+                            WHERE r.id_variedad = v.id
+                              AND (r.estado = 0 OR r.estado = 1)
+                        ), 0)
+                        - IFNULL((
+                            SELECT SUM(e.cantidad)
+                            FROM entregas_stock e
                             JOIN reservas_productos r2 ON r2.id = e.id_reserva_producto
-                            WHERE r2.id_variedad = v.id AND r2.estado = 2), 0)
-                ) AS disponible_para_reservar,
-                (
-                    SELECT CONCAT('https://control.roelplant.cl/uploads/variedades/', iv.nombre_archivo)
-                    FROM imagenes_variedades iv
-                    WHERE iv.id_variedad = v.id
-                    ORDER BY iv.id DESC
-                    LIMIT 1
-                ) AS imagen_url
-            FROM stock_productos s
-            JOIN articulospedidos ap ON ap.id = s.id_artpedido
-            JOIN variedades_producto v ON v.id = ap.id_variedad
-            JOIN tipos_producto t ON t.id = v.id_tipo
-            LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = v.id
+                            WHERE r2.id_variedad = v.id
+                              AND r2.estado = 2
+                        ), 0)
+                    ) AS disponible_para_reservar
+                FROM stock_productos s
+                JOIN articulospedidos ap ON ap.id = s.id_artpedido
+                JOIN variedades_producto v ON v.id = ap.id_variedad
+                JOIN tipos_producto t ON t.id = v.id_tipo
+                WHERE ap.estado = 8
+                  AND v.nombre LIKE ?
+                GROUP BY v.id
+            ) AS sv
+            JOIN variedades_producto v ON v.id = sv.id_variedad
+            LEFT JOIN imagenes_variedades img ON img.id_variedad = sv.id_variedad
+            LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = sv.id_variedad
             LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
             LEFT JOIN atributos a ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
-            WHERE ap.estado >= 8
-              AND (v.eliminada IS NULL OR v.eliminada = 0)
-              AND v.nombre LIKE ?
-            GROUP BY v.id, v.nombre, v.id_interno, v.precio, v.precio_detalle, t.codigo
-            HAVING disponible_para_reservar > 0
-            ORDER BY v.nombre ASC
+            WHERE sv.disponible_para_reservar > 0
+            GROUP BY sv.id_variedad
             LIMIT 1";
 
-    $stmt = mysqli_prepare($con, $sql);
-    mysqli_stmt_bind_param($stmt, 's', $like);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $producto = mysqli_fetch_assoc($result);
+    $stmt = $db->prepare($sql);
+    $stmt->bind_param('s', $like);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $producto = $result->fetch_assoc();
 
-    mysqli_stmt_close($stmt);
-    mysqli_close($con);
+    $stmt->close();
 
     if (!$producto) {
         echo json_encode(['status' => 'not_found', 'message' => 'Sin coincidencias']);
@@ -97,8 +98,15 @@ try {
     $detalleNeto = (float)($producto['precio_detalle_sin_iva'] ?? 0);
     $mayorNeto = (float)($producto['precio_mayorista_sin_iva'] ?? 0);
 
+    // Construir URL de imagen
+    $imagenUrl = null;
+    if (!empty($producto['imagen_nombre'])) {
+        $imagenUrl = 'https://control.roelplant.cl/uploads/variedades/' . $producto['imagen_nombre'];
+    }
+
     echo json_encode([
         'status' => 'ok',
+        'id_variedad' => (int)($producto['id_variedad'] ?? 0),
         'variedad' => $producto['nombre'],
         'referencia' => $producto['referencia'],
         'tipo_planta' => $producto['tipo_planta'] ?? null,
@@ -107,7 +115,7 @@ try {
         'stock' => max(0, (int)($producto['disponible_para_reservar'] ?? 0)),
         'disponible_para_reservar' => max(0, (int)($producto['disponible_para_reservar'] ?? 0)),
         'unidad' => 'plantines',
-        'imagen' => $producto['imagen_url'] ?? null,
+        'imagen' => $imagenUrl,
         'descripcion' => $producto['descripcion'] ?? null
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 

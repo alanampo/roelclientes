@@ -131,6 +131,15 @@ async function apiFetch(url, opts={}){
   return j;
 }
 
+// Helper para construir URLs de API
+function buildApiUrl(endpoint) {
+  return '/catalogo_detalle/api/' + endpoint;
+}
+
+// Exponer apiFetch y buildApiUrl globalmente para uso del agente
+window.apiFetch = apiFetch;
+window.buildApiUrl = buildApiUrl;
+
 function setErr(id, msg){
   const el=document.getElementById(id);
   if(!el) return;

@@ -75,9 +75,11 @@
   const SESSION_EP = '/server/realtime_session.php';
   const TOOL_EP = '/server/tool_producto.php';
   const DISP_EP = '/server/disponibles_proxy.php';
-  const CART_EP = '/catalogo_detalle/cart/cart_api.php';
-  const FLOW_EP = '/catalogo_detalle/cart/flow_create_payment.php';
-  const FLOW_STATUS_EP = '/catalogo_detalle/cart/flow_check_status.php';
+
+  // Usar API del catálogo para el carrito (integración completa)
+  const CATALOG_CART_ADD = '/catalogo_detalle/api/cart/add.php';
+  const CATALOG_CART_GET = '/catalogo_detalle/api/cart/get.php';
+  const CATALOG_CART_REMOVE = '/catalogo_detalle/api/cart/remove.php';
 
   const SYSTEM_PROMPT = `You are a sales assistant for Roelplant (Chilean plant nursery).
 
@@ -653,7 +655,11 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           ]
         }
       }));
-      addText('assistant', 'Conectado. Escribe o usa los atajos.');
+      // Solo agregar mensaje de conexión una vez
+      if (!window._agenteConnectedMessageShown) {
+        window._agenteConnectedMessageShown = true;
+        addText('assistant', 'Conectado. Escribe o usa los atajos.');
+      }
     };
 
     const fnAcc = {};
@@ -667,6 +673,29 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       if (msg.type !== 'response.audio.delta') log('rx', msg.type, (msg.name || msg.role || ''));
       if (msg.type === 'error') {
         log('rx', 'error', JSON.stringify(msg), 'err');
+        return;
+      }
+
+      // Acumular transcripción de audio
+      if (msg.type === 'response.audio_transcript.delta') {
+        const itemId = msg.item_id || 'current';
+        if (!window._transcriptAcc) window._transcriptAcc = {};
+        if (!window._transcriptAcc[itemId]) window._transcriptAcc[itemId] = '';
+        if (msg.delta) window._transcriptAcc[itemId] += msg.delta;
+        return;
+      }
+
+      // Mostrar transcripción completa cuando termine
+      if (msg.type === 'response.audio_transcript.done') {
+        const itemId = msg.item_id || 'current';
+        if (window._transcriptAcc && window._transcriptAcc[itemId]) {
+          const text = window._transcriptAcc[itemId];
+          console.log('[AGENTE] Transcripción completa:', text);
+          if (!suppressCartText && text.trim()) {
+            addText('assistant', text.trim());
+          }
+          delete window._transcriptAcc[itemId];
+        }
         return;
       }
 
@@ -690,12 +719,42 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         if (name === 'consultar_precio_producto_roelplant') {
           const out = await postJSON(TOOL_EP, { nombre: String(args.nombre || '').trim() });
           handleProducto(out);
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify(out) }
+            }));
+            dc.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['audio', 'text'] }
+            }));
+          }
         } else if (name === 'consultar_disponibles_roelplant') {
           const lst = await getJSON(DISP_EP);
           handleLista(lst, 'Disponibles');
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify(lst) }
+            }));
+            dc.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['audio', 'text'] }
+            }));
+          }
         } else if (name === 'consultar_disponibles_por_tipo_roelplant') {
           const lst = await postJSON(DISP_EP, { tipo: String(args.tipo || '').trim() });
           handleLista(lst, `Disponibles · ${args.tipo || ''}`);
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify(lst) }
+            }));
+            dc.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['audio', 'text'] }
+            }));
+          }
         } else if (name === 'carrito_operar') {
           suppressCartText = true;
           if (dc && dc.readyState === 'open') {
@@ -719,12 +778,39 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         return;
       }
 
-      if (msg.type === 'response.completed' && msg.output && msg.output.text) {
+      if (msg.type === 'response.completed') {
+        console.log('[AGENTE] response.completed:', JSON.stringify(msg));
+
         if (suppressCartText) {
           suppressCartText = false;
           return;
         }
-        addText('assistant', msg.output.text);
+
+        // Intentar extraer el texto de diferentes estructuras posibles
+        let text = null;
+        if (msg.output && msg.output.text) {
+          text = msg.output.text;
+        } else if (msg.response && msg.response.output) {
+          // Buscar en los items de output
+          for (const item of msg.response.output) {
+            if (item.type === 'message' && item.content) {
+              for (const content of item.content) {
+                if (content.type === 'text' && content.text) {
+                  text = content.text;
+                  break;
+                }
+              }
+            }
+            if (text) break;
+          }
+        }
+
+        if (text) {
+          console.log('[AGENTE] Mostrando texto:', text);
+          addText('assistant', text);
+        } else {
+          console.warn('[AGENTE] No se encontró texto en response.completed');
+        }
       }
     };
 
@@ -790,6 +876,11 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     pc = null;
     dc = null;
     setConn('none');
+
+    // Reset flags y acumuladores
+    window._agenteConnectedMessageShown = false;
+    window._transcriptAcc = {};
+
     log('rtc', 'cleanup');
     console.log('[AGENTE-WIDGET] Cleanup completado');
   }
@@ -839,25 +930,32 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   function renderCart(c) {
     const items = (c && Array.isArray(c.items)) ? c.items : [];
     cartFloatBody.innerHTML = items.length ? items.map(it => {
-      const unitPrice = Number(it.price || 0);
+      // Compatibilidad: formato del catálogo (unit_price_clp, nombre) y formato antiguo (price, name)
+      const unitPrice = Number(it.unit_price_clp || it.price || 0);
       const qty = Number(it.qty || 0);
-      const lineSub = ('subtotal' in it && it.subtotal != null) ? Number(it.subtotal) : unitPrice * qty;
+      const lineSub = it.line_total_clp ? Number(it.line_total_clp) :
+                      (('subtotal' in it && it.subtotal != null) ? Number(it.subtotal) : unitPrice * qty);
+      const imgUrl = it.imagen_url || it.image || 'https://placehold.co/96x96?text=%F0%9F%8C%B1';
+      const productName = it.nombre || it.name || it.code || 'Producto';
+
       return `
       <div class="agente-cart-item">
-        <img src="${it.image || 'https://placehold.co/96x96?text=%F0%9F%8C%B1'}" alt="">
+        <img src="${imgUrl}" alt="">
         <div>
-          <div><strong>${it.name || it.code || 'Producto'}</strong></div>
+          <div><strong>${productName}</strong></div>
           <div class="meta">${qty} ${it.unit || 'unid.'} · ${it.tier || 'detalle'} · ${formatCLP(unitPrice)} c/u</div>
         </div>
         <div class="meta">${formatCLP(lineSub)}</div>
       </div>`;
     }).join('') : `<div class="meta" style="opacity:.75">Carrito vacío.</div>`;
 
-    const total = items.reduce((s, i) => {
-      const p = Number(i.price || 0), q = Number(i.qty || 0);
-      return s + (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q);
+    // Usar total_clp del catálogo si existe, sino calcular
+    const total = c.total_clp ? Number(c.total_clp) : items.reduce((s, i) => {
+      const p = Number(i.unit_price_clp || i.price || 0), q = Number(i.qty || 0);
+      return s + (i.line_total_clp ? Number(i.line_total_clp) :
+                  (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q));
     }, 0);
-    const units = items.reduce((s, i) => s + Number(i.qty || 0), 0);
+    const units = c.item_count ? Number(c.item_count) : items.reduce((s, i) => s + Number(i.qty || 0), 0);
     const lines = items.length;
 
     cartFloatBody.innerHTML += `<div class="agente-cart-total"><span>Total</span><strong>${formatCLP(total)}</strong></div>`;
@@ -870,15 +968,211 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     }
   }
 
-  async function cartCall(payload) {
-    const currentUser = window.roelAuth?.getUser();
-    if (currentUser?.id && !payload.user_id) payload.user_id = currentUser.id;
-    if (currentUser?.username && !payload.username) payload.username = currentUser.username;
-    if (clientRut && !payload.rut) payload.rut = clientRut;
+  // Función auxiliar para obtener CSRF token del catálogo
+  function getCatalogCSRF() {
+    return window.API?.csrf || '';
+  }
 
-    const res = await postJSON(CART_EP, payload);
-    if (res?.cart) renderCart(res.cart);
-    return res;
+  // Función para agregar al carrito del catálogo (usando su API)
+  async function addToCatalogCart(productData) {
+    console.log('[AGENTE] Agregando al carrito del catálogo:', productData);
+
+    try {
+      // Usar apiFetch del catálogo si está disponible (maneja CSRF automáticamente)
+      const result = window.apiFetch
+        ? await window.apiFetch(CATALOG_CART_ADD, {method: 'POST', body: JSON.stringify(productData)})
+        : await (async () => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-Token': getCatalogCSRF()
+            };
+            const response = await fetch(CATALOG_CART_ADD, {
+              method: 'POST',
+              headers: headers,
+              credentials: 'same-origin',
+              body: JSON.stringify(productData)
+            });
+            return await response.json();
+          })();
+
+      console.log('[AGENTE] Respuesta del carrito:', result);
+
+      if (result.ok && result.cart) {
+        // Actualizar contador del carrito del catálogo
+        const cartCount = document.getElementById('cartCount');
+        if (cartCount && result.cart.item_count !== undefined) {
+          cartCount.textContent = result.cart.item_count;
+        }
+
+        // Renderizar carrito del agente también
+        renderCart(result.cart);
+        return { ok: true, cart: result.cart };
+      }
+
+      return { ok: false, error: result.error || 'Error desconocido' };
+    } catch (e) {
+      console.error('[AGENTE] Error agregando al carrito:', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Función para obtener el carrito del catálogo (sin renderizar)
+  async function getCatalogCartData() {
+    try {
+      const result = window.apiFetch
+        ? await window.apiFetch(CATALOG_CART_GET, {method: 'GET'})
+        : await (async () => {
+            const response = await fetch(CATALOG_CART_GET, {
+              method: 'GET',
+              credentials: 'same-origin'
+            });
+            return await response.json();
+          })();
+
+      if (result.ok && result.cart) {
+        return { ok: true, cart: result.cart };
+      }
+
+      return { ok: false, error: result.error || 'Error desconocido' };
+    } catch (e) {
+      console.error('[AGENTE] Error obteniendo carrito:', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Función para obtener y renderizar el carrito del catálogo
+  async function getCatalogCart() {
+    const result = await getCatalogCartData();
+    if (result.ok && result.cart) {
+      renderCart(result.cart);
+    }
+    return result;
+  }
+
+  // Función para remover un item del carrito del catálogo
+  async function removeFromCatalogCart(itemId) {
+    console.log('[AGENTE] Removiendo item del carrito:', itemId);
+
+    try {
+      const result = window.apiFetch
+        ? await window.apiFetch(CATALOG_CART_REMOVE, {method: 'POST', body: JSON.stringify({ item_id: itemId })})
+        : await (async () => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-Token': getCatalogCSRF()
+            };
+            const response = await fetch(CATALOG_CART_REMOVE, {
+              method: 'POST',
+              headers: headers,
+              credentials: 'same-origin',
+              body: JSON.stringify({ item_id: itemId })
+            });
+            return await response.json();
+          })();
+
+      console.log('[AGENTE] Respuesta remover item:', result);
+
+      if (result.ok && result.cart) {
+        const cartCount = document.getElementById('cartCount');
+        if (cartCount && result.cart.item_count !== undefined) {
+          cartCount.textContent = result.cart.item_count;
+        }
+        renderCart(result.cart);
+        return { ok: true, cart: result.cart };
+      }
+
+      return { ok: false, error: result.error || 'Error desconocido' };
+    } catch (e) {
+      console.error('[AGENTE] Error removiendo del carrito:', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Función para vaciar completamente el carrito del catálogo
+  async function clearCatalogCart() {
+    console.log('[AGENTE] Iniciando vaciado del carrito...');
+    try {
+      // Primero obtener todos los items del carrito (sin renderizar)
+      const cartResult = await getCatalogCartData();
+      console.log('[AGENTE] Carrito obtenido:', cartResult);
+
+      if (!cartResult.ok || !cartResult.cart || !cartResult.cart.items) {
+        console.error('[AGENTE] No se pudo obtener el carrito');
+        return { ok: false, error: 'No se pudo obtener el carrito' };
+      }
+
+      const items = cartResult.cart.items;
+      console.log('[AGENTE] Items a eliminar:', items.length);
+
+      if (items.length === 0) {
+        console.log('[AGENTE] El carrito ya estaba vacío');
+        renderCart(cartResult.cart);
+        return { ok: true, cart: cartResult.cart, message: 'El carrito ya estaba vacío' };
+      }
+
+      // Eliminar cada item
+      for (const item of items) {
+        console.log('[AGENTE] Eliminando item:', item.item_id, item.nombre);
+        const result = await removeFromCatalogCart(item.item_id);
+        console.log('[AGENTE] Resultado eliminación:', result);
+
+        if (!result.ok) {
+          console.error('[AGENTE] Error eliminando item:', result.error);
+        }
+      }
+
+      // Obtener el carrito actualizado y renderizarlo
+      console.log('[AGENTE] Obteniendo carrito actualizado...');
+      const updatedCart = await getCatalogCart();
+      console.log('[AGENTE] Carrito actualizado:', updatedCart);
+
+      return { ok: true, cart: updatedCart.cart, message: 'Carrito vaciado exitosamente' };
+    } catch (e) {
+      console.error('[AGENTE] Error vaciando carrito:', e);
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Función para actualizar cantidad de un item en el carrito
+  async function updateCatalogCartQty(itemId, qty) {
+    console.log('[AGENTE] Actualizando cantidad del item:', itemId, 'a', qty);
+
+    try {
+      const result = window.apiFetch
+        ? await window.apiFetch('/catalogo_detalle/api/cart/update.php', {method: 'POST', body: JSON.stringify({ item_id: itemId, qty: qty })})
+        : await (async () => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-Token': getCatalogCSRF()
+            };
+            const response = await fetch('/catalogo_detalle/api/cart/update.php', {
+              method: 'POST',
+              headers: headers,
+              credentials: 'same-origin',
+              body: JSON.stringify({ item_id: itemId, qty: qty })
+            });
+            return await response.json();
+          })();
+
+      console.log('[AGENTE] Respuesta actualizar qty:', result);
+
+      if (result.ok && result.cart) {
+        const cartCount = document.getElementById('cartCount');
+        if (cartCount && result.cart.item_count !== undefined) {
+          cartCount.textContent = result.cart.item_count;
+        }
+        renderCart(result.cart);
+        return { ok: true, cart: result.cart };
+      }
+
+      return { ok: false, error: result.error || 'Error desconocido' };
+    } catch (e) {
+      console.error('[AGENTE] Error actualizando cantidad:', e);
+      return { ok: false, error: e.message };
+    }
   }
 
   if (cartFloatClose) {
@@ -897,26 +1191,13 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
   // ========== PRODUCTO & LISTAS ==========
   function handleProducto(out) {
-    if (!out || out.status !== 'ok') {
-      speak('No encontré el producto solicitado.');
-      addText('assistant', 'No encontré el producto solicitado.');
-      return;
-    }
-    const qty = (out.stock ?? out.disponible_para_reservar);
-    const frase = `Precio de ${out.variedad || 'el producto'}: mayorista ${formatCLP(out.precio)}${out.unidad ? ' ' + out.unidad : ''}. Detalle ${formatCLP(out.precio_detalle)}. Disponible ${qty ?? 'no informado'} ${out.unidad || 'plantines'}.`;
-    addText('assistant', frase);
-    speak(frase);
+    // Ya no agregamos texto ni hablamos, dejamos que el AI responda basándose en el resultado
+    // Solo retornamos para que el tool pueda enviar el output al AI
   }
 
   function handleLista(lst, label) {
-    if (!lst || !Array.isArray(lst.items)) {
-      addText('assistant', 'No pude obtener la lista de disponibles.');
-      return;
-    }
-    const top = lst.items.slice(0, 6);
-    const res = top.map(x => `${x.variedad}: ${(x.stock ?? x.disponible_para_reservar) ?? '-'} ${x.unidad || 'plantines'}`).join(' · ');
-    addText('assistant', `${label}: ${lst.count || top.length} variedades. Ejemplos: ${res}.`);
-    speak(`Hay ${lst.count || top.length} variedades. ${res}.`);
+    // Ya no agregamos texto ni hablamos, dejamos que el AI responda basándose en el resultado
+    // Solo retornamos para que el tool pueda enviar el output al AI
   }
 
   const mapTier = (t) => {
@@ -928,12 +1209,15 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   function composeCartLine(c) {
     const items = (c && Array.isArray(c.items)) ? c.items : [];
     if (!items.length) return 'Carrito vacío.';
-    const first = items.slice(0, 4).map(it => `${it.qty}× ${it.name || it.code}`).join(' · ');
-    const tot = items.reduce((s, i) => {
-      const p = Number(i.price || 0), q = Number(i.qty || 0);
-      return s + (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q);
+    // Compatibilidad: nombre (catálogo) o name/code (formato antiguo)
+    const first = items.slice(0, 4).map(it => `${it.qty}× ${it.nombre || it.name || it.code}`).join(' · ');
+    // Usar total_clp del catálogo si existe, sino calcular
+    const tot = c.total_clp ? Number(c.total_clp) : items.reduce((s, i) => {
+      const p = Number(i.unit_price_clp || i.price || 0), q = Number(i.qty || 0);
+      return s + (i.line_total_clp ? Number(i.line_total_clp) :
+                  (('subtotal' in i && i.subtotal != null) ? Number(i.subtotal) : p * q));
     }, 0);
-    const units = items.reduce((s, i) => s + Number(i.qty || 0), 0);
+    const units = c.item_count ? Number(c.item_count) : items.reduce((s, i) => s + Number(i.qty || 0), 0);
     return `Tu carrito: ${first}${items.length > 4 ? ` … (${items.length} líneas)` : ''}. Total ${formatCLP(tot)} · ${units} unid.`;
   }
 
@@ -993,73 +1277,177 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       return;
     }
 
-    let payload;
-    if (a === 'add_by_name') {
-      let name = String(args.name || '').trim();
+    // Para agregar productos, usar el carrito del catálogo
+    if (a === 'add_by_name' || a === 'add') {
+      let productInfo = null;
       let qty = Number(args.qty || 1);
       let tier = mapTier(args.tier || 'retail');
-      let unit = String(args.unit || '').trim();
-      let price = Number(args.price || 0);
-      let image = String(args.image || '').trim();
-      let code = String(args.code || '').trim();
 
-      if ((!price || price <= 0) && name) {
+      // Si es add_by_name, buscar el producto primero
+      if (a === 'add_by_name') {
+        const name = String(args.name || '').trim();
+        if (!name) {
+          addText('assistant', 'No especificaste el nombre del producto.');
+          speak('No especificaste el nombre del producto.');
+          return;
+        }
+
         const p = await postJSON(TOOL_EP, { nombre: name });
-        if (p && p.status === 'ok') {
-          const pm = parseInt(p.precio, 10) || 0;
-          const pd = parseInt(p.precio_detalle, 10) || 0;
-          price = (tier === 'wholesale') ? pm : pd;
-          unit = unit || p.unidad || p.unidad_medida || 'plantines';
-          image = image || p.imagen || '';
-          code = code || p.referencia || '';
-          name = p.variedad || name;
+        if (!p || p.status !== 'ok') {
+          addText('assistant', `No encontré el producto "${name}" o no tiene stock disponible.`);
+          speak(`No encontré el producto ${name} o no tiene stock disponible.`);
+          return;
+        }
+        productInfo = p;
+      } else {
+        // Si es 'add' con datos directos, buscar el producto para verificar stock y obtener id_variedad
+        const name = String(args.name || '').trim();
+        if (name) {
+          const p = await postJSON(TOOL_EP, { nombre: name });
+          if (!p || p.status !== 'ok') {
+            addText('assistant', `No encontré el producto "${name}" o no tiene stock disponible.`);
+            speak(`No encontré el producto ${name} o no tiene stock disponible.`);
+            return;
+          }
+          productInfo = p;
         }
       }
-      payload = { action: 'add_by_name', name, qty, tier, unit, price, image, code };
-    } else if (a === 'add') {
-      payload = {
-        action: 'add',
-        code: args.code,
-        name: args.name,
-        qty: args.qty,
-        tier: mapTier(args.tier || 'retail'),
-        unit: args.unit,
-        price: args.price,
-        image: args.image
+
+      // Verificar stock disponible
+      const stock = productInfo.stock || productInfo.disponible_para_reservar || 0;
+      if (stock <= 0) {
+        addText('assistant', `El producto "${productInfo.variedad}" no tiene stock disponible.`);
+        speak(`El producto ${productInfo.variedad} no tiene stock disponible.`);
+        return;
+      }
+
+      if (qty > stock) {
+        addText('assistant', `Solo hay ${stock} unidades disponibles de "${productInfo.variedad}". Ajustando cantidad.`);
+        speak(`Solo hay ${stock} unidades disponibles. Ajustando cantidad.`);
+        qty = stock;
+      }
+
+      // Preparar datos para el API del catálogo
+      const price = (tier === 'wholesale') ? productInfo.precio : productInfo.precio_detalle;
+      const catalogPayload = {
+        id_variedad: productInfo.id_variedad,
+        referencia: productInfo.referencia,
+        nombre: productInfo.variedad,
+        imagen_url: productInfo.imagen || '',
+        unit_price_clp: price,
+        qty: qty
       };
-    } else if (a === 'update_qty') {
-      payload = { action: 'update_qty', code: args.code, name: args.name, qty: args.qty };
-    } else if (a === 'remove') {
-      payload = { action: 'remove', code: args.code, name: args.name };
-    } else if (a === 'clear') {
-      payload = { action: 'clear' };
-    } else {
-      payload = { action: 'summary' };
-    }
 
-    let res = await cartCall(payload);
+      // Agregar al carrito del catálogo
+      const result = await addToCatalogCart(catalogPayload);
 
-    if (a !== 'summary') {
-      const res2 = await cartCall({ action: 'summary' });
-      if (res2?.status === 'ok') res = res2;
-    }
-
-    if (res?.status === 'ok') {
-      const c = res.cart || {};
-      const line = composeCartLine(c);
-      addText('assistant', line);
-      if (dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'response.cancel' }));
+      if (result.ok && result.cart) {
+        const c = result.cart;
+        const line = composeCartLine(c);
+        addText('assistant', line);
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'response.cancel' }));
+        }
+        speak(`Agregué ${qty} ${productInfo.unidad || 'unidades'} de ${productInfo.variedad} al carrito. ${line}`);
+        showCart(true);
+      } else {
+        const errMsg = result.error || 'No pude agregar el producto al carrito.';
+        addText('assistant', errMsg);
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'response.cancel' }));
+        }
+        speak('No pude agregar el producto al carrito.');
       }
-      speak(line);
-      showCart(true);
-    } else {
-      addText('assistant', 'No pude actualizar/leer el carrito.');
-      if (dc && dc.readyState === 'open') {
-        dc.send(JSON.stringify({ type: 'response.cancel' }));
-      }
-      speak('No pude actualizar o leer el carrito.');
+
+      return;
     }
+
+    // Para ver el resumen del carrito, usar el API del catálogo
+    if (a === 'summary') {
+      const result = await getCatalogCart();
+
+      if (result.ok && result.cart) {
+        const c = result.cart;
+        const line = composeCartLine(c);
+        addText('assistant', line);
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'response.cancel' }));
+        }
+        speak(line);
+        showCart(true);
+      } else {
+        addText('assistant', 'No pude obtener el carrito.');
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify({ type: 'response.cancel' }));
+        }
+        speak('No pude obtener el carrito.');
+      }
+
+      return;
+    }
+
+    // Para vaciar el carrito
+    if (a === 'clear') {
+      const result = await clearCatalogCart();
+      if (result.ok) {
+        // No agregamos texto porque el servidor AI ya generó el mensaje con voz
+        // Solo actualizamos visualmente
+        showCart(false);
+      }
+      return;
+    }
+
+    // Para remover un item del carrito
+    if (a === 'remove') {
+      const name = String(args.name || args.code || '').trim();
+      if (!name) {
+        return;
+      }
+
+      // Obtener el carrito para buscar el item por nombre (sin renderizar aún)
+      const cartResult = await getCatalogCartData();
+      if (cartResult.ok && cartResult.cart && cartResult.cart.items) {
+        const item = cartResult.cart.items.find(it =>
+          (it.nombre || '').toLowerCase().includes(name.toLowerCase()) ||
+          (it.referencia || '').toLowerCase() === name.toLowerCase()
+        );
+
+        if (item) {
+          const result = await removeFromCatalogCart(item.item_id);
+          console.log('[AGENTE] Resultado remover item:', result);
+          // No agregamos texto porque el servidor AI ya generó el mensaje
+        }
+      }
+      return;
+    }
+
+    // Para actualizar cantidad
+    if (a === 'update_qty') {
+      const name = String(args.name || args.code || '').trim();
+      const qty = Number(args.qty || 0);
+
+      if (!name) {
+        return;
+      }
+
+      // Obtener el carrito para buscar el item por nombre (sin renderizar aún)
+      const cartResult = await getCatalogCartData();
+      if (cartResult.ok && cartResult.cart && cartResult.cart.items) {
+        const item = cartResult.cart.items.find(it =>
+          (it.nombre || '').toLowerCase().includes(name.toLowerCase()) ||
+          (it.referencia || '').toLowerCase() === name.toLowerCase()
+        );
+
+        if (item) {
+          const result = await updateCatalogCartQty(item.item_id, qty);
+          console.log('[AGENTE] Resultado actualizar qty:', result);
+          // No agregamos texto porque el servidor AI ya generó el mensaje
+        }
+      }
+      return;
+    }
+
+    // Acción desconocida - no hacer nada para no contradecir al servidor AI
   }
 
   // ========== NLP + ENVÍO ==========
@@ -1180,11 +1568,10 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   }
 
   // ========== CARGAR CARRITO AL INICIO ==========
-  console.log('[AGENTE-WIDGET] Cargando carrito inicial...');
-  cartCall({ action: 'summary' }).then((res) => {
-    log('net', 'POST ./cart/cart_api.php', '{"action":"summary"}');
-    console.log('[AGENTE-WIDGET] Respuesta del carrito:', res);
-    if (res?.cart?.items && Array.isArray(res.cart.items) && res.cart.items.length > 0) {
+  console.log('[AGENTE-WIDGET] Cargando carrito inicial del catálogo...');
+  getCatalogCart().then((res) => {
+    console.log('[AGENTE-WIDGET] Respuesta del carrito del catálogo:', res);
+    if (res?.ok && res?.cart?.items && Array.isArray(res.cart.items) && res.cart.items.length > 0) {
       showCart(true);
     }
   }).catch(err => {
