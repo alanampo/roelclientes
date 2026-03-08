@@ -112,11 +112,19 @@ CART - TOOL USAGE:
 
 5. To clear entire cart: use action="clear"
 
-6. IMPORTANT: After any add/update/remove, the function auto-calls summary. DO NOT call it again yourself.
+6. To CHECKOUT / PROCEED TO PAYMENT:
+   - When customer wants to pay, go to checkout, finalize, or complete their purchase
+   - ALWAYS use action="checkout"
+   - Spanish triggers: "quiero pagar", "pagar", "checkout", "finalizar compra", "completar compra", "ir al pago", "proceder al pago", "llevar al checkout", "ir a pagar", etc.
+   - English triggers: "I want to pay", "pay", "checkout", "complete purchase", "go to payment", "proceed to payment", "finalize order", etc.
+   - Italian triggers: "voglio pagare", "pagare", "checkout", "completare l'acquisto", etc.
+   - The system will validate cart has items and redirect to checkout page
 
-7. Never invent totals or quantities. The tool calculates everything.
+7. IMPORTANT: After any add/update/remove, the function auto-calls summary. DO NOT call it again yourself.
 
-8. If customer says "add it" without prior context, ask which product they want to add.
+8. Never invent totals or quantities. The tool calculates everything.
+
+9. If customer says "add it" without prior context, ask which product they want to add.
 
 QUERIES:
 - For price/stock: use consultar_precio_producto_roelplant
@@ -1226,53 +1234,41 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     const a = (args.action || '').toLowerCase();
 
     if (a === 'checkout') {
-      const clientData = await window.clientProfile?.getClientData();
-      const rut = clientData?.rut || await ensureRut();
-      if (!rut) {
-        addText('assistant', 'Necesito tu RUT para proceder con la compra.');
-        speak('Necesito tu RUT para proceder con la compra.');
-        return;
-      }
+      console.log('[AGENTE] Procesando checkout...');
 
-      const email = clientData?.mail || await ensureEmail();
-      if (!email) {
-        addText('assistant', 'Necesito tu email para enviarte el link de pago.');
-        speak('Necesito tu email para enviarte el link de pago.');
-        return;
-      }
+      // Verificar si el carrito tiene items
+      const cartResult = await getCatalogCartData();
+      console.log('[AGENTE] Carrito para checkout:', cartResult);
 
-      addText('assistant', 'Generando tu link de pago...');
-      speak('Generando tu link de pago.');
-
-      try {
-        const currentUser = window.roelAuth?.getUser();
-        const userId = currentUser?.id || null;
-
-        const flowResp = await postJSON(FLOW_EP, { email, rut, user_id: userId });
-
-        if (flowResp?.status === 'ok' && flowResp?.payment_url) {
-          const msg = `Link de pago generado. Monto: ${formatCLP(flowResp.amount)}. Orden: ${flowResp.order_number}. Haz click aquí: ${flowResp.payment_url}`;
-          addText('assistant', msg);
-
-          if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify({ type: 'response.cancel' }));
-          }
-
-          speak(`Link de pago generado por ${formatCLP(flowResp.amount)}. Revisa el chat para ver el enlace.`);
-          showCart(true);
-        } else {
-          throw new Error(flowResp?.message || 'No se pudo generar el link de pago');
-        }
-      } catch (e) {
-        const errMsg = 'No pude generar el link de pago. ' + (e.message || 'Error desconocido');
-        addText('assistant', errMsg);
+      if (!cartResult.ok || !cartResult.cart || !cartResult.cart.items || cartResult.cart.items.length === 0) {
+        const msg = 'Tu carrito está vacío. Agrega productos antes de proceder al pago.';
+        addText('assistant', msg);
 
         if (dc && dc.readyState === 'open') {
           dc.send(JSON.stringify({ type: 'response.cancel' }));
         }
 
-        speak('No pude generar el link de pago. Intenta nuevamente.');
+        speak(msg);
+        console.log('[AGENTE] Checkout cancelado: carrito vacío');
+        return;
       }
+
+      // Carrito tiene items, proceder al checkout
+      const msg = 'Te llevo al checkout para completar tu compra.';
+      addText('assistant', msg);
+
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+      }
+
+      speak(msg);
+
+      // Redirigir al checkout
+      console.log('[AGENTE] Redirigiendo a checkout...');
+      setTimeout(() => {
+        const checkoutUrl = window.buildUrl ? window.buildUrl('checkout.php') : '/catalogo_detalle/checkout.php';
+        window.location.href = checkoutUrl;
+      }, 1500); // Dar tiempo para que el usuario escuche el mensaje
 
       return;
     }
