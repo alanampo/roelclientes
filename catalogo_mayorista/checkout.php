@@ -42,7 +42,7 @@ if ($logged) {
     </div>
 
     <div class="actions">
-      <a class="btn" href="index.php">Volver al carrito</a>
+      <a class="btn" href="index.php">Volver al catálogo</a>
       <a class="btn" href="index.php">Seguir comprando</a>
 
       <span id="helloName" class="muted" style="font-weight:800"></span>
