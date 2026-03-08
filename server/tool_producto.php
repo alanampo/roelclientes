@@ -30,15 +30,27 @@ try {
     $ivaPct = 0.19;
     $like = "%" . $db->real_escape_string($nombre) . "%";
 
-    // Consultar producto con stock disponible (misma estructura que el catálogo)
+    // Consultar productos con stock disponible (misma estructura que el catálogo)
+    // Ahora retorna TODOS los resultados que coincidan, no solo 1
     $sql = "SELECT
                 sv.id_variedad,
                 sv.variedad AS nombre,
                 sv.referencia,
+                sv.tipo AS tipo_producto,
                 sv.precio AS precio_mayorista_sin_iva,
                 sv.precio_detalle AS precio_detalle_sin_iva,
                 sv.disponible_para_reservar,
-                MAX(av.valor) AS tipo_planta,
+                MAX(CASE WHEN a.nombre = 'TIPO DE PLANTA' THEN av.valor END) AS tipo_planta,
+                GROUP_CONCAT(DISTINCT
+                    CASE
+                        WHEN a.nombre IS NULL THEN NULL
+                        WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+                        WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+                        ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+                    END
+                    ORDER BY a.nombre
+                    SEPARATOR '||'
+                ) AS attrs_activos,
                 MIN(v.descripcion) AS descripcion,
                 MIN(img.nombre_archivo) AS imagen_nombre
             FROM (
@@ -46,6 +58,7 @@ try {
                     v.id AS id_variedad,
                     v.nombre AS variedad,
                     CONCAT(t.codigo, LPAD(v.id_interno, 4, '0')) AS referencia,
+                    t.nombre AS tipo,
                     v.precio,
                     v.precio_detalle,
                     (
@@ -76,47 +89,81 @@ try {
             LEFT JOIN imagenes_variedades img ON img.id_variedad = sv.id_variedad
             LEFT JOIN atributos_valores_variedades avv ON avv.id_variedad = sv.id_variedad
             LEFT JOIN atributos_valores av ON av.id = avv.id_atributo_valor
-            LEFT JOIN atributos a ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
+            LEFT JOIN atributos a ON a.id = av.id_atributo
             WHERE sv.disponible_para_reservar > 0
             GROUP BY sv.id_variedad
-            LIMIT 1";
+            ORDER BY sv.disponible_para_reservar DESC";
 
     $stmt = $db->prepare($sql);
     $stmt->bind_param('s', $like);
     $stmt->execute();
     $result = $stmt->get_result();
-    $producto = $result->fetch_assoc();
+
+    $items = [];
+    while ($row = $result->fetch_assoc()) {
+        $detalleNeto = (float)($row['precio_detalle_sin_iva'] ?? 0);
+        $mayorNeto = (float)($row['precio_mayorista_sin_iva'] ?? 0);
+
+        // Construir URL de imagen
+        $imagenUrl = null;
+        if (!empty($row['imagen_nombre'])) {
+            $imagenUrl = 'https://control.roelplant.cl/uploads/variedades/' . $row['imagen_nombre'];
+        }
+
+        // Procesar atributos
+        $attrsRaw = trim((string)($row['attrs_activos'] ?? ''));
+        $attrs = [];
+        if ($attrsRaw !== '') {
+            foreach (explode('||', $attrsRaw) as $kv) {
+                $kv = trim((string)$kv);
+                if ($kv !== '') {
+                    $parts = explode(':', $kv, 2);
+                    if (count($parts) === 2) {
+                        $attrs[] = [
+                            'nombre' => trim($parts[0]),
+                            'valor' => trim($parts[1])
+                        ];
+                    }
+                }
+            }
+        }
+
+        $items[] = [
+            'id_variedad' => (int)($row['id_variedad'] ?? 0),
+            'variedad' => $row['nombre'],
+            'referencia' => $row['referencia'],
+            'tipo_producto' => $row['tipo_producto'] ?? null,
+            'tipo_planta' => $row['tipo_planta'] ?? null,
+            'attrs' => $attrs,
+            'attrs_raw' => $attrsRaw,
+            'precio' => (int)round($mayorNeto * (1 + $ivaPct)),
+            'precio_detalle' => (int)round($detalleNeto * (1 + $ivaPct)),
+            'stock' => max(0, (int)($row['disponible_para_reservar'] ?? 0)),
+            'disponible_para_reservar' => max(0, (int)($row['disponible_para_reservar'] ?? 0)),
+            'unidad' => 'plantines',
+            'imagen' => $imagenUrl,
+            'descripcion' => $row['descripcion'] ?? null
+        ];
+    }
 
     $stmt->close();
 
-    if (!$producto) {
+    if (empty($items)) {
         echo json_encode(['status' => 'not_found', 'message' => 'Sin coincidencias']);
         exit;
     }
 
-    // Formatear respuesta
-    $detalleNeto = (float)($producto['precio_detalle_sin_iva'] ?? 0);
-    $mayorNeto = (float)($producto['precio_mayorista_sin_iva'] ?? 0);
-
-    // Construir URL de imagen
-    $imagenUrl = null;
-    if (!empty($producto['imagen_nombre'])) {
-        $imagenUrl = 'https://control.roelplant.cl/uploads/variedades/' . $producto['imagen_nombre'];
+    // Si hay un solo resultado, retornar como antes (para compatibilidad)
+    if (count($items) === 1) {
+        echo json_encode(array_merge(['status' => 'ok'], $items[0]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
+    // Si hay múltiples resultados, retornar array
     echo json_encode([
-        'status' => 'ok',
-        'id_variedad' => (int)($producto['id_variedad'] ?? 0),
-        'variedad' => $producto['nombre'],
-        'referencia' => $producto['referencia'],
-        'tipo_planta' => $producto['tipo_planta'] ?? null,
-        'precio' => (int)round($mayorNeto * (1 + $ivaPct)),
-        'precio_detalle' => (int)round($detalleNeto * (1 + $ivaPct)),
-        'stock' => max(0, (int)($producto['disponible_para_reservar'] ?? 0)),
-        'disponible_para_reservar' => max(0, (int)($producto['disponible_para_reservar'] ?? 0)),
-        'unidad' => 'plantines',
-        'imagen' => $imagenUrl,
-        'descripcion' => $producto['descripcion'] ?? null
+        'status' => 'multiple',
+        'count' => count($items),
+        'items' => $items
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 } catch (\Throwable $th) {

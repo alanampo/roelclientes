@@ -41,7 +41,7 @@ try {
 
     if ($tipo) {
         $tipoNorm = '%' . strtoupper(trim($tipo)) . '%';
-        $whereExtra = ' AND (av.valor LIKE ? OR t.nombre LIKE ?)';
+        $whereExtra = ' AND (av.valor LIKE ? OR sv.tipo LIKE ?)';
         $params = [$tipoNorm, $tipoNorm];
         $types = 'ss';
     }
@@ -54,7 +54,17 @@ try {
                 sv.precio AS precio_mayorista_sin_iva,
                 sv.precio_detalle AS precio_detalle_sin_iva,
                 sv.disponible_para_reservar,
-                MAX(av.valor) AS tipo_planta,
+                MAX(CASE WHEN a.nombre = 'TIPO DE PLANTA' THEN av.valor END) AS tipo_planta,
+                GROUP_CONCAT(DISTINCT
+                    CASE
+                        WHEN a.nombre IS NULL THEN NULL
+                        WHEN a.nombre = 'TIPO DE PLANTA' THEN NULL
+                        WHEN NULLIF(TRIM(av.valor),'') IS NULL THEN NULL
+                        ELSE CONCAT(a.nombre, ': ', TRIM(av.valor))
+                    END
+                    ORDER BY a.nombre
+                    SEPARATOR '||'
+                ) AS attrs_activos,
                 MIN(v.descripcion) AS descripcion,
                 MIN(img.nombre_archivo) AS imagen_nombre
             FROM (
@@ -95,9 +105,9 @@ try {
             LEFT JOIN atributos a ON a.id = av.id_atributo AND a.nombre = 'TIPO DE PLANTA'
             WHERE sv.disponible_para_reservar > 0
               $whereExtra
-            GROUP BY v.id, v.nombre, v.id_interno, v.precio, v.precio_detalle, t.codigo, t.nombre
+            GROUP BY sv.id_variedad, sv.variedad, sv.referencia, sv.tipo, sv.precio, sv.precio_detalle
             HAVING disponible_para_reservar > 0
-            ORDER BY disponible_para_reservar DESC, v.nombre ASC
+            ORDER BY sv.disponible_para_reservar DESC, sv.variedad ASC
             LIMIT 200";
 
     $stmt = $db->prepare($sql);
@@ -120,12 +130,32 @@ try {
             $imagenUrl = 'https://control.roelplant.cl/uploads/variedades/' . $row['imagen_nombre'];
         }
 
+        // Procesar atributos
+        $attrsRaw = trim((string)($row['attrs_activos'] ?? ''));
+        $attrs = [];
+        if ($attrsRaw !== '') {
+            foreach (explode('||', $attrsRaw) as $kv) {
+                $kv = trim((string)$kv);
+                if ($kv !== '') {
+                    $parts = explode(':', $kv, 2);
+                    if (count($parts) === 2) {
+                        $attrs[] = [
+                            'nombre' => trim($parts[0]),
+                            'valor' => trim($parts[1])
+                        ];
+                    }
+                }
+            }
+        }
+
         $items[] = [
             'status' => 'ok',
             'id_variedad' => (int)$row['id_variedad'],
             'variedad' => $row['nombre'],
             'referencia' => $row['referencia'],
             'tipo_planta' => $row['tipo_planta'] ?: $row['tipo_producto'],
+            'attrs' => $attrs,
+            'attrs_raw' => $attrsRaw,
             'precio' => (int)round($mayorNeto * (1 + $ivaPct)),
             'precio_detalle' => (int)round($detalleNeto * (1 + $ivaPct)),
             'stock' => max(0, (int)$row['disponible_para_reservar']),

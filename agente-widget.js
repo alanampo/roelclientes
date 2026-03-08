@@ -131,6 +131,22 @@ QUERIES:
 - To list available products: use consultar_disponibles_roelplant
 - To filter by type: use consultar_disponibles_por_tipo_roelplant
 
+MULTIPLE PRODUCT OPTIONS:
+- When consultar_precio_producto_roelplant returns multiple options (status='multiple'), a visual selector appears automatically
+- DO NOT try to add to cart yet - wait for customer to select which option they want
+- Customer can select by:
+  1. Clicking on a product card (handled automatically)
+  2. Saying which one they want by voice
+- When customer indicates which product they want by voice, use seleccionar_producto_de_opciones with:
+  - index: if they say "first", "second", "la primera", "la segunda", etc. (pass 1, 2, 3...)
+  - description: if they mention type or attributes like "planta terminada", "semilla", "esqueje", "maceta", "bandeja", etc.
+  - qty: the quantity they want (if they said "10 units", pass qty=10)
+- This tool will automatically add the selected product to cart with the specified quantity
+- IMPORTANT: If user asks to add X units and there are multiple options:
+  1. First call consultar_precio_producto_roelplant
+  2. When it returns multiple, tell them "Found X options, which one do you want?"
+  3. When they specify, call seleccionar_producto_de_opciones with the qty they originally requested
+
 If off-topic (not about plants): respond "I'm Roelplant's assistant. I only handle plant queries, prices, stock, orders and shipping." (or equivalent in customer's language)`;
 
   // ========== UI ELEMENTS ==========
@@ -186,6 +202,14 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   let silentMode = false;
   let pc = null;
   let dc = null;
+
+  // ========== ANTI-FLOOD ==========
+  const FLOOD_LIMIT = 8; // máximo mensajes por ventana
+  const FLOOD_WINDOW = 60000; // 60 segundos en ms
+  const FLOOD_COOLDOWN = 30000; // 30 segundos de bloqueo
+  let messageTimestamps = [];
+  let floodBlocked = false;
+  let floodBlockedUntil = 0;
 
   function setSilentMode(silent) {
     silentMode = silent;
@@ -659,6 +683,20 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
               name: 'activar_modo_silencio',
               description: 'Activa el modo silencio cuando el usuario dice STOP, Basta, Silencio, etc',
               parameters: { type: 'object', properties: {}, additionalProperties: false }
+            },
+            {
+              type: 'function',
+              name: 'seleccionar_producto_de_opciones',
+              description: 'Cuando hay múltiples opciones de productos mostradas, permite seleccionar una por índice o descripción y agregarla al carrito',
+              parameters: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number', description: 'Índice del producto (1, 2, 3, etc. basado en 1)' },
+                  description: { type: 'string', description: 'Descripción de cuál quiere (ej: "la de maceta", "la de bandeja", "la semilla", "la planta terminada")' },
+                  qty: { type: 'number', description: 'Cantidad a agregar al carrito (default: 1)' }
+                },
+                additionalProperties: false
+              }
             }
           ]
         }
@@ -707,6 +745,49 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         return;
       }
 
+      // Contar interacciones de voz para anti-flood
+      if (msg.type === 'conversation.item.created') {
+        if (msg.item && msg.item.type === 'message' && msg.item.role === 'user') {
+          // El usuario acaba de enviar un mensaje de voz
+          console.log('[AGENTE] Mensaje de voz detectado');
+
+          // Verificar si está bloqueado ANTES de registrar
+          const now = Date.now();
+          if (floodBlocked && now < floodBlockedUntil) {
+            const secsLeft = Math.ceil((floodBlockedUntil - now) / 1000);
+            console.log('[AGENTE] Bloqueado por flood, cancelando respuesta');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+            addText('assistant', `🚫 Bloqueado. Espera ${secsLeft} segundos.`);
+            return;
+          }
+
+          // Limpiar mensajes antiguos y verificar límite
+          cleanOldMessages();
+          if (messageTimestamps.length >= FLOOD_LIMIT) {
+            floodBlocked = true;
+            floodBlockedUntil = now + FLOOD_COOLDOWN;
+            console.log('[AGENTE] Límite alcanzado, bloqueando');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+            addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT} mensajes/minuto). Bloqueado por 30 segundos.`);
+            return;
+          }
+
+          // Advertencia si está cerca del límite
+          if (messageTimestamps.length === 6) {
+            addText('assistant', '⚠️ Vas rápido. Solo 2 mensajes más en este minuto.');
+          }
+
+          // Registrar el mensaje
+          recordMessage();
+          console.log('[AGENTE] Mensaje registrado, total:', messageTimestamps.length);
+        }
+        return;
+      }
+
       if (msg.type === 'response.function_call_arguments.delta' || msg.type === 'function_call.arguments.delta') {
         const id = msg.call_id || msg.id;
         if (!fnAcc[id]) fnAcc[id] = { name: '', args: '' };
@@ -725,17 +806,41 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         log('fn', 'args.done', name + ' ' + JSON.stringify(args));
 
         if (name === 'consultar_precio_producto_roelplant') {
-          const out = await postJSON(TOOL_EP, { nombre: String(args.nombre || '').trim() });
-          handleProducto(out);
-          if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify({
-              type: 'conversation.item.create',
-              item: { type: 'function_call_output', call_id: id, output: JSON.stringify(out) }
-            }));
-            dc.send(JSON.stringify({
-              type: 'response.create',
-              response: { modalities: ['audio', 'text'] }
-            }));
+          const searchTerm = String(args.nombre || '').trim();
+          const out = await postJSON(TOOL_EP, { nombre: searchTerm });
+
+          // Agregar término de búsqueda al resultado para mostrarlo en el modal
+          if (out.status === 'multiple') {
+            out.searchTerm = searchTerm;
+
+            // Cancelar respuesta del AI para evitar que hable antes de mostrar el modal
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+
+            // Mostrar modal (handleProducto lo hará)
+            handleProducto(out);
+
+            // NO crear nueva respuesta, solo enviar el output
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify(out) }
+              }));
+            }
+          } else {
+            // Un solo resultado, proceder normal
+            handleProducto(out);
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify(out) }
+              }));
+              dc.send(JSON.stringify({
+                type: 'response.create',
+                response: { modalities: ['audio', 'text'] }
+              }));
+            }
           }
         } else if (name === 'consultar_disponibles_roelplant') {
           const lst = await getJSON(DISP_EP);
@@ -780,6 +885,74 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
               type: 'conversation.item.create',
               item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok' }) }
             }));
+          }
+        } else if (name === 'seleccionar_producto_de_opciones') {
+          if (!multipleProductsData || !multipleProductsData.items) {
+            addText('assistant', 'No hay opciones disponibles para seleccionar.');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'error', message: 'No options available' }) }
+              }));
+            }
+            delete fnAcc[id];
+            return;
+          }
+
+          let selectedIndex = -1;
+          const qty = args.qty && typeof args.qty === 'number' && args.qty > 0 ? Math.floor(args.qty) : 1;
+
+          // Seleccionar por índice
+          if (args.index && typeof args.index === 'number') {
+            selectedIndex = Math.floor(args.index) - 1; // Convertir de base-1 a base-0
+          }
+          // Seleccionar por descripción
+          else if (args.description && typeof args.description === 'string') {
+            const desc = args.description.toLowerCase();
+            selectedIndex = multipleProductsData.items.findIndex(item => {
+              const itemDesc = [
+                item.variedad,
+                item.referencia,
+                item.tipo_producto,
+                ...(item.attrs || []).map(a => a.valor)
+              ].join(' ').toLowerCase();
+              return itemDesc.includes(desc);
+            });
+          }
+
+          if (selectedIndex >= 0 && selectedIndex < multipleProductsData.items.length) {
+            const item = multipleProductsData.items[selectedIndex];
+            console.log('[AGENTE] Producto seleccionado por voz:', item, 'cantidad:', qty);
+
+            // Cerrar modal
+            closeProductSelector();
+
+            // Cancelar respuesta del agente
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+
+            // Agregar al carrito directamente con la cantidad especificada
+            await addProductDirectlyToCart(item, qty, 'retail');
+
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok', selected: item, qty: qty }) }
+              }));
+            }
+          } else {
+            addText('assistant', 'No pude identificar qué producto quieres. Intenta ser más específico o usa los botones.');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'error', message: 'Could not identify product' }) }
+              }));
+              dc.send(JSON.stringify({
+                type: 'response.create',
+                response: { modalities: ['audio', 'text'] }
+              }));
+            }
           }
         }
         delete fnAcc[id];
@@ -888,6 +1061,14 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     // Reset flags y acumuladores
     window._agenteConnectedMessageShown = false;
     window._transcriptAcc = {};
+
+    // Reset anti-flood
+    messageTimestamps = [];
+    floodBlocked = false;
+    floodBlockedUntil = 0;
+
+    // Cerrar selector de productos si está abierto
+    closeProductSelector();
 
     log('rtc', 'cleanup');
     console.log('[AGENTE-WIDGET] Cleanup completado');
@@ -1197,10 +1378,178 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     }));
   }
 
+  // ========== SELECTOR DE PRODUCTOS ==========
+  let multipleProductsData = null;
+  let pendingProductQuantity = 1; // Cantidad que el usuario pidió
+  const productSelectorOverlay = document.getElementById('agenteProductSelector');
+  const productSelectorTitle = document.getElementById('agenteProductSelectorTitle');
+  const productGrid = document.getElementById('agenteProductGrid');
+  const productSelectorClose = document.getElementById('agenteProductSelectorClose');
+
+  if (productSelectorClose) {
+    productSelectorClose.onclick = () => closeProductSelector();
+  }
+
+  function closeProductSelector() {
+    if (productSelectorOverlay) {
+      productSelectorOverlay.classList.remove('active');
+    }
+    multipleProductsData = null;
+    pendingProductQuantity = 1;
+  }
+
+  function showProductSelector(data) {
+    if (!productSelectorOverlay || !productGrid) return;
+
+    multipleProductsData = data;
+
+    // Actualizar título
+    if (productSelectorTitle) {
+      productSelectorTitle.textContent = `Encontré ${data.count} opciones de "${data.searchTerm || 'este producto'}"`;
+    }
+
+    // Limpiar grid
+    productGrid.innerHTML = '';
+
+    // Crear cards
+    data.items.forEach((item, index) => {
+      const card = document.createElement('div');
+      card.className = 'agente-product-card';
+      card.dataset.index = index;
+      card.dataset.idVariedad = item.id_variedad;
+
+      const imgUrl = item.imagen || 'https://via.placeholder.com/300x300?text=Sin+imagen';
+
+      // Construir HTML de tipo de producto
+      let tipoHtml = '';
+      if (item.tipo_producto) {
+        tipoHtml = `<div class="agente-product-card-attr" style="color: #22d3ee; font-weight: 600;"><strong>Tipo:</strong> ${item.tipo_producto}</div>`;
+      }
+
+      // Construir HTML de atributos
+      let attrsHtml = '';
+      if (item.attrs && item.attrs.length > 0) {
+        attrsHtml = item.attrs.map(attr =>
+          `<div class="agente-product-card-attr"><strong>${attr.nombre}:</strong> ${attr.valor}</div>`
+        ).join('');
+      }
+
+      const hasStock = item.stock > 0;
+
+      card.innerHTML = `
+        <img src="${imgUrl}" alt="${item.variedad}" class="agente-product-card-image" loading="lazy">
+        <div class="agente-product-card-body">
+          <h3 class="agente-product-card-title">${item.variedad}</h3>
+          <p class="agente-product-card-ref">Ref: ${item.referencia}</p>
+          ${tipoHtml ? `<div class="agente-product-card-attrs">${tipoHtml}</div>` : ''}
+          ${attrsHtml ? `<div class="agente-product-card-attrs">${attrsHtml}</div>` : ''}
+          <p class="agente-product-card-stock">Stock: ${item.stock} ${item.unidad || 'unidades'}</p>
+          <p class="agente-product-card-price">${formatCLP(item.precio_detalle)}</p>
+        </div>
+        <div class="agente-product-card-footer">
+          <button class="agente-product-card-btn" ${!hasStock ? 'disabled' : ''}
+                  onclick="window.selectProductFromModal(${index})">
+            ${hasStock ? 'Agregar al carrito' : 'Sin stock'}
+          </button>
+        </div>
+      `;
+
+      productGrid.appendChild(card);
+    });
+
+    // Mostrar modal
+    productSelectorOverlay.classList.add('active');
+
+    // Crear resumen breve para voz
+    const voiceSummary = data.items.map((item, i) => {
+      const tipoProd = item.tipo_producto || '';
+      return `opción ${i + 1}, ${tipoProd}`;
+    }).join(', ');
+
+    const message = `Encontré ${data.count} opciones de ${data.searchTerm}. Puedes ver los detalles en pantalla y seleccionar la que prefieras.`;
+
+    addText('assistant', message);
+    speak(message);
+  }
+
+  // Función para agregar producto directamente al carrito (sin buscarlo de nuevo)
+  async function addProductDirectlyToCart(item, qty = 1, tier = 'retail') {
+    console.log('[AGENTE] Agregando producto directamente al carrito:', item);
+
+    // Verificar stock disponible
+    const stock = item.stock || item.disponible_para_reservar || 0;
+    if (stock <= 0) {
+      addText('assistant', `El producto "${item.variedad}" no tiene stock disponible.`);
+      speak(`El producto ${item.variedad} no tiene stock disponible.`);
+      return;
+    }
+
+    if (qty > stock) {
+      addText('assistant', `Solo hay ${stock} unidades disponibles de "${item.variedad}". Ajustando cantidad.`);
+      speak(`Solo hay ${stock} unidades disponibles. Ajustando cantidad.`);
+      qty = stock;
+    }
+
+    // Preparar datos para el API del catálogo
+    const price = (tier === 'wholesale') ? item.precio : item.precio_detalle;
+    const catalogPayload = {
+      id_variedad: item.id_variedad,
+      referencia: item.referencia,
+      nombre: item.variedad,
+      imagen_url: item.imagen || '',
+      unit_price_clp: price,
+      qty: qty
+    };
+
+    // Agregar al carrito del catálogo
+    const result = await addToCatalogCart(catalogPayload);
+
+    if (result.ok && result.cart) {
+      const c = result.cart;
+      const line = composeCartLine(c);
+      addText('assistant', line);
+      speak(`Agregué ${qty} ${item.unidad || 'unidades'} de ${item.variedad} al carrito. ${line}`);
+      showCart(true);
+    } else {
+      const errMsg = result.error || 'No pude agregar el producto al carrito.';
+      addText('assistant', errMsg);
+      speak('No pude agregar el producto al carrito.');
+    }
+  }
+
+  // Función global para seleccionar producto desde el modal
+  window.selectProductFromModal = async function(index) {
+    if (!multipleProductsData || !multipleProductsData.items[index]) return;
+
+    const item = multipleProductsData.items[index];
+    console.log('[AGENTE] Producto seleccionado:', item);
+
+    // Cerrar modal
+    closeProductSelector();
+
+    // Cancelar respuesta actual del agente
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({ type: 'response.cancel' }));
+    }
+
+    // Usar la cantidad pendiente si existe, sino 1
+    const qty = pendingProductQuantity || 1;
+
+    // Agregar al carrito directamente con toda la información del producto
+    await addProductDirectlyToCart(item, qty, 'retail');
+  };
+
   // ========== PRODUCTO & LISTAS ==========
   function handleProducto(out) {
+    // Verificar si hay múltiples resultados
+    if (out.status === 'multiple' && out.items && out.items.length > 1) {
+      console.log('[AGENTE] Múltiples productos encontrados:', out);
+      showProductSelector(out);
+      return;
+    }
+
+    // Si es un solo resultado, continuar como antes
     // Ya no agregamos texto ni hablamos, dejamos que el AI responda basándose en el resultado
-    // Solo retornamos para que el tool pueda enviar el output al AI
   }
 
   function handleLista(lst, label) {
@@ -1263,12 +1612,12 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
       speak(msg);
 
-      // Redirigir al checkout
-      console.log('[AGENTE] Redirigiendo a checkout...');
+      // Redirigir al checkout después de que termine de hablar
+      console.log('[AGENTE] Redirigiendo a checkout en 4 segundos...');
       setTimeout(() => {
         const checkoutUrl = window.buildUrl ? window.buildUrl('checkout.php') : '/catalogo_detalle/checkout.php';
         window.location.href = checkoutUrl;
-      }, 1500); // Dar tiempo para que el usuario escuche el mensaje
+      }, 4000); // Dar tiempo suficiente para que termine de hablar el mensaje completo
 
       return;
     }
@@ -1446,6 +1795,55 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     // Acción desconocida - no hacer nada para no contradecir al servidor AI
   }
 
+  // ========== ANTI-FLOOD FUNCTIONS ==========
+  function cleanOldMessages() {
+    const now = Date.now();
+    messageTimestamps = messageTimestamps.filter(ts => now - ts < FLOOD_WINDOW);
+  }
+
+  function checkFloodLimit() {
+    const now = Date.now();
+
+    // Verificar si está bloqueado
+    if (floodBlocked && now < floodBlockedUntil) {
+      const secsLeft = Math.ceil((floodBlockedUntil - now) / 1000);
+      addText('assistant', `⚠️ Demasiados mensajes. Espera ${secsLeft} segundos más.`);
+      return false;
+    }
+
+    // Desbloquear si pasó el tiempo
+    if (floodBlocked && now >= floodBlockedUntil) {
+      floodBlocked = false;
+      floodBlockedUntil = 0;
+      messageTimestamps = [];
+      addText('assistant', '✓ Puedes continuar.');
+    }
+
+    // Limpiar mensajes antiguos
+    cleanOldMessages();
+
+    const count = messageTimestamps.length;
+
+    // Advertencia suave (7 mensajes)
+    if (count === 6) {
+      addText('assistant', '⚠️ Vas rápido. Solo 2 mensajes más en este minuto.');
+    }
+
+    // Bloqueo (8+ mensajes)
+    if (count >= FLOOD_LIMIT) {
+      floodBlocked = true;
+      floodBlockedUntil = now + FLOOD_COOLDOWN;
+      addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT} mensajes/minuto). Bloqueado por 30 segundos.`);
+      return false;
+    }
+
+    return true;
+  }
+
+  function recordMessage() {
+    messageTimestamps.push(Date.now());
+  }
+
   // ========== NLP + ENVÍO ==========
   const wantsPrice = (t) => /\b(precio|valor|cu[aá]nto|costo|stock\s+de|precio\s+de)\b/i.test(t);
   const wantsDispon = (t) => /\b(disponible|disponibles|en\s+stock|hay\s+disponible|lista|cat[aá]logo)\b/i.test(t);
@@ -1461,6 +1859,15 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       addText('assistant', 'Conéctate primero con Iniciar.');
       return;
     }
+
+    // Verificar límite anti-flood
+    if (!checkFloodLimit()) {
+      return;
+    }
+
+    // Registrar mensaje
+    recordMessage();
+
     addText('user', qn);
 
     if (wantsCartSummary(qn)) {

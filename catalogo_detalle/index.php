@@ -1130,6 +1130,21 @@ $secciones=[
   </div>
 </div>
 
+<!-- Modal Selector de Productos -->
+<div class="agente-product-selector-overlay" id="agenteProductSelector">
+  <div class="agente-product-selector">
+    <div class="agente-product-selector-header">
+      <h2 id="agenteProductSelectorTitle">Selecciona un producto</h2>
+      <button class="agente-product-selector-close" id="agenteProductSelectorClose" aria-label="Cerrar">×</button>
+    </div>
+    <div class="agente-product-selector-body">
+      <div class="agente-product-grid" id="agenteProductGrid">
+        <!-- Las cards se generan dinámicamente con JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
 <link rel="stylesheet" href="../agente-widget.css">
 
 
