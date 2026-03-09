@@ -439,6 +439,44 @@
 .agente-product-card-footer {
   padding: 12px;
   border-top: 1px solid var(--stroke);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agente-product-card-qty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agente-product-card-qty label {
+  font-size: 12px;
+  color: #b4c5dc;
+  white-space: nowrap;
+}
+
+.agente-product-card-qty-input {
+  flex: 1;
+  padding: 6px 8px;
+  background: rgba(9, 16, 25, .7);
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 60px;
+}
+
+.agente-product-card-qty-input:focus {
+  outline: none;
+  border-color: var(--cyan);
+}
+
+.agente-product-card-qty-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .agente-product-card-btn {
@@ -536,6 +574,26 @@
     grid-row: 2;
     border-top: none;
     border-left: 1px solid var(--stroke);
+    gap: 6px;
+  }
+
+  .agente-product-card-qty {
+    gap: 6px;
+  }
+
+  .agente-product-card-qty label {
+    font-size: 11px;
+  }
+
+  .agente-product-card-qty-input {
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: 50px;
+  }
+
+  .agente-product-card-btn {
+    padding: 6px 10px;
+    font-size: 12px;
   }
 }
 

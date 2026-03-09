@@ -20,6 +20,10 @@ try {
     $raw = file_get_contents('php://input') ?: '';
     $data = json_decode($raw, true) ?: [];
     $nombre = trim($data['nombre'] ?? '');
+    $tipo = trim($data['tipo'] ?? '');
+
+    // LOG para debugging
+    error_log('[TOOL_PRODUCTO] Buscando - nombre: ' . $nombre . ', tipo: ' . $tipo);
 
     if ($nombre === '') {
         http_response_code(400);
@@ -29,6 +33,15 @@ try {
 
     $ivaPct = 0.19;
     $like = "%" . $db->real_escape_string($nombre) . "%";
+
+    // Preparar filtro de tipo si está presente
+    $tipoWhere = '';
+    $tipoParam = null;
+    if ($tipo !== '') {
+        // Usar coincidencia exacta (case-insensitive) para tipos
+        $tipoWhere = ' AND UPPER(t.nombre) = ?';
+        $tipoParam = strtoupper($db->real_escape_string($tipo));
+    }
 
     // Consultar productos con stock disponible (misma estructura que el catálogo)
     // Ahora retorna TODOS los resultados que coincidan, no solo 1
@@ -83,6 +96,7 @@ try {
                 JOIN tipos_producto t ON t.id = v.id_tipo
                 WHERE ap.estado = 8
                   AND v.nombre LIKE ?
+                  $tipoWhere
                 GROUP BY v.id
             ) AS sv
             JOIN variedades_producto v ON v.id = sv.id_variedad
@@ -95,7 +109,13 @@ try {
             ORDER BY sv.disponible_para_reservar DESC";
 
     $stmt = $db->prepare($sql);
-    $stmt->bind_param('s', $like);
+
+    if ($tipoParam !== null) {
+        $stmt->bind_param('ss', $like, $tipoParam);
+    } else {
+        $stmt->bind_param('s', $like);
+    }
+
     $stmt->execute();
     $result = $stmt->get_result();
 

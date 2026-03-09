@@ -96,9 +96,13 @@ SILENT MODE:
 
 CART - TOOL USAGE:
 1. When customer asks to ADD to cart ("agregar al carrito", "add to cart", "aggiungi al carrello", "додати до кошика"):
-   - ALWAYS use action="add_by_name" (never use update_qty for adding!)
-   - Include: name (product name), qty (quantity, default 1), tier ("retail" or "wholesale")
-   - Example: If they asked price of "Monstera" and say "add it", call carrito_operar with {action:"add_by_name", name:"Monstera Deliciosa", qty:1, tier:"retail"}
+   - CRITICAL: If customer specifies a product TYPE (semilla, esqueje, etc.), you MUST pass the tipo parameter to carrito_operar
+   - Include: name (product name), qty (quantity, default 1), tier ("retail" or "wholesale"), tipo (if specified)
+   - Example flows:
+     * Customer: "add monstera tipo semilla" → carrito_operar({action:"add_by_name", name:"Monstera Deliciosa", qty:1, tier:"retail", tipo:"SEMILLA"})
+     * Customer: "add 2 plantines de monstera" → carrito_operar({action:"add_by_name", name:"Monstera Deliciosa", qty:2, tier:"retail", tipo:"SEMILLA"})
+     * Customer: "add monstera" (no type specified) → carrito_operar({action:"add_by_name", name:"Monstera Deliciosa", qty:1, tier:"retail"})
+   - If carrito_operar returns multiple options, it will show selector automatically
    - The system automatically handles if product already exists in cart - it will increment the quantity
 
 2. When customer asks to CHANGE quantity of existing item:
@@ -126,26 +130,74 @@ CART - TOOL USAGE:
 
 9. If customer says "add it" without prior context, ask which product they want to add.
 
-QUERIES:
+QUERIES AND TERMINOLOGY MAPPING:
 - For price/stock: use consultar_precio_producto_roelplant
+  * nombre: product name (required)
+  * tipo: product type filter (optional) - use when customer specifies type
+
+- Product types in database (ALWAYS USE EXACT UPPERCASE):
+  * SEMILLA - seeds/seedlings
+  * ESQUEJE - cuttings
+  * PLANTA TERMINADA - finished plants
+  * PACK - product packs
+
+- KEYWORD MAPPING (customer terms → search parameter):
+  IMPORTANT: Always pass tipo parameter in UPPERCASE exactly as shown below:
+  * "plantín" / "plantine" / "plantines" → IMPORTANT: This is AMBIGUOUS
+    - First check if it's in the product NAME (e.g., "PACK DE 10 PLANTINES MIX CLASICO")
+    - If NOT in name, then map to tipos: tipo="SEMILLA" or tipo="ESQUEJE" (try both)
+    - Example: "quiero un plantín de monstera" → search nombre="monstera", tipo="SEMILLA" first, if nothing then tipo="ESQUEJE"
+  * "semilla" / "seed" / "de tipo semilla" → tipo="SEMILLA" (exact uppercase)
+  * "esqueje" / "cutting" / "de tipo esqueje" → tipo="ESQUEJE" (exact uppercase)
+  * "planta terminada" / "finished plant" / "de tipo planta terminada" → tipo="PLANTA TERMINADA" (exact uppercase)
+  * "pack" / "de tipo pack" → tipo="PACK" (exact uppercase)
+
+- SEARCH STRATEGY:
+  * Use consultar_precio_producto_roelplant ONLY when customer asks for price/info WITHOUT wanting to add to cart
+  * When customer wants to ADD to cart, use carrito_operar directly with tipo parameter
+
+  Examples:
+  * "cuánto cuesta monstera en semilla?" → consultar_precio_producto_roelplant(nombre="monstera", tipo="SEMILLA")
+  * "agregar monstera en semilla al carrito" → carrito_operar(action="add_by_name", name="monstera", tipo="SEMILLA", qty=1, tier="retail")
+  * "cuánto cuesta monstera?" → consultar_precio_producto_roelplant(nombre="monstera") [may return multiple]
+  * "agregar monstera" → carrito_operar(action="add_by_name", name="monstera", qty=1, tier="retail") [may show selector]
+
+- HANDLING NO RESULTS (status='not_found'):
+  * If a specific search with tipo filter returns 'not_found':
+    - Automatically try again WITHOUT the tipo filter (broader search)
+    - Example: "monstera en semilla" finds nothing → try just "monstera"
+    - Tell customer: "No encontré monstera en semilla, pero encontré estas opciones de monstera:"
+  * If even the broad search returns nothing:
+    - Tell customer the product is not available in stock
+    - Suggest checking consultar_disponibles_roelplant to see what's in stock
+
 - To list available products: use consultar_disponibles_roelplant
 - To filter by type: use consultar_disponibles_por_tipo_roelplant
 
 MULTIPLE PRODUCT OPTIONS:
-- When consultar_precio_producto_roelplant returns multiple options (status='multiple'), a visual selector appears automatically
-- DO NOT try to add to cart yet - wait for customer to select which option they want
-- Customer can select by:
-  1. Clicking on a product card (handled automatically)
-  2. Saying which one they want by voice
-- When customer indicates which product they want by voice, use seleccionar_producto_de_opciones with:
-  - index: if they say "first", "second", "la primera", "la segunda", etc. (pass 1, 2, 3...)
-  - description: if they mention type or attributes like "planta terminada", "semilla", "esqueje", "maceta", "bandeja", etc.
-  - qty: the quantity they want (if they said "10 units", pass qty=10)
-- This tool will automatically add the selected product to cart with the specified quantity
-- IMPORTANT: If user asks to add X units and there are multiple options:
-  1. First call consultar_precio_producto_roelplant
-  2. When it returns multiple, tell them "Found X options, which one do you want?"
-  3. When they specify, call seleccionar_producto_de_opciones with the qty they originally requested
+- When consultar_precio_producto_roelplant returns status='multiple', a visual selector appears automatically
+- You will receive items with these fields:
+  * nombre: product name
+  * tipo: product type (SEMILLA, PLANTA TERMINADA, etc.)
+  * atributos: attributes like bandeja, maceta, etc.
+  * stock: available quantity
+  * precio_final_con_iva: FINAL PRICE WITH IVA INCLUDED - USE THIS PRICE when speaking to customer
+  * unidad: unit (plantines, etc.)
+- Describe each option clearly mentioning the tipo, atributos, stock, and precio_final_con_iva
+- Example: "Encontré 2 opciones. Opción 1: MONSTERA DELICIOSA tipo SEMILLA, bandeja de 72 alveolos, 2026 unidades disponibles, precio 1785 pesos. Opción 2: MONSTERA DELICIOSA tipo PLANTA TERMINADA, maceta MAC-14, 95 unidades disponibles, precio 5950 pesos."
+- DO NOT try to add to cart yet - wait for customer to select
+- Customer can select by clicking or saying which one they want
+
+SELECTING FROM OPTIONS:
+- If customer wants ONE option: use seleccionar_producto_de_opciones
+  * index: if they say "first", "second", "la primera", etc. (pass 1, 2, 3...)
+  * description: if they mention "semilla", "planta terminada", "maceta", "bandeja", etc.
+  * qty: the quantity they want
+
+- If customer wants MULTIPLE options at once: use agregar_multiples_del_selector
+  * Example: "1 de la primera y 2 de la segunda" → agregar_multiples_del_selector with selections: [{index: 1, qty: 1}, {index: 2, qty: 2}]
+  * Example: "agrega la semilla y la planta terminada" → agregar_multiples_del_selector with selections: [{description: "semilla", qty: 1}, {description: "planta terminada", qty: 1}]
+  * This tool adds all selections to cart in one operation
 
 If off-topic (not about plants): respond "I'm Roelplant's assistant. I only handle plant queries, prices, stock, orders and shipping." (or equivalent in customer's language)`;
 
@@ -347,6 +399,31 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   }
 
   function loadAvatar() {
+    // Si ya existe un avatar, limpiarlo primero
+    if (avatar) {
+      console.log('[AGENTE-WIDGET] Avatar ya existe, limpiando antes de cargar nuevo...');
+      scene.remove(avatar);
+      avatar.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) {
+            o.material.forEach(m => m.dispose());
+          } else {
+            o.material.dispose();
+          }
+        }
+      });
+      avatar = null;
+      jawTargets.length = 0;
+      blinkLT.length = 0;
+      blinkRT.length = 0;
+      Object.keys(bones).forEach(k => bones[k] = null);
+      if (mixer) {
+        mixer.stopAllAction();
+        mixer = null;
+      }
+    }
+
     const loader = new GLTFLoader();
     loader.load(RPM_GLTF, (gltf) => {
       avatar = gltf.scene;
@@ -647,7 +724,15 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
             {
               type: 'function',
               name: 'consultar_precio_producto_roelplant',
-              parameters: { type: 'object', properties: { nombre: { type: 'string' } }, required: ['nombre'] }
+              description: 'Search for product by name with optional filters for exact matching',
+              parameters: {
+                type: 'object',
+                properties: {
+                  nombre: { type: 'string', description: 'Product name to search' },
+                  tipo: { type: 'string', description: 'Optional: product type filter (SEMILLA, ESQUEJE, PLANTA TERMINADA, etc.)' }
+                },
+                required: ['nombre']
+              }
             },
             {
               type: 'function',
@@ -670,6 +755,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
                   name: { type: 'string' },
                   qty: { type: 'number' },
                   tier: { type: 'string' },
+                  tipo: { type: 'string', description: 'Optional: product type filter (SEMILLA, ESQUEJE, PLANTA TERMINADA, etc.)' },
                   unit: { type: 'string' },
                   price: { type: 'number' },
                   image: { type: 'string' }
@@ -695,6 +781,30 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
                   description: { type: 'string', description: 'Descripción de cuál quiere (ej: "la de maceta", "la de bandeja", "la semilla", "la planta terminada")' },
                   qty: { type: 'number', description: 'Cantidad a agregar al carrito (default: 1)' }
                 },
+                additionalProperties: false
+              }
+            },
+            {
+              type: 'function',
+              name: 'agregar_multiples_del_selector',
+              description: 'Cuando el usuario pide agregar MÚLTIPLES opciones del selector (ej: "1 de la primera y 2 de la segunda"), usa este tool para agregar todas a la vez',
+              parameters: {
+                type: 'object',
+                properties: {
+                  selections: {
+                    type: 'array',
+                    description: 'Array de selecciones a agregar',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        index: { type: 'number', description: 'Índice del producto (1, 2, 3, etc. basado en 1)' },
+                        description: { type: 'string', description: 'Descripción alternativa (ej: "semilla", "planta terminada")' },
+                        qty: { type: 'number', description: 'Cantidad a agregar (default: 1)' }
+                      }
+                    }
+                  }
+                },
+                required: ['selections'],
                 additionalProperties: false
               }
             }
@@ -807,25 +917,59 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
         if (name === 'consultar_precio_producto_roelplant') {
           const searchTerm = String(args.nombre || '').trim();
-          const out = await postJSON(TOOL_EP, { nombre: searchTerm });
+          const tipoFilter = args.tipo ? String(args.tipo).trim() : null;
+
+          // Construir payload con tipo opcional
+          const payload = { nombre: searchTerm };
+          if (tipoFilter) {
+            payload.tipo = tipoFilter;
+            console.log('[AGENTE] ⚠️ BÚSQUEDA CON FILTRO DE TIPO:', tipoFilter);
+          }
+
+          console.log('[AGENTE] Buscando producto con payload:', JSON.stringify(payload));
+          const out = await postJSON(TOOL_EP, payload);
+          console.log('[AGENTE] Resultado de búsqueda:', JSON.stringify(out).substring(0, 300));
 
           // Agregar término de búsqueda al resultado para mostrarlo en el modal
           if (out.status === 'multiple') {
             out.searchTerm = searchTerm;
 
-            // Cancelar respuesta del AI para evitar que hable antes de mostrar el modal
+            // CANCELAR la respuesta del AI primero para que no siga hablando
             if (dc && dc.readyState === 'open') {
               dc.send(JSON.stringify({ type: 'response.cancel' }));
             }
 
-            // Mostrar modal (handleProducto lo hará)
+            // Mostrar modal
             handleProducto(out);
 
-            // NO crear nueva respuesta, solo enviar el output
+            // Preparar output para el AI con precios claros
+            // Asegurarnos de que cada item tenga precio_final_con_iva
+            const itemsForAI = out.items.map(item => ({
+              nombre: item.variedad,
+              referencia: item.referencia,
+              tipo: item.tipo_producto,
+              atributos: item.attrs ? item.attrs.map(a => a.valor).join(', ') : '',
+              stock: item.stock,
+              precio_final_con_iva: item.precio_detalle,
+              unidad: item.unidad
+            }));
+
+            const aiOutput = {
+              status: 'multiple',
+              count: out.count,
+              message: 'Multiple options found. DO NOT say you added to cart. Wait for customer to select.',
+              items: itemsForAI
+            };
+
+            // Enviar resultado y crear nueva respuesta
             if (dc && dc.readyState === 'open') {
               dc.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: { type: 'function_call_output', call_id: id, output: JSON.stringify(out) }
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify(aiOutput) }
+              }));
+              dc.send(JSON.stringify({
+                type: 'response.create',
+                response: { modalities: ['audio', 'text'] }
               }));
             }
           } else {
@@ -886,6 +1030,117 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
               item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok' }) }
             }));
           }
+        } else if (name === 'agregar_multiples_del_selector') {
+          if (!multipleProductsData || !multipleProductsData.items) {
+            addText('assistant', 'No hay opciones disponibles para seleccionar.');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'error', message: 'No options available' }) }
+              }));
+            }
+            delete fnAcc[id];
+            return;
+          }
+
+          const selections = args.selections || [];
+          if (!Array.isArray(selections) || selections.length === 0) {
+            addText('assistant', 'No especificaste qué productos agregar.');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'error', message: 'No selections provided' }) }
+              }));
+            }
+            delete fnAcc[id];
+            return;
+          }
+
+          console.log('[AGENTE] Múltiples selecciones recibidas:', selections);
+
+          // Cancelar respuesta del agente
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+
+          const results = [];
+          const addedProducts = [];
+
+          // Procesar cada selección en modo silencioso
+          for (const sel of selections) {
+            let selectedIndex = -1;
+            const qty = sel.qty && typeof sel.qty === 'number' && sel.qty > 0 ? Math.floor(sel.qty) : 1;
+
+            // Seleccionar por índice
+            if (sel.index && typeof sel.index === 'number') {
+              selectedIndex = Math.floor(sel.index) - 1; // Convertir de base-1 a base-0
+            }
+            // Seleccionar por descripción
+            else if (sel.description && typeof sel.description === 'string') {
+              const desc = sel.description.toLowerCase();
+              selectedIndex = multipleProductsData.items.findIndex(item => {
+                const itemDesc = [
+                  item.variedad,
+                  item.referencia,
+                  item.tipo_producto,
+                  ...(item.attrs || []).map(a => a.valor)
+                ].join(' ').toLowerCase();
+                return itemDesc.includes(desc);
+              });
+            }
+
+            if (selectedIndex >= 0 && selectedIndex < multipleProductsData.items.length) {
+              const item = multipleProductsData.items[selectedIndex];
+              console.log('[AGENTE] ===== AGREGANDO PRODUCTO =====');
+              console.log('[AGENTE] Producto:', item.variedad);
+              console.log('[AGENTE] Referencia:', item.referencia);
+              console.log('[AGENTE] ID Variedad:', item.id_variedad);
+              console.log('[AGENTE] Cantidad solicitada:', qty);
+              console.log('[AGENTE] Tipo:', item.tipo_producto);
+
+              // Agregar al carrito en modo silencioso (sin mostrar mensajes individuales)
+              const addResult = await addProductDirectlyToCart(item, qty, 'retail', true);
+
+              console.log('[AGENTE] Resultado de agregar:', addResult);
+
+              if (addResult.ok) {
+                results.push({ status: 'ok', product: item.variedad, qty: addResult.qty });
+                addedProducts.push({ name: item.variedad, qty: addResult.qty, ref: item.referencia });
+              } else {
+                results.push({ status: 'error', product: item.variedad, error: addResult.error });
+              }
+            } else {
+              console.warn('[AGENTE] No se encontró producto para selección:', sel);
+              results.push({ status: 'not_found', selection: sel });
+            }
+          }
+
+          // Cerrar modal después de agregar todos
+          closeProductSelector();
+
+          // Mostrar mensaje consolidado con todos los productos agregados
+          if (addedProducts.length > 0) {
+            const summary = addedProducts.map(p => `${p.qty}× ${p.name}`).join(', ');
+
+            // Obtener carrito actualizado
+            const cartResult = await getCatalogCartData();
+            if (cartResult.ok && cartResult.cart) {
+              const line = composeCartLine(cartResult.cart);
+              const message = `Agregué al carrito: ${summary}. ${line}`;
+              addText('assistant', message);
+              speak(message);
+              showCart(true);
+            }
+          }
+
+          // Enviar resultado al AI
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok', results: results }) }
+            }));
+          }
+
         } else if (name === 'seleccionar_producto_de_opciones') {
           if (!multipleProductsData || !multipleProductsData.items) {
             addText('assistant', 'No hay opciones disponibles para seleccionar.');
@@ -1054,6 +1309,36 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       }
     }
 
+    // Limpiar avatar y escena de Three.js
+    if (avatar) {
+      console.log('[AGENTE-WIDGET] Limpiando avatar de Three.js...');
+      scene.remove(avatar);
+      avatar.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) {
+            o.material.forEach(m => m.dispose());
+          } else {
+            o.material.dispose();
+          }
+        }
+      });
+      avatar = null;
+    }
+
+    // Detener animaciones
+    if (mixer) {
+      console.log('[AGENTE-WIDGET] Deteniendo mixer de animaciones...');
+      mixer.stopAllAction();
+      mixer = null;
+    }
+
+    // Limpiar arrays de morph targets y bones
+    jawTargets.length = 0;
+    blinkLT.length = 0;
+    blinkRT.length = 0;
+    Object.keys(bones).forEach(k => bones[k] = null);
+
     pc = null;
     dc = null;
     setConn('none');
@@ -1117,8 +1402,23 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
   // ========== CART ==========
   function renderCart(c) {
+    console.log('[AGENTE] Renderizando carrito:', c);
+
     const items = (c && Array.isArray(c.items)) ? c.items : [];
-    cartFloatBody.innerHTML = items.length ? items.map(it => {
+    console.log('[AGENTE] Items en carrito:', items.length);
+
+    // Limpiar completamente el contenido
+    cartFloatBody.innerHTML = '';
+
+    if (items.length === 0) {
+      // Carrito vacío
+      cartFloatBody.innerHTML = `<div class="meta" style="opacity:.75">Carrito vacío.</div>`;
+      if (cartFloatCount) cartFloatCount.textContent = '';
+      return;
+    }
+
+    // Renderizar items
+    const itemsHtml = items.map(it => {
       // Compatibilidad: formato del catálogo (unit_price_clp, nombre) y formato antiguo (price, name)
       const unitPrice = Number(it.unit_price_clp || it.price || 0);
       const qty = Number(it.qty || 0);
@@ -1136,7 +1436,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         </div>
         <div class="meta">${formatCLP(lineSub)}</div>
       </div>`;
-    }).join('') : `<div class="meta" style="opacity:.75">Carrito vacío.</div>`;
+    }).join('');
 
     // Usar total_clp del catálogo si existe, sino calcular
     const total = c.total_clp ? Number(c.total_clp) : items.reduce((s, i) => {
@@ -1147,8 +1447,12 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     const units = c.item_count ? Number(c.item_count) : items.reduce((s, i) => s + Number(i.qty || 0), 0);
     const lines = items.length;
 
-    cartFloatBody.innerHTML += `<div class="agente-cart-total"><span>Total</span><strong>${formatCLP(total)}</strong></div>`;
-    if (cartFloatCount) cartFloatCount.textContent = lines ? `(${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${units} unid.)` : '';
+    // Agregar items y total
+    cartFloatBody.innerHTML = itemsHtml + `<div class="agente-cart-total"><span>Total</span><strong>${formatCLP(total)}</strong></div>`;
+
+    if (cartFloatCount) {
+      cartFloatCount.textContent = lines ? `(${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${units} unid.)` : '';
+    }
   }
 
   function showCart(open) {
@@ -1447,6 +1751,17 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           <p class="agente-product-card-price">${formatCLP(item.precio_detalle)}</p>
         </div>
         <div class="agente-product-card-footer">
+          <div class="agente-product-card-qty">
+            <label>Cantidad:</label>
+            <input type="number"
+                   class="agente-product-card-qty-input"
+                   id="qty-${index}"
+                   value="1"
+                   min="1"
+                   max="${item.stock}"
+                   ${!hasStock ? 'disabled' : ''}
+                   onchange="window.validateProductQty(${index}, ${item.stock})">
+          </div>
           <button class="agente-product-card-btn" ${!hasStock ? 'disabled' : ''}
                   onclick="window.selectProductFromModal(${index})">
             ${hasStock ? 'Agregar al carrito' : 'Sin stock'}
@@ -1460,35 +1775,37 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     // Mostrar modal
     productSelectorOverlay.classList.add('active');
 
-    // Crear resumen breve para voz
-    const voiceSummary = data.items.map((item, i) => {
-      const tipoProd = item.tipo_producto || '';
-      return `opción ${i + 1}, ${tipoProd}`;
-    }).join(', ');
-
-    const message = `Encontré ${data.count} opciones de ${data.searchTerm}. Puedes ver los detalles en pantalla y seleccionar la que prefieras.`;
-
-    addText('assistant', message);
-    speak(message);
+    // NO hablar aquí - dejar que el AI hable usando los datos que le enviamos
+    // El AI recibirá los items con precio_final_con_iva y los dirá correctamente
   }
 
   // Función para agregar producto directamente al carrito (sin buscarlo de nuevo)
-  async function addProductDirectlyToCart(item, qty = 1, tier = 'retail') {
-    console.log('[AGENTE] Agregando producto directamente al carrito:', item);
+  async function addProductDirectlyToCart(item, qty = 1, tier = 'retail', silent = false) {
+    console.log('[AGENTE] *** addProductDirectlyToCart INICIO ***');
+    console.log('[AGENTE] Item:', item.variedad);
+    console.log('[AGENTE] Cantidad recibida:', qty, 'tipo:', typeof qty);
 
     // Verificar stock disponible
     const stock = item.stock || item.disponible_para_reservar || 0;
     if (stock <= 0) {
-      addText('assistant', `El producto "${item.variedad}" no tiene stock disponible.`);
-      speak(`El producto ${item.variedad} no tiene stock disponible.`);
-      return;
+      if (!silent) {
+        addText('assistant', `El producto "${item.variedad}" no tiene stock disponible.`);
+        speak(`El producto ${item.variedad} no tiene stock disponible.`);
+      }
+      return { ok: false, error: 'Sin stock', item: item };
     }
 
     if (qty > stock) {
-      addText('assistant', `Solo hay ${stock} unidades disponibles de "${item.variedad}". Ajustando cantidad.`);
-      speak(`Solo hay ${stock} unidades disponibles. Ajustando cantidad.`);
+      if (!silent) {
+        addText('assistant', `Solo hay ${stock} unidades disponibles de "${item.variedad}". Ajustando cantidad.`);
+        speak(`Solo hay ${stock} unidades disponibles. Ajustando cantidad.`);
+      }
       qty = stock;
     }
+
+    // Asegurar que qty sea un número entero
+    const finalQty = Math.max(1, Math.floor(qty));
+    console.log('[AGENTE] Cantidad final a enviar:', finalQty);
 
     // Preparar datos para el API del catálogo
     const price = (tier === 'wholesale') ? item.precio : item.precio_detalle;
@@ -1498,24 +1815,55 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       nombre: item.variedad,
       imagen_url: item.imagen || '',
       unit_price_clp: price,
-      qty: qty
+      qty: finalQty
     };
+
+    console.log('[AGENTE] Payload a enviar al API:', JSON.stringify(catalogPayload));
 
     // Agregar al carrito del catálogo
     const result = await addToCatalogCart(catalogPayload);
 
+    console.log('[AGENTE] Resultado del API:', result);
+
     if (result.ok && result.cart) {
-      const c = result.cart;
-      const line = composeCartLine(c);
-      addText('assistant', line);
-      speak(`Agregué ${qty} ${item.unidad || 'unidades'} de ${item.variedad} al carrito. ${line}`);
-      showCart(true);
+      if (!silent) {
+        const c = result.cart;
+        const line = composeCartLine(c);
+        addText('assistant', line);
+        speak(`Agregué ${finalQty} ${item.unidad || 'unidades'} de ${item.variedad} al carrito. ${line}`);
+        showCart(true);
+      }
+      return { ok: true, cart: result.cart, qty: finalQty, item: item };
     } else {
-      const errMsg = result.error || 'No pude agregar el producto al carrito.';
-      addText('assistant', errMsg);
-      speak('No pude agregar el producto al carrito.');
+      if (!silent) {
+        const errMsg = result.error || 'No pude agregar el producto al carrito.';
+        addText('assistant', errMsg);
+        speak('No pude agregar el producto al carrito.');
+      }
+      return { ok: false, error: result.error, item: item };
     }
   }
+
+  // Función para validar cantidad del producto
+  window.validateProductQty = function(index, maxStock) {
+    const input = document.getElementById(`qty-${index}`);
+    if (!input) return;
+
+    let value = parseInt(input.value) || 1;
+
+    // Validar mínimo
+    if (value < 1) {
+      value = 1;
+    }
+
+    // Validar máximo
+    if (value > maxStock) {
+      value = maxStock;
+      addText('assistant', `Stock máximo disponible: ${maxStock} unidades.`);
+    }
+
+    input.value = value;
+  };
 
   // Función global para seleccionar producto desde el modal
   window.selectProductFromModal = async function(index) {
@@ -1523,6 +1871,18 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
     const item = multipleProductsData.items[index];
     console.log('[AGENTE] Producto seleccionado:', item);
+
+    // Leer cantidad del input
+    const qtyInput = document.getElementById(`qty-${index}`);
+    let qty = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+
+    // Validar cantidad vs stock
+    if (qty > item.stock) {
+      qty = item.stock;
+    }
+    if (qty < 1) {
+      qty = 1;
+    }
 
     // Cerrar modal
     closeProductSelector();
@@ -1532,10 +1892,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       dc.send(JSON.stringify({ type: 'response.cancel' }));
     }
 
-    // Usar la cantidad pendiente si existe, sino 1
-    const qty = pendingProductQuantity || 1;
-
-    // Agregar al carrito directamente con toda la información del producto
+    // Agregar al carrito directamente con la cantidad seleccionada
     await addProductDirectlyToCart(item, qty, 'retail');
   };
 
@@ -1637,7 +1994,32 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           return;
         }
 
-        const p = await postJSON(TOOL_EP, { nombre: name });
+        // Construir payload con tipo opcional
+        const searchPayload = { nombre: name };
+        if (args.tipo) {
+          searchPayload.tipo = String(args.tipo).trim();
+          console.log('[CARRITO] Buscando con tipo:', searchPayload.tipo);
+        }
+
+        console.log('[CARRITO] Buscando producto para agregar:', JSON.stringify(searchPayload));
+        const p = await postJSON(TOOL_EP, searchPayload);
+        console.log('[CARRITO] Resultado:', p ? `status=${p.status}, count=${p.count || 1}` : 'null');
+
+        // Si hay múltiples resultados, mostrar selector y NO permitir que la AI siga hablando
+        if (p && p.status === 'multiple') {
+          // CANCELAR respuesta de la AI
+          suppressCartText = true;
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+
+          addText('assistant', `Encontré ${p.count} opciones de "${name}". Por favor selecciona cuál quieres.`);
+          speak(`Encontré ${p.count} opciones. Especifica cuál quieres o selecciona de las opciones.`);
+          p.searchTerm = name;
+          handleProducto(p);
+          return;
+        }
+
         if (!p || p.status !== 'ok') {
           addText('assistant', `No encontré el producto "${name}" o no tiene stock disponible.`);
           speak(`No encontré el producto ${name} o no tiene stock disponible.`);
@@ -1648,7 +2030,32 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         // Si es 'add' con datos directos, buscar el producto para verificar stock y obtener id_variedad
         const name = String(args.name || '').trim();
         if (name) {
-          const p = await postJSON(TOOL_EP, { nombre: name });
+          // Construir payload con tipo opcional
+          const searchPayload = { nombre: name };
+          if (args.tipo) {
+            searchPayload.tipo = String(args.tipo).trim();
+            console.log('[CARRITO] Buscando con tipo:', searchPayload.tipo);
+          }
+
+          console.log('[CARRITO] Buscando producto para agregar:', JSON.stringify(searchPayload));
+          const p = await postJSON(TOOL_EP, searchPayload);
+          console.log('[CARRITO] Resultado:', p ? `status=${p.status}, count=${p.count || 1}` : 'null');
+
+          // Si hay múltiples resultados, mostrar selector y NO permitir que la AI siga hablando
+          if (p && p.status === 'multiple') {
+            // CANCELAR respuesta de la AI
+            suppressCartText = true;
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+
+            addText('assistant', `Encontré ${p.count} opciones de "${name}". Por favor selecciona cuál quieres.`);
+            speak(`Encontré ${p.count} opciones. Especifica cuál quieres o selecciona de las opciones.`);
+            p.searchTerm = name;
+            handleProducto(p);
+            return;
+          }
+
           if (!p || p.status !== 'ok') {
             addText('assistant', `No encontré el producto "${name}" o no tiene stock disponible.`);
             speak(`No encontré el producto ${name} o no tiene stock disponible.`);
@@ -1656,6 +2063,13 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           }
           productInfo = p;
         }
+      }
+
+      // Verificar que productInfo no sea null
+      if (!productInfo) {
+        addText('assistant', 'Error: No se pudo obtener información del producto.');
+        speak('Error: No se pudo obtener información del producto.');
+        return;
       }
 
       // Verificar stock disponible
@@ -1980,6 +2394,17 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   }).catch(err => {
     console.error('[AGENTE-WIDGET] Error cargando carrito:', err);
   });
+
+  // Función para actualizar el carrito del agente (llamada cuando se abre el modal)
+  window.agenteUpdateCart = async function() {
+    console.log('[AGENTE] Actualizando carrito...');
+    try {
+      const result = await getCatalogCart();
+      console.log('[AGENTE] Carrito actualizado:', result);
+    } catch (err) {
+      console.error('[AGENTE] Error actualizando carrito:', err);
+    }
+  };
 
   // Exponer funciones globalmente
   window.agenteWidgetStart = start;

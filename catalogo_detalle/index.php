@@ -1174,6 +1174,12 @@ $secciones=[
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
 
+      // Actualizar carrito del agente cada vez que se abre el modal
+      if (window.agenteUpdateCart && typeof window.agenteUpdateCart === 'function') {
+        console.log('[MODAL] Actualizando carrito del agente...');
+        window.agenteUpdateCart();
+      }
+
       // Iniciar el agente automáticamente al abrir el modal
       if (!window.agenteInitialized) {
         window.agenteInitialized = true;
