@@ -87,6 +87,85 @@
   border-color: rgba(239, 68, 68, .4);
 }
 
+.agente-modal-textmode {
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  margin-right: 8px;
+}
+
+.agente-modal-textmode:hover {
+  background: rgba(34, 211, 238, .1);
+  border-color: rgba(34, 211, 238, .4);
+  opacity: 1;
+}
+
+.agente-modal-textmode.active {
+  background: rgba(34, 211, 238, .25);
+  border-color: rgba(34, 211, 238, .8);
+  color: #22d3ee;
+  opacity: 1;
+  box-shadow: 0 0 12px rgba(34, 211, 238, .3);
+}
+
+.agente-modal-textmode:active {
+  transform: scale(0.95);
+}
+
+.agente-modal-interrupt {
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+  margin-right: 8px;
+}
+
+.agente-modal-interrupt:hover {
+  background: rgba(34, 211, 238, .1);
+  border-color: rgba(34, 211, 238, .4);
+  opacity: 1;
+}
+
+.agente-modal-interrupt:active {
+  transform: scale(0.95);
+}
+
+/* Modo texto - ocultar elementos de audio/avatar */
+.agente-modal.text-mode .agente-center {
+  display: none;
+}
+
+.agente-modal.text-mode .agente-stage {
+  grid-template-columns: 1fr;
+}
+
+.agente-modal.text-mode .agente-right {
+  min-width: unset;
+}
+
 .agente-stage {
   display: grid;
   grid-template-columns: minmax(280px, 55%) minmax(320px, 45%);
@@ -542,8 +621,19 @@
     min-height: 100vh;
   }
 
+  .agente-product-selector-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   .agente-product-selector-header h2 {
     font-size: 16px;
+    flex: 1;
+  }
+
+  .agente-product-selector-header > div {
+    display: flex;
+    gap: 6px;
   }
 
   .agente-product-grid {
@@ -608,6 +698,24 @@
     height: 100vh;
     max-height: 100vh;
     border-radius: 0;
+  }
+
+  .agente-modal-header {
+    padding: 12px;
+  }
+
+  .agente-modal-textmode,
+  .agente-modal-interrupt,
+  .agente-modal-close {
+    width: 32px;
+    height: 32px;
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+
+  .agente-modal-textmode,
+  .agente-modal-interrupt {
+    margin-right: 6px;
   }
 
   .agente-right .agente-feed {

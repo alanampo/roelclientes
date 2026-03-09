@@ -32,7 +32,12 @@ try {
     }
 
     $ivaPct = 0.19;
+
+    // Hacer búsqueda más flexible: buscar tanto con espacios como sin espacios
+    // Esto permite encontrar "MONA LISA" cuando se busca "mona lisa" o "monalisa"
+    $nombreSinEspacios = str_replace(' ', '', $nombre);
     $like = "%" . $db->real_escape_string($nombre) . "%";
+    $likeSinEspacios = "%" . $db->real_escape_string($nombreSinEspacios) . "%";
 
     // Preparar filtro de tipo si está presente
     $tipoWhere = '';
@@ -95,7 +100,7 @@ try {
                 JOIN variedades_producto v ON v.id = ap.id_variedad
                 JOIN tipos_producto t ON t.id = v.id_tipo
                 WHERE ap.estado = 8
-                  AND v.nombre LIKE ?
+                  AND (v.nombre LIKE ? OR REPLACE(v.nombre, ' ', '') LIKE ?)
                   $tipoWhere
                 GROUP BY v.id
             ) AS sv
@@ -111,9 +116,9 @@ try {
     $stmt = $db->prepare($sql);
 
     if ($tipoParam !== null) {
-        $stmt->bind_param('ss', $like, $tipoParam);
+        $stmt->bind_param('sss', $like, $likeSinEspacios, $tipoParam);
     } else {
-        $stmt->bind_param('s', $like);
+        $stmt->bind_param('ss', $like, $likeSinEspacios);
     }
 
     $stmt->execute();

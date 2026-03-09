@@ -75,6 +75,7 @@
   const SESSION_EP = '/server/realtime_session.php';
   const TOOL_EP = '/server/tool_producto.php';
   const DISP_EP = '/server/disponibles_proxy.php';
+  const CHAT_API_EP = '/server/chat_api.php';
 
   // Usar API del catálogo para el carrito (integración completa)
   const CATALOG_CART_ADD = '/catalogo_detalle/api/cart/add.php';
@@ -85,6 +86,19 @@
   if (typeof window._agenteHasVoiceGreeted === 'undefined') {
     window._agenteHasVoiceGreeted = false;
   }
+
+  // Flag para controlar modo texto (persiste en la sesión de página)
+  if (typeof window._agenteTextModeOnly === 'undefined') {
+    window._agenteTextModeOnly = false;
+  }
+  let textModeOnly = window._agenteTextModeOnly;
+
+  // Flag para saber si está conectando
+  let isConnecting = false;
+
+  // Historial de conversación para modo texto
+  let conversationHistory = [];
+  let isTextModeSending = false;
 
   const SYSTEM_PROMPT = `You are a sales assistant for Roelplant (Chilean plant nursery).
 
@@ -228,7 +242,13 @@ SELECTING FROM OPTIONS:
   * Example: "agrega la semilla y la planta terminada" → agregar_multiples_del_selector with selections: [{description: "semilla", qty: 1}, {description: "planta terminada", qty: 1}]
   * This tool adds all selections to cart in one operation
 
-If off-topic (not about plants): respond "I'm Roelplant's assistant. I only handle plant queries, prices, stock, orders and shipping." (or equivalent in customer's language)`;
+If off-topic (not about plants): respond "I'm Roelplant's assistant. I only handle plant queries, prices, stock, orders and shipping." (or equivalent in customer's language)
+
+TEXT-ONLY MODE NOTE:
+- If the conversation includes "TEXT-ONLY MODE" or "text-only mode", you are in chat-only mode
+- Only respond with text - do NOT generate audio
+- Keep responses concise and natural
+- Avoid mentioning audio or voice features`;
 
   // ========== UI ELEMENTS ==========
   const dot = document.getElementById('dot');
@@ -241,6 +261,8 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   const remote = document.getElementById('remote');
   const overlay = document.getElementById('overlay');
   const startBig = document.getElementById('startBig');
+  const btnTextMode = document.getElementById('agenteModalTextMode');
+  const btnInterrupt = document.getElementById('agenteModalInterrupt');
   const cartFloatPanel = document.getElementById('cartFloatPanel');
   const cartFloatBody = document.getElementById('cartFloatBody');
   const cartFloatClose = document.getElementById('cartFloatClose');
@@ -693,6 +715,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       console.log('[AGENTE-WIDGET] Ya existe conexión activa');
       return;
     }
+    isConnecting = true;
     setConn('connecting');
     log('rtc', 'connect()');
     let eph = '';
@@ -707,11 +730,13 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       eph = js?.client_secret?.value || '';
       log('net', 'realtime_session', eph ? 'token ok' : ('payload:' + tx), eph ? 'log' : 'err');
       if (!eph) {
+        isConnecting = false;
         addText('assistant', 'No pude abrir sesión');
         setConn('none');
         return;
       }
     } catch (e) {
+      isConnecting = false;
       log('net', 'realtime_session.error', String(e), 'err');
       addText('assistant', 'No pude abrir sesión');
       setConn('none');
@@ -736,19 +761,27 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       log('rtc', 'ontrack audio');
     };
 
-    try {
-      const mic = await getMic();
-      if (mic) mic.getTracks().forEach(t => pc.addTrack(t, mic));
-    } catch { }
+    // En modo texto, no solicitar micrófono
+    if (!textModeOnly) {
+      try {
+        const mic = await getMic();
+        if (mic) mic.getTracks().forEach(t => pc.addTrack(t, mic));
+      } catch { }
+    }
 
     dc = pc.createDataChannel('oai-events');
     dc.onopen = () => {
       log('dc', 'open');
+      // Determinar instrucciones según modo
+      const sessionInstructions = textModeOnly
+        ? SYSTEM_PROMPT + `\n\nTEXT-ONLY MODE: You are in text-only mode. Only respond with text. Do NOT generate audio. Keep responses concise and clear. No voice interaction is available.`
+        : SYSTEM_PROMPT;
+
       dc.send(JSON.stringify({
         type: 'session.update',
         session: {
           voice: 'alloy',
-          instructions: SYSTEM_PROMPT,
+          instructions: sessionInstructions,
           tools: [
             {
               type: 'function',
@@ -846,8 +879,12 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         addText('assistant', 'Conectado. Escribe o usa los atajos.');
       }
 
+      // Marcar que ya no está conectando
+      isConnecting = false;
+      console.log('[AGENTE] DataChannel abierto - isConnecting = false');
+
       // Saludo de voz solo en la primera apertura de la sesión
-      if (!window._agenteHasVoiceGreeted) {
+      if (!window._agenteHasVoiceGreeted && !textModeOnly) {
         window._agenteHasVoiceGreeted = true;
         console.log('[AGENTE] Primera conexión, enviando saludo automático...');
         // Esperar un momento para que todo esté listo, luego enviar el saludo
@@ -1808,9 +1845,20 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   const productSelectorTitle = document.getElementById('agenteProductSelectorTitle');
   const productGrid = document.getElementById('agenteProductGrid');
   const productSelectorClose = document.getElementById('agenteProductSelectorClose');
+  const productSelectorInterrupt = document.getElementById('agenteProductSelectorInterrupt');
 
   if (productSelectorClose) {
     productSelectorClose.onclick = () => closeProductSelector();
+  }
+
+  if (productSelectorInterrupt) {
+    productSelectorInterrupt.onclick = () => {
+      console.log('[AGENTE] Interrumpiendo respuesta (desde selector de productos)...');
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+        addText('assistant', '[Interrumpido]');
+      }
+    };
   }
 
   function closeProductSelector() {
@@ -2378,20 +2426,66 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
   }
 
   // ========== NLP + ENVÍO ==========
-  const wantsPrice = (t) => /\b(precio|valor|cu[aá]nto|costo|stock\s+de|precio\s+de)\b/i.test(t);
+  const wantsPrice = (t) => /\b(precio|valor|cu[aá]nto|costo|stock\s+de|precio\s+de|cuesta)\b/i.test(t);
   const wantsDispon = (t) => /\b(disponible|disponibles|en\s+stock|hay\s+disponible|lista|cat[aá]logo)\b/i.test(t);
   const wantsCartSummary = (t) => /\b(?:ver|mostrar|resumen|estado|mi|el|actualiza|actualizar|actualizado)\s+carrito\b/i.test(t);
+  const isProductSearch = (t) => /\b(tenes?|tienes?|hay|tienen|tenemos)\b.*\?/i.test(t) || /\b(de|la|el|una?)\s+[a-záéíóú\s]{3,}\?/i.test(t);
   const extractTipo = (t) => {
     const m = t.match(/\b(plantas? de interior|plantas? de exterior|cubre\s*suelo[s]?|árboles|arboles|trepadoras|suculentas|helechos|nativas|introducidas)\b/i);
     return m ? m[0] : null;
   };
 
+  // Extraer nombre de producto de forma inteligente
+  function extractProductName(text) {
+    const clean = text.replace(/[?!.]/g, '').toLowerCase().trim();
+
+    // Palabras a ignorar
+    const ignore = ['que', 'es', 'el', 'la', 'de', 'un', 'una', 'unos', 'unas', 'y', 'o', 'si', 'no', 'los', 'las', 'del', 'las'];
+    const keywords = ['precio', 'costo', 'cuanto', 'cuánto', 'tienes', 'tenes', 'tenemos', 'hay', 'tienen', 'disponible', 'disponibles', 'en', 'stock', 'cuesta', 'vale', 'sale', 'moneda', 'clp', 'pesos', 'disponibilidad', 'cual', 'cuál'];
+
+    // Estrategia 1: Patrones específicos (más flexibles, sin requerir ?)
+    const patterns = [
+      /(?:tenes?|tienes?|hay|tenemos?|tienen)\s+([a-záéíóúñ\s]+?)(?:\?|$)/i,  // tenes X? / tenes X
+      /(?:cuanto|cuánto|cual|cuál)\s+(?:cuesta|es|vale|sale)\s+(?:el\s+|la\s+|los\s+|las\s+)?([a-záéíóúñ\s]+?)(?:\?|$)/i,  // cuanto cuesta/vale/sale X?
+      /precio\s+(?:de\s+)?([a-záéíóúñ\s]+?)(?:\?|$)/i,  // precio de X?
+      /disponibilidad\s+(?:de\s+)?([a-záéíóúñ\s]+?)(?:\?|$)/i,  // disponibilidad de X?
+      /stock\s+(?:de\s+)?([a-záéíóúñ\s]+?)(?:\?|$)/i,  // stock de X?
+      /(?:tienes?|tenes?)\s+([a-záéíóúñ\s]+)/i  // tienes X (sin interrogación)
+    ];
+
+    for (let pattern of patterns) {
+      const match = clean.match(pattern);
+      if (match && match[1]) {
+        let name = match[1].trim();
+        // Limpiar espacios extra
+        name = name.replace(/\s+/g, ' ');
+        if (name.length > 2) {
+          console.log('[AGENTE] Patrón coincidió:', name);
+          return name;
+        }
+      }
+    }
+
+    // Estrategia 2: Si no coincide patrón, eliminar palabras clave/ignoradas
+    const words = clean.split(/\s+/).filter(w =>
+      !keywords.includes(w) &&
+      !ignore.includes(w) &&
+      w.length > 1
+    );
+
+    if (words.length > 0) {
+      const fallback = words.join(' ').trim();
+      console.log('[AGENTE] Fallback extraction:', fallback);
+      return fallback;
+    }
+
+    return '';
+  }
+
   function sendText(q) {
     const qn = String(q || '').trim();
-    if (!dc || dc.readyState !== 'open') {
-      addText('assistant', 'Conéctate primero con Iniciar.');
-      return;
-    }
+
+    if (qn === '') return;
 
     // Verificar límite anti-flood
     if (!checkFloodLimit()) {
@@ -2408,6 +2502,112 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       return;
     }
 
+    // ========== MODO TEXTO: Igual que voz ==========
+    if (textModeOnly) {
+      if (isTextModeSending) {
+        console.log('[AGENTE-TEXTO] Ya está enviando, esperando...');
+        return;
+      }
+
+      // ===== BÚSQUEDA DE PRODUCTO: Igual que voz =====
+      if (wantsPrice(qn) || wantsDispon(qn) || isProductSearch(qn)) {
+        console.log('[AGENTE-TEXTO] Búsqueda detectada:', qn);
+        isTextModeSending = true;
+
+        const productName = extractProductName(qn);
+        console.log('[AGENTE-TEXTO] Buscando:', productName);
+
+        if (!productName || productName.length < 2) {
+          addText('assistant', 'Dime qué producto buscas.');
+          isTextModeSending = false;
+          return;
+        }
+
+        // Buscar directamente (igual que voz)
+        fetch(TOOL_EP, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: productName, tipo: '' })
+        })
+          .then(r => r.json())
+          .then(result => {
+            console.log('[AGENTE-TEXTO] Resultado:', result);
+
+            if (result.status === 'not_found' || result.status === 'error') {
+              addText('assistant', 'No tengo ese producto disponible.');
+              isTextModeSending = false;
+              return;
+            }
+
+            // Convertir a "multiple" si es necesario
+            let dataToShow = result;
+            if (result.status === 'ok' && !result.items) {
+              dataToShow = { status: 'multiple', count: 1, items: [result] };
+            }
+
+            // Mostrar tarjetas (igual que voz)
+            handleProducto(dataToShow);
+            isTextModeSending = false;
+          })
+          .catch(err => {
+            console.error('[AGENTE-TEXTO] Error:', err);
+            addText('assistant', 'Error en búsqueda.');
+            isTextModeSending = false;
+          });
+
+        return;
+      }
+
+      // ===== OTRAS PREGUNTAS: Chat API simple =====
+      isTextModeSending = true;
+
+      fetch(CHAT_API_EP, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: qn, history: conversationHistory })
+      })
+        .then(r => r.json())
+        .then(res => {
+          console.log('[AGENTE-TEXTO] Chat API:', res);
+
+          if (!res.ok) {
+            addText('assistant', 'Error.');
+            isTextModeSending = false;
+            return;
+          }
+
+          const aiResponse = res.response || '';
+          conversationHistory.push({ role: 'user', content: qn });
+          conversationHistory.push({ role: 'assistant', content: aiResponse });
+
+          if (aiResponse) {
+            addText('assistant', aiResponse);
+          }
+
+          isTextModeSending = false;
+        })
+        .catch(err => {
+          console.error('[AGENTE-TEXTO] Error Chat API:', err);
+          addText('assistant', 'Error.');
+          isTextModeSending = false;
+        });
+
+      return;
+    }
+
+    // ========== MODO VOZ: Usar WebRTC Realtime ==========
+    // Chequear si está conectando - reintentarauto después de 500ms
+    if (isConnecting) {
+      console.log('[AGENTE] Está conectando, reintentando en 500ms...');
+      setTimeout(() => sendText(q), 500);
+      return;
+    }
+
+    if (!dc || dc.readyState !== 'open') {
+      addText('assistant', 'Conéctate primero con Iniciar.');
+      return;
+    }
+
     let hint = '';
     if (wantsDispon(qn)) {
       const tipo = extractTipo(qn);
@@ -2420,15 +2620,27 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     dc.send(JSON.stringify({ type: 'input_text', text: qn + hint }));
 
     if (!wantsPrice(qn) && !wantsDispon(qn)) {
-      dc.send(JSON.stringify({ type: 'response.create', response: { modalities: ['audio', 'text'] } }));
+      const modalities = textModeOnly ? ['text'] : ['audio', 'text'];
+      dc.send(JSON.stringify({ type: 'response.create', response: { modalities: modalities } }));
     }
   }
 
   // ========== START ==========
   function start() {
-    console.log('[AGENTE-WIDGET] start() llamado');
+    console.log('[AGENTE-WIDGET] start() llamado, textModeOnly:', textModeOnly);
     if (overlay) overlay.style.display = 'none';
     if (btnIniciar) btnIniciar.style.display = 'none';
+
+    // Si está en modo texto, iniciar sin WebRTC/avatar
+    if (textModeOnly) {
+      console.log('[AGENTE-WIDGET] Modo texto - Iniciando sin WebRTC/avatar...');
+      conversationHistory = [];
+      isTextModeSending = false;
+      setConn('connected');
+      addText('assistant', '[Modo texto activado - Solo chat]');
+      return;
+    }
+
     console.log('[AGENTE-WIDGET] Cargando avatar...');
     loadAvatar();
 
@@ -2471,6 +2683,109 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
       if (!v) return;
       txt.value = '';
       sendText(v);
+    };
+  }
+
+  // Botón para cambiar a modo texto
+  if (btnTextMode) {
+    // Aplicar estado visual si modo texto ya estaba activo
+    if (textModeOnly) {
+      const modal = document.querySelector('.agente-modal');
+      if (modal) modal.classList.add('text-mode');
+      btnTextMode.classList.add('active');
+    }
+
+    btnTextMode.onclick = () => {
+      textModeOnly = !textModeOnly;
+      window._agenteTextModeOnly = textModeOnly;
+      console.log('[AGENTE] Modo texto toggle:', textModeOnly);
+
+      const modal = document.querySelector('.agente-modal');
+      if (modal) {
+        if (textModeOnly) {
+          // ===== ACTIVAR MODO TEXTO =====
+          modal.classList.add('text-mode');
+          btnTextMode.classList.add('active');
+
+          console.log('[AGENTE] ACTIVANDO modo texto - Usando Chat API puro');
+
+          // Limpiar historial
+          conversationHistory = [];
+          isTextModeSending = false;
+
+          // Cancelar cualquier respuesta de voz en curso
+          if (dc && dc.readyState === 'open') {
+            console.log('[AGENTE] Cancelando respuesta de voz en curso...');
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+
+          // Detener captura de micrófono si existe
+          if (micStream) {
+            console.log('[AGENTE] Deteniendo micrófono...');
+            micStream.getTracks().forEach(track => track.stop());
+            micStream = null;
+          }
+
+          // Establecer conexión como "conectado" para Chat API (sin WebRTC)
+          setConn('connected');
+
+          addText('assistant', '[✓ Modo texto activado - Usando API de Chat (sin micrófono)]');
+        } else {
+          // ===== DESACTIVAR MODO TEXTO =====
+          modal.classList.remove('text-mode');
+          btnTextMode.classList.remove('active');
+
+          console.log('[AGENTE] DESACTIVANDO modo texto - Reconectando WebRTC');
+
+          // Limpiar historial de Chat API
+          conversationHistory = [];
+          isTextModeSending = false;
+
+          // Cerrar conexión anterior si existe
+          if (pc) {
+            try {
+              if (pc.connectionState !== 'closed') {
+                pc.close();
+              }
+            } catch (e) {}
+            pc = null;
+          }
+          dc = null;
+
+          // Reconectar WebRTC automáticamente
+          addText('assistant', '[Reconectando en modo voz...]');
+
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') {
+              audioCtx.resume().catch(e => {});
+            }
+          }
+
+          connect().then(() => {
+            console.log('[AGENTE] Reconectado en modo voz');
+          }).catch(err => {
+            console.error('[AGENTE] Error reconectando:', err);
+            addText('assistant', 'Error al reconectar. Click "Iniciar" para intentar de nuevo.');
+          });
+        }
+      }
+    };
+  }
+
+  // Botón para interrumpir respuesta de voz
+  if (btnInterrupt) {
+    btnInterrupt.onclick = () => {
+      // No interrumpir en modo texto
+      if (textModeOnly) {
+        return;
+      }
+
+      console.log('[AGENTE] Interrumpiendo respuesta actual...');
+      if (dc && dc.readyState === 'open') {
+        dc.send(JSON.stringify({ type: 'response.cancel' }));
+        addText('assistant', '[Interrumpido]');
+      }
     };
   }
 
