@@ -81,6 +81,11 @@
   const CATALOG_CART_GET = '/catalogo_detalle/api/cart/get.php';
   const CATALOG_CART_REMOVE = '/catalogo_detalle/api/cart/remove.php';
 
+  // Flag para controlar saludo de voz (persiste toda la sesión de página)
+  if (typeof window._agenteHasVoiceGreeted === 'undefined') {
+    window._agenteHasVoiceGreeted = false;
+  }
+
   const SYSTEM_PROMPT = `You are a sales assistant for Roelplant (Chilean plant nursery).
 
 LANGUAGE RULE: Always respond in the SAME language the customer uses:
@@ -840,6 +845,24 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
         window._agenteConnectedMessageShown = true;
         addText('assistant', 'Conectado. Escribe o usa los atajos.');
       }
+
+      // Saludo de voz solo en la primera apertura de la sesión
+      if (!window._agenteHasVoiceGreeted) {
+        window._agenteHasVoiceGreeted = true;
+        console.log('[AGENTE] Primera conexión, enviando saludo automático...');
+        // Esperar un momento para que todo esté listo, luego enviar el saludo
+        setTimeout(() => {
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'response.create',
+              response: {
+                modalities: ['audio', 'text'],
+                instructions: 'Saluda diciendo exactamente: "Hola, ¿en qué te puedo ayudar?" No digas nada más.'
+              }
+            }));
+          }
+        }, 500);
+      }
     };
 
     const fnAcc = {};
@@ -1441,6 +1464,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
     // Reset flags y acumuladores
     window._agenteConnectedMessageShown = false;
     window._transcriptAcc = {};
+    // IMPORTANTE: NO resetear window._agenteHasVoiceGreeted - debe persistir toda la sesión
 
     // Reset anti-flood
     messageTimestamps = [];
