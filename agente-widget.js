@@ -131,7 +131,17 @@ CART - TOOL USAGE:
 9. If customer says "add it" without prior context, ask which product they want to add.
 
 QUERIES AND TERMINOLOGY MAPPING:
-- For price/stock: use consultar_precio_producto_roelplant
+- IMPORTANT: Choose the right tool based on customer intent:
+  * INFORMATIONAL queries ("tienes?", "cuánto cuesta?", "hay stock de?", "show me", "tell me about")
+    → Use consultar_precio_producto_roelplant
+    → This will ALWAYS show visual product card(s), even for 1 result
+    → Customer can then select from the visual options
+
+  * PURCHASE intent ("agregar al carrito", "add to cart", "quiero comprar", "dame", "I want")
+    → Use carrito_operar directly with action="add_by_name"
+    → This will add directly WITHOUT showing visual options (unless multiple matches, then shows selector)
+
+- For consultar_precio_producto_roelplant:
   * nombre: product name (required)
   * tipo: product type filter (optional) - use when customer specifies type
 
@@ -152,15 +162,21 @@ QUERIES AND TERMINOLOGY MAPPING:
   * "planta terminada" / "finished plant" / "de tipo planta terminada" → tipo="PLANTA TERMINADA" (exact uppercase)
   * "pack" / "de tipo pack" → tipo="PACK" (exact uppercase)
 
-- SEARCH STRATEGY:
-  * Use consultar_precio_producto_roelplant ONLY when customer asks for price/info WITHOUT wanting to add to cart
-  * When customer wants to ADD to cart, use carrito_operar directly with tipo parameter
+- EXAMPLES OF WHEN TO USE EACH TOOL:
 
-  Examples:
+  INFORMATIONAL (use consultar_precio_producto_roelplant):
+  * "tienes dolar variegado?" → consultar_precio_producto_roelplant(nombre="dolar variegado")
   * "cuánto cuesta monstera en semilla?" → consultar_precio_producto_roelplant(nombre="monstera", tipo="SEMILLA")
+  * "hay stock de ficus?" → consultar_precio_producto_roelplant(nombre="ficus")
+  * "show me the monstera options" → consultar_precio_producto_roelplant(nombre="monstera")
+  * "cuánto sale?" (after previous product mentioned) → consultar_precio_producto_roelplant(nombre="[previous product]")
+
+  PURCHASE INTENT (use carrito_operar):
   * "agregar monstera en semilla al carrito" → carrito_operar(action="add_by_name", name="monstera", tipo="SEMILLA", qty=1, tier="retail")
-  * "cuánto cuesta monstera?" → consultar_precio_producto_roelplant(nombre="monstera") [may return multiple]
-  * "agregar monstera" → carrito_operar(action="add_by_name", name="monstera", qty=1, tier="retail") [may show selector]
+  * "dame 2 de ficus" → carrito_operar(action="add_by_name", name="ficus", qty=2, tier="retail")
+  * "quiero comprar dolar variegado" → carrito_operar(action="add_by_name", name="dolar variegado", qty=1, tier="retail")
+  * "add it to cart" (after showing product) → carrito_operar(action="add_by_name", name="[shown product]", qty=1, tier="retail")
+  * "agrégalo" (after showing product) → carrito_operar(action="add_by_name", name="[shown product]", qty=1, tier="retail")
 
 - HANDLING NO RESULTS (status='not_found'):
   * If a specific search with tipo filter returns 'not_found':
@@ -174,19 +190,27 @@ QUERIES AND TERMINOLOGY MAPPING:
 - To list available products: use consultar_disponibles_roelplant
 - To filter by type: use consultar_disponibles_por_tipo_roelplant
 
-MULTIPLE PRODUCT OPTIONS:
-- When consultar_precio_producto_roelplant returns status='multiple', a visual selector appears automatically
-- You will receive items with these fields:
+PRODUCT SEARCH RESULTS:
+- When consultar_precio_producto_roelplant is called, a visual card ALWAYS appears (even for 1 result)
+- You will receive product data with these fields:
   * nombre: product name
   * tipo: product type (SEMILLA, PLANTA TERMINADA, etc.)
   * atributos: attributes like bandeja, maceta, etc.
   * stock: available quantity
-  * precio_final_con_iva: FINAL PRICE WITH IVA INCLUDED - USE THIS PRICE when speaking to customer
+  * precio_final_con_iva: FINAL PRICE WITH IVA INCLUDED - USE THIS PRICE when speaking
   * unidad: unit (plantines, etc.)
-- Describe each option clearly mentioning the tipo, atributos, stock, and precio_final_con_iva
-- Example: "Encontré 2 opciones. Opción 1: MONSTERA DELICIOSA tipo SEMILLA, bandeja de 72 alveolos, 2026 unidades disponibles, precio 1785 pesos. Opción 2: MONSTERA DELICIOSA tipo PLANTA TERMINADA, maceta MAC-14, 95 unidades disponibles, precio 5950 pesos."
-- DO NOT try to add to cart yet - wait for customer to select
-- Customer can select by clicking or saying which one they want
+
+- If status='found' (1 result):
+  * Describe the product briefly: name, type, key attributes, stock, price
+  * Example: "Sí, tengo MONSTERA DELICIOSA tipo SEMILLA, bandeja de 72 alveolos, 2026 unidades disponibles, precio 1785 pesos. Puedes verlo en la tarjeta y agregarlo al carrito."
+  * Customer can click the visual card to add to cart
+
+- If status='multiple' (2+ results):
+  * List each option with number
+  * Example: "Encontré 2 opciones. Opción 1: MONSTERA DELICIOSA tipo SEMILLA, 2026 unidades, 1785 pesos. Opción 2: MONSTERA DELICIOSA tipo PLANTA TERMINADA, 95 unidades, 5950 pesos. Puedes seleccionar desde las tarjetas o decirme cuál quieres."
+
+- DO NOT add to cart automatically - customer must select from visual cards or say which one they want
+- Customer can select by clicking card button or by voice ("la primera", "la semilla", etc.)
 
 SELECTING FROM OPTIONS:
 - If customer wants ONE option: use seleccionar_producto_de_opciones
@@ -930,11 +954,59 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           const out = await postJSON(TOOL_EP, payload);
           console.log('[AGENTE] Resultado de búsqueda:', JSON.stringify(out).substring(0, 300));
 
-          // Agregar término de búsqueda al resultado para mostrarlo en el modal
-          if (out.status === 'multiple') {
+          // SIEMPRE mostrar modal visual cuando es consulta de precio/info
+          // Convertir resultado único en formato de múltiples opciones para mostrar en modal
+          if (out.status === 'ok') {
+            // Un solo resultado → convertir a formato 'multiple' para mostrar modal
+            const singleItemAsMultiple = {
+              status: 'multiple',
+              count: 1,
+              searchTerm: searchTerm,
+              items: [out]
+            };
+
+            // CANCELAR la respuesta del AI
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+
+            // Mostrar modal con 1 opción
+            handleProducto(singleItemAsMultiple);
+
+            // Preparar output para el AI
+            const itemForAI = {
+              nombre: out.variedad,
+              referencia: out.referencia,
+              tipo: out.tipo_producto,
+              atributos: out.attrs ? out.attrs.map(a => a.valor).join(', ') : '',
+              stock: out.stock,
+              precio_final_con_iva: out.precio_detalle,
+              unidad: out.unidad
+            };
+
+            const aiOutput = {
+              status: 'found',
+              count: 1,
+              message: 'Product found. Describe it briefly: name, type, price, stock. Tell customer they can select it from the visual card.',
+              item: itemForAI
+            };
+
+            // Enviar resultado y crear nueva respuesta
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'function_call_output', call_id: id, output: JSON.stringify(aiOutput) }
+              }));
+              dc.send(JSON.stringify({
+                type: 'response.create',
+                response: { modalities: ['audio', 'text'] }
+              }));
+            }
+          } else if (out.status === 'multiple') {
+            // Múltiples resultados
             out.searchTerm = searchTerm;
 
-            // CANCELAR la respuesta del AI primero para que no siga hablando
+            // CANCELAR la respuesta del AI
             if (dc && dc.readyState === 'open') {
               dc.send(JSON.stringify({ type: 'response.cancel' }));
             }
@@ -943,7 +1015,6 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
             handleProducto(out);
 
             // Preparar output para el AI con precios claros
-            // Asegurarnos de que cada item tenga precio_final_con_iva
             const itemsForAI = out.items.map(item => ({
               nombre: item.variedad,
               referencia: item.referencia,
@@ -957,7 +1028,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
             const aiOutput = {
               status: 'multiple',
               count: out.count,
-              message: 'Multiple options found. DO NOT say you added to cart. Wait for customer to select.',
+              message: 'Multiple options found. Describe each option.',
               items: itemsForAI
             };
 
@@ -973,8 +1044,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
               }));
             }
           } else {
-            // Un solo resultado, proceder normal
-            handleProducto(out);
+            // not_found o error
             if (dc && dc.readyState === 'open') {
               dc.send(JSON.stringify({
                 type: 'conversation.item.create',
@@ -1031,6 +1101,11 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
             }));
           }
         } else if (name === 'agregar_multiples_del_selector') {
+          console.log('[AGENTE] ========================================');
+          console.log('[AGENTE] FUNCIÓN: agregar_multiples_del_selector');
+          console.log('[AGENTE] Args completos:', JSON.stringify(args, null, 2));
+          console.log('[AGENTE] ========================================');
+
           if (!multipleProductsData || !multipleProductsData.items) {
             addText('assistant', 'No hay opciones disponibles para seleccionar.');
             if (dc && dc.readyState === 'open') {
@@ -1056,7 +1131,7 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
             return;
           }
 
-          console.log('[AGENTE] Múltiples selecciones recibidas:', selections);
+          console.log('[AGENTE] Múltiples selecciones recibidas:', JSON.stringify(selections, null, 2));
 
           // Cancelar respuesta del agente
           if (dc && dc.readyState === 'open') {
@@ -1067,17 +1142,24 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
           const addedProducts = [];
 
           // Procesar cada selección en modo silencioso
-          for (const sel of selections) {
+          for (let i = 0; i < selections.length; i++) {
+            const sel = selections[i];
+            console.log(`[AGENTE] ========== PROCESANDO SELECCIÓN ${i + 1}/${selections.length} ==========`);
+            console.log('[AGENTE] Selección recibida:', JSON.stringify(sel));
+
             let selectedIndex = -1;
             const qty = sel.qty && typeof sel.qty === 'number' && sel.qty > 0 ? Math.floor(sel.qty) : 1;
+            console.log('[AGENTE] Cantidad parseada de sel.qty:', qty, 'original sel.qty:', sel.qty);
 
             // Seleccionar por índice
             if (sel.index && typeof sel.index === 'number') {
               selectedIndex = Math.floor(sel.index) - 1; // Convertir de base-1 a base-0
+              console.log('[AGENTE] Seleccionado por índice:', sel.index, '→ array index:', selectedIndex);
             }
             // Seleccionar por descripción
             else if (sel.description && typeof sel.description === 'string') {
               const desc = sel.description.toLowerCase();
+              console.log('[AGENTE] Buscando por descripción:', desc);
               selectedIndex = multipleProductsData.items.findIndex(item => {
                 const itemDesc = [
                   item.variedad,
@@ -1087,26 +1169,32 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
                 ].join(' ').toLowerCase();
                 return itemDesc.includes(desc);
               });
+              console.log('[AGENTE] Resultado búsqueda por descripción:', selectedIndex);
             }
 
             if (selectedIndex >= 0 && selectedIndex < multipleProductsData.items.length) {
               const item = multipleProductsData.items[selectedIndex];
-              console.log('[AGENTE] ===== AGREGANDO PRODUCTO =====');
+              console.log('[AGENTE] ===== PRODUCTO ENCONTRADO =====');
               console.log('[AGENTE] Producto:', item.variedad);
               console.log('[AGENTE] Referencia:', item.referencia);
               console.log('[AGENTE] ID Variedad:', item.id_variedad);
-              console.log('[AGENTE] Cantidad solicitada:', qty);
-              console.log('[AGENTE] Tipo:', item.tipo_producto);
+              console.log('[AGENTE] ⚠️ CANTIDAD QUE SE VA A AGREGAR:', qty, 'tipo:', typeof qty);
+              console.log('[AGENTE] Tipo producto:', item.tipo_producto);
 
               // Agregar al carrito en modo silencioso (sin mostrar mensajes individuales)
+              console.log('[AGENTE] Llamando addProductDirectlyToCart con qty:', qty);
               const addResult = await addProductDirectlyToCart(item, qty, 'retail', true);
 
               console.log('[AGENTE] Resultado de agregar:', addResult);
+              console.log('[AGENTE] addResult.qty retornado:', addResult.qty);
 
               if (addResult.ok) {
+                console.log('[AGENTE] ✅ Agregado exitosamente, guardando resultado con qty:', addResult.qty);
                 results.push({ status: 'ok', product: item.variedad, qty: addResult.qty });
                 addedProducts.push({ name: item.variedad, qty: addResult.qty, ref: item.referencia });
+                console.log('[AGENTE] addedProducts actual:', JSON.stringify(addedProducts));
               } else {
+                console.log('[AGENTE] ❌ Error al agregar:', addResult.error);
                 results.push({ status: 'error', product: item.variedad, error: addResult.error });
               }
             } else {
@@ -1120,13 +1208,20 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
           // Mostrar mensaje consolidado con todos los productos agregados
           if (addedProducts.length > 0) {
-            const summary = addedProducts.map(p => `${p.qty}× ${p.name}`).join(', ');
+            console.log('[AGENTE] ========== GENERANDO MENSAJE FINAL ==========');
+            console.log('[AGENTE] addedProducts completo:', JSON.stringify(addedProducts));
+            const summary = addedProducts.map((p, idx) => {
+              console.log(`[AGENTE] Producto ${idx + 1}: ${p.qty}× ${p.name}`);
+              return `${p.qty}× ${p.name}`;
+            }).join(', ');
+            console.log('[AGENTE] Summary final:', summary);
 
             // Obtener carrito actualizado
             const cartResult = await getCatalogCartData();
             if (cartResult.ok && cartResult.cart) {
               const line = composeCartLine(cartResult.cart);
               const message = `Agregué al carrito: ${summary}. ${line}`;
+              console.log('[AGENTE] Mensaje que se mostrará:', message);
               addText('assistant', message);
               speak(message);
               showCart(true);
@@ -1709,7 +1804,8 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
     // Actualizar título
     if (productSelectorTitle) {
-      productSelectorTitle.textContent = `Encontré ${data.count} opciones de "${data.searchTerm || 'este producto'}"`;
+      const countText = data.count === 1 ? '1 opción' : `${data.count} opciones`;
+      productSelectorTitle.textContent = `Encontré ${countText} de "${data.searchTerm || 'este producto'}"`;
     }
 
     // Limpiar grid
@@ -1898,15 +1994,14 @@ If off-topic (not about plants): respond "I'm Roelplant's assistant. I only hand
 
   // ========== PRODUCTO & LISTAS ==========
   function handleProducto(out) {
-    // Verificar si hay múltiples resultados
-    if (out.status === 'multiple' && out.items && out.items.length > 1) {
-      console.log('[AGENTE] Múltiples productos encontrados:', out);
+    // Verificar si hay resultados para mostrar en el selector
+    if (out.status === 'multiple' && out.items && out.items.length >= 1) {
+      console.log('[AGENTE] Mostrando selector con', out.items.length, 'producto(s)');
       showProductSelector(out);
       return;
     }
 
-    // Si es un solo resultado, continuar como antes
-    // Ya no agregamos texto ni hablamos, dejamos que el AI responda basándose en el resultado
+    // Si no hay items, no hacer nada (AI manejará el mensaje)
   }
 
   function handleLista(lst, label) {
