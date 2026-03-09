@@ -92,18 +92,25 @@
   border: 1px solid var(--stroke);
   color: var(--text);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 16px;
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  width: 36px;
-  height: 36px;
+  font-size: 13px;
+  line-height: 1.2;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   transition: all 0.2s ease;
-  opacity: 0.6;
+  opacity: 0.7;
   margin-right: 8px;
+  white-space: nowrap;
+}
+
+.agente-modal-textmode .icon {
+  font-size: 16px;
+}
+
+.agente-modal-textmode .label {
+  font-weight: 500;
 }
 
 .agente-modal-textmode:hover {
@@ -129,18 +136,25 @@
   border: 1px solid var(--stroke);
   color: var(--text);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 16px;
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  width: 36px;
-  height: 36px;
+  font-size: 13px;
+  line-height: 1.2;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   transition: all 0.2s ease;
   opacity: 0.7;
   margin-right: 8px;
+  white-space: nowrap;
+}
+
+.agente-modal-interrupt .icon {
+  font-size: 16px;
+}
+
+.agente-modal-interrupt .label {
+  font-weight: 500;
 }
 
 .agente-modal-interrupt:hover {

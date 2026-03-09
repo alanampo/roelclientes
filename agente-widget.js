@@ -2595,34 +2595,91 @@ TEXT-ONLY MODE NOTE:
       return;
     }
 
-    // ========== MODO VOZ: Usar WebRTC Realtime ==========
-    // Chequear si está conectando - reintentarauto después de 500ms
-    if (isConnecting) {
-      console.log('[AGENTE] Está conectando, reintentando en 500ms...');
-      setTimeout(() => sendText(q), 500);
+    // ========== MODO HÍBRIDO: Chat escrito inteligente (igual que modo texto) ==========
+    // El chat escrito SIEMPRE usa búsqueda inteligente + Chat API
+    // El micrófono sigue usando WebRTC por separado
+
+    // ===== BÚSQUEDA DE PRODUCTO =====
+    if (wantsPrice(qn) || wantsDispon(qn) || isProductSearch(qn)) {
+      console.log('[AGENTE-HIBRIDO] Búsqueda de producto detectada (escrito):', qn);
+      isTextModeSending = true;
+
+      const productName = extractProductName(qn);
+      console.log('[AGENTE-HIBRIDO] Buscando:', productName);
+
+      if (!productName || productName.length < 2) {
+        addText('assistant', 'Dime qué producto buscas.');
+        isTextModeSending = false;
+        return;
+      }
+
+      // Buscar directamente
+      fetch(TOOL_EP, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: productName, tipo: '' })
+      })
+        .then(r => r.json())
+        .then(result => {
+          console.log('[AGENTE-HIBRIDO] Resultado:', result);
+
+          if (result.status === 'not_found' || result.status === 'error') {
+            addText('assistant', 'No tengo ese producto disponible.');
+            isTextModeSending = false;
+            return;
+          }
+
+          // Mostrar tarjetas
+          let dataToShow = result;
+          if (result.status === 'ok' && !result.items) {
+            dataToShow = { status: 'multiple', count: 1, items: [result] };
+          }
+
+          handleProducto(dataToShow);
+          isTextModeSending = false;
+        })
+        .catch(err => {
+          console.error('[AGENTE-HIBRIDO] Error:', err);
+          addText('assistant', 'Error en búsqueda.');
+          isTextModeSending = false;
+        });
+
       return;
     }
 
-    if (!dc || dc.readyState !== 'open') {
-      addText('assistant', 'Conéctate primero con Iniciar.');
-      return;
-    }
+    // ===== OTRAS PREGUNTAS: Chat API =====
+    isTextModeSending = true;
 
-    let hint = '';
-    if (wantsDispon(qn)) {
-      const tipo = extractTipo(qn);
-      hint = tipo ? ` (usa consultar_disponibles_por_tipo_roelplant con tipo="${tipo}")` : ' (usa consultar_disponibles_roelplant)';
-    } else if (wantsPrice(qn)) {
-      hint = ' (usa consultar_precio_producto_roelplant si aplica)';
-    }
+    fetch(CHAT_API_EP, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: qn, history: conversationHistory })
+    })
+      .then(r => r.json())
+      .then(res => {
+        console.log('[AGENTE-HIBRIDO] Chat API:', res);
 
-    log('send', 'input_text', qn + hint);
-    dc.send(JSON.stringify({ type: 'input_text', text: qn + hint }));
+        if (!res.ok) {
+          addText('assistant', 'Error.');
+          isTextModeSending = false;
+          return;
+        }
 
-    if (!wantsPrice(qn) && !wantsDispon(qn)) {
-      const modalities = textModeOnly ? ['text'] : ['audio', 'text'];
-      dc.send(JSON.stringify({ type: 'response.create', response: { modalities: modalities } }));
-    }
+        const aiResponse = res.response || '';
+        conversationHistory.push({ role: 'user', content: qn });
+        conversationHistory.push({ role: 'assistant', content: aiResponse });
+
+        if (aiResponse) {
+          addText('assistant', aiResponse);
+        }
+
+        isTextModeSending = false;
+      })
+      .catch(err => {
+        console.error('[AGENTE-HIBRIDO] Error Chat API:', err);
+        addText('assistant', 'Error.');
+        isTextModeSending = false;
+      });
   }
 
   // ========== START ==========

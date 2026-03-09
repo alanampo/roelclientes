@@ -1124,8 +1124,14 @@ $secciones=[
         <div class="brand-icon"></div>
         <strong>Roelplant · Avatar Asesor</strong>
       </div>
-      <button class="agente-modal-textmode" id="agenteModalTextMode" aria-label="Modo texto" title="Activar modo texto (solo chat)">💬</button>
-      <button class="agente-modal-interrupt" id="agenteModalInterrupt" aria-label="Interrumpir" title="Interrumpir">⏸</button>
+      <button class="agente-modal-textmode" id="agenteModalTextMode" aria-label="Modo texto" title="Alternar modo texto (solo chat)">
+        <span class="icon">💬</span>
+        <span class="label">Texto</span>
+      </button>
+      <button class="agente-modal-interrupt" id="agenteModalInterrupt" aria-label="Interrumpir" title="Interrumpir la respuesta actual">
+        <span class="icon">⏸</span>
+        <span class="label">Parar</span>
+      </button>
       <button class="agente-modal-close" id="agenteModalClose" aria-label="Cerrar">×</button>
     </div>
     <?php include __DIR__ . '/../agente-widget-content.php'; ?>
@@ -1138,7 +1144,10 @@ $secciones=[
     <div class="agente-product-selector-header">
       <h2 id="agenteProductSelectorTitle">Selecciona un producto</h2>
       <div style="display: flex; gap: 8px;">
-        <button class="agente-modal-interrupt" id="agenteProductSelectorInterrupt" aria-label="Interrumpir" title="Interrumpir">⏸</button>
+        <button class="agente-modal-interrupt" id="agenteProductSelectorInterrupt" aria-label="Interrumpir" title="Interrumpir la respuesta actual">
+          <span class="icon">⏸</span>
+          <span class="label">Parar</span>
+        </button>
         <button class="agente-product-selector-close" id="agenteProductSelectorClose" aria-label="Cerrar">×</button>
       </div>
     </div>
