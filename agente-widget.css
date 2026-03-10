@@ -260,6 +260,31 @@
   margin: 8px 0;
 }
 
+@keyframes tipGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.4), inset 0 0 8px rgba(234, 179, 8, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.8), inset 0 0 12px rgba(234, 179, 8, 0.2);
+  }
+}
+
+.agente-tip {
+  background: rgba(20, 25, 40, 0.8);
+  border: 2px solid #eab308;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  color: #fef3c7;
+  font-size: 14px;
+  font-weight: 500;
+  font-style: italic;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+  animation: tipGlow 2s ease-in-out infinite;
+  background: linear-gradient(135deg, rgba(20, 25, 40, 0.9), rgba(30, 35, 50, 0.8));
+}
+
 .agente-ctrl {
   display: flex;
   gap: 10px;

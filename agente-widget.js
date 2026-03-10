@@ -302,6 +302,22 @@ TEXT-ONLY MODE NOTE:
     }
   };
 
+  // Mensajes "tip" para guiar al usuario (sutil pero visible)
+  const addTip = (text) => {
+    const d = document.createElement('div');
+    d.className = 'agente-tip';
+    d.innerHTML = '💡 ' + text;
+
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+
+    // Desvanecimiento automático después de 30 segundos
+    setTimeout(() => {
+      d.style.opacity = '0';
+      d.style.transition = 'opacity 0.5s ease';
+    }, 30000);
+  };
+
   const formatCLP = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
 
   // ========== RUT & EMAIL ==========
@@ -319,6 +335,14 @@ TEXT-ONLY MODE NOTE:
   let dc = null;
   let inactivityInterval = null;
   let lastActivityTime = 0;
+
+  // ========== TIPS PARA GUIAR AL USUARIO ==========
+  let tipsShown = {
+    greeting: false,
+    firstSearch: false,
+    addToCart: false,
+    checkout: false
+  };
 
   // ========== ANTI-FLOOD ==========
   const FLOOD_LIMIT_TEXT = 8; // máximo mensajes de texto por minuto
@@ -787,7 +811,7 @@ TEXT-ONLY MODE NOTE:
     }
 
     dc = pc.createDataChannel('oai-events');
-    dc.onopen = () => {
+    dc.onopen = async () => {
       log('dc', 'open');
       // Determinar instrucciones según modo
       const sessionInstructions = textModeOnly
@@ -903,6 +927,41 @@ TEXT-ONLY MODE NOTE:
       isConnecting = false;
       console.log('[AGENTE] DataChannel abierto - isConnecting = false');
 
+      // Mecanismo de inactividad: desconectar si pasan 3+ minutos sin actividad real
+      lastActivityTime = Date.now();
+
+      window.updateActivityTime = () => {
+        lastActivityTime = Date.now();
+      };
+
+      const startInactivityCheck = () => {
+        if (inactivityInterval) clearInterval(inactivityInterval);
+        inactivityInterval = setInterval(() => {
+          const inactiveTime = Date.now() - lastActivityTime;
+          const THREE_MINUTES = 3 * 60 * 1000;
+
+          if (inactiveTime > THREE_MINUTES && !textModeOnly) {
+            console.log('[AGENTE] ⏰ Inactividad detectada (' + Math.round(inactiveTime / 1000) + 's), ejecutando STOP automático');
+            addText('assistant', '⏰ Desconectado por inactividad (3+ minutos sin actividad).');
+
+            // Cancelar respuesta en curso
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+
+            // Detener micrófono
+            if (micStream) {
+              micStream.getTracks().forEach(track => track.stop());
+              micStream = null;
+            }
+
+            // Detener intervalo
+            clearInterval(inactivityInterval);
+            inactivityInterval = null;
+          }
+        }, 30 * 1000); // Chequear cada 30 segundos
+      };
+
       // Iniciar chequeo de inactividad
       startInactivityCheck();
 
@@ -923,40 +982,6 @@ TEXT-ONLY MODE NOTE:
           }
         }, 500);
       }
-
-      // Mecanismo de inactividad: desconectar si pasan 3+ minutos sin actividad real
-      lastActivityTime = Date.now();
-
-      const updateActivityTime = () => {
-        lastActivityTime = Date.now();
-      };
-
-      const startInactivityCheck = () => {
-        if (inactivityInterval) clearInterval(inactivityInterval);
-        inactivityInterval = setInterval(() => {
-        const inactiveTime = Date.now() - lastActivityTime;
-        const THREE_MINUTES = 3 * 60 * 1000;
-
-        if (inactiveTime > THREE_MINUTES && !textModeOnly) {
-          console.log('[AGENTE] ⏰ Inactividad detectada (' + Math.round(inactiveTime / 1000) + 's), ejecutando STOP automático');
-          addText('assistant', '⏰ Desconectado por inactividad (3+ minutos sin actividad).');
-
-          // Cancelar respuesta en curso
-          if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify({ type: 'response.cancel' }));
-          }
-
-          // Detener micrófono
-          if (micStream) {
-            micStream.getTracks().forEach(track => track.stop());
-            micStream = null;
-          }
-
-          // Detener intervalo
-          clearInterval(inactivityInterval);
-          inactivityInterval = null;
-        }
-      }, 30 * 1000); // Chequear cada 30 segundos
     };
 
     const fnAcc = {};
@@ -990,6 +1015,14 @@ TEXT-ONLY MODE NOTE:
           console.log('[AGENTE] Transcripción completa:', text);
           if (!suppressCartText && text.trim()) {
             addText('assistant', text.trim());
+
+            // Mostrar tip después del saludo inicial
+            if (!tipsShown.greeting && text.includes('puedo ayudar')) {
+              setTimeout(() => {
+                addTip('Prueba diciendo: "¿Tienes Monstera Deliciosa?" o "¿Hay Dólar Variegado?"');
+                tipsShown.greeting = true;
+              }, 1000);
+            }
           }
           delete window._transcriptAcc[itemId];
         }
@@ -1110,7 +1143,7 @@ TEXT-ONLY MODE NOTE:
 
         if (userRequest) {
           console.log('[AGENTE] Pedido del usuario: ' + userRequest);
-          updateActivityTime(); // Actualizar timestamp de actividad
+          if (window.updateActivityTime) window.updateActivityTime(); // Actualizar timestamp de actividad
           logChatMessage('user', userRequest, 'voz_transcripcion').catch(err => {
             console.error('[AGENTE] Error loguando pedido:', err);
           });
@@ -1149,6 +1182,14 @@ TEXT-ONLY MODE NOTE:
 
             // Mostrar modal con 1 opción
             handleProducto(singleItemAsMultiple);
+
+            // Mostrar tip después de primera búsqueda
+            if (!tipsShown.firstSearch) {
+              setTimeout(() => {
+                addTip('Ahora puedes seleccionar una opción y agregarla al carrito diciendo "Agrega una" o "Quiero 2 unidades de la primera opción"');
+                tipsShown.firstSearch = true;
+              }, 1500);
+            }
 
             // Preparar output para el AI
             const itemForAI = {
@@ -1779,6 +1820,17 @@ TEXT-ONLY MODE NOTE:
 
         // Renderizar carrito del agente también
         renderCart(result.cart);
+
+        // VERIFICAR Y CERRAR MODAL SI TIENE SOLO 1 OPCIÓN
+        if (productSelectorOverlay && productSelectorOverlay.classList.contains('active')) {
+          const cards = productGrid ? productGrid.querySelectorAll('.agente-product-card').length : 0;
+          console.log('[AGENTE] Modal abierto con ' + cards + ' cards');
+          if (cards === 1) {
+            console.log('[AGENTE] ✓✓✓ CERRANDO MODAL (única opción) ✓✓✓');
+            productSelectorOverlay.classList.remove('active');
+          }
+        }
+
         return { ok: true, cart: result.cart };
       }
 
@@ -2161,7 +2213,18 @@ TEXT-ONLY MODE NOTE:
     if (!multipleProductsData || !multipleProductsData.items[index]) return;
 
     const item = multipleProductsData.items[index];
+    const totalItems = multipleProductsData.items.length;
     console.log('[AGENTE] Producto seleccionado:', item);
+    console.log('[AGENTE] Total items en modal:', totalItems);
+
+    // Si solo hay 1 opción, cerrar el modal YA
+    const shouldCloseModal = (totalItems === 1);
+    if (shouldCloseModal) {
+      console.log('[AGENTE] ✓ Cerrando modal (única opción)');
+      if (productSelectorOverlay) {
+        productSelectorOverlay.classList.remove('active');
+      }
+    }
 
     // Leer cantidad del input
     const qtyInput = document.getElementById(`qty-${index}`);
@@ -2174,9 +2237,6 @@ TEXT-ONLY MODE NOTE:
     if (qty < 1) {
       qty = 1;
     }
-
-    // Cerrar modal
-    closeProductSelector();
 
     // Cancelar respuesta actual del agente
     if (dc && dc.readyState === 'open') {
@@ -2252,6 +2312,14 @@ TEXT-ONLY MODE NOTE:
       // Carrito tiene items, proceder al checkout
       const msg = 'Te llevo al checkout para completar tu compra.';
       addText('assistant', msg);
+
+      // Mostrar tip de checkout
+      if (!tipsShown.checkout) {
+        setTimeout(() => {
+          addTip('¡Transacción completada! Puedes cerrar este chat y continuar en el carrito cuando gustes.');
+          tipsShown.checkout = true;
+        }, 800);
+      }
 
       if (dc && dc.readyState === 'open') {
         dc.send(JSON.stringify({ type: 'response.cancel' }));
@@ -2399,6 +2467,14 @@ TEXT-ONLY MODE NOTE:
         }
         speak(`Agregué ${qty} ${productInfo.unidad || 'unidades'} de ${productInfo.variedad} al carrito. ${line}`);
         showCart(true);
+
+        // Mostrar tip después de agregar al carrito
+        if (!tipsShown.addToCart) {
+          setTimeout(() => {
+            addTip('¿Necesitas más productos? Busca otro o di "Quiero pagar" cuando estés listo para el checkout');
+            tipsShown.addToCart = true;
+          }, 1500);
+        }
       } else {
         const errMsg = result.error || 'No pude agregar el producto al carrito.';
         addText('assistant', errMsg);
