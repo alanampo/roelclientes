@@ -55,6 +55,14 @@ try {
 
   error_log('[CHAT_SESSION] Sesión creada: ID=' . $insertId . ', sessionId=' . $sessionId);
 
+  // Limpiar chats más viejos de 2 meses (ejecutar en background)
+  $deleteSQL = "DELETE FROM chat_sessions WHERE fecha_inicio < DATE_SUB(NOW(), INTERVAL 2 MONTH)";
+  $db->query($deleteSQL);
+  $deletedCount = $db->affected_rows;
+  if ($deletedCount > 0) {
+    error_log('[CHAT_SESSION] Limpieza ejecutada: ' . $deletedCount . ' sesiones eliminadas');
+  }
+
   echo json_encode([
     'ok' => true,
     'session_id' => $insertId,
