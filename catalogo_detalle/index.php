@@ -1159,7 +1159,7 @@ $secciones=[
   </div>
 </div>
 
-<link rel="stylesheet" href="../agente-widget.css?v=1">
+<link rel="stylesheet" href="../agente-widget.css?v=2">
 
 
 <script>
