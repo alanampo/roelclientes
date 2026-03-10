@@ -76,6 +76,9 @@
   const TOOL_EP = '/server/tool_producto.php';
   const DISP_EP = '/server/disponibles_proxy.php';
   const CHAT_API_EP = '/server/chat_api.php';
+  const CHAT_SESSION_START_EP = '/server/chat_session_start.php';
+  const CHAT_MESSAGE_LOG_EP = '/server/chat_message_log.php';
+  const CHAT_SESSION_END_EP = '/server/chat_session_end.php';
 
   // Usar API del catálogo para el carrito (integración completa)
   const CATALOG_CART_ADD = '/catalogo_detalle/api/cart/add.php';
@@ -99,6 +102,10 @@
   // Historial de conversación para modo texto
   let conversationHistory = [];
   let isTextModeSending = false;
+
+  // Chat session logging
+  let currentChatSessionId = null;
+  let currentChatMode = 'texto'; // 'texto' o 'voz'
 
   const SYSTEM_PROMPT = `You are a sales assistant for Roelplant (Chilean plant nursery).
 
@@ -288,6 +295,11 @@ TEXT-ONLY MODE NOTE:
 
     chat.appendChild(d);
     chat.scrollTop = chat.scrollHeight;
+
+    // Loguear mensaje en la BD
+    if (!text.startsWith('[')) { // No loguear mensajes de sistema (entre corchetes)
+      logChatMessage(role, text, 'texto');
+    }
   };
 
   const formatCLP = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
@@ -782,6 +794,9 @@ TEXT-ONLY MODE NOTE:
         session: {
           voice: 'alloy',
           instructions: sessionInstructions,
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
           tools: [
             {
               type: 'function',
@@ -916,7 +931,7 @@ TEXT-ONLY MODE NOTE:
         return;
       }
 
-      // Acumular transcripción de audio
+      // Acumular transcripción de audio (respuesta del asistente)
       if (msg.type === 'response.audio_transcript.delta') {
         const itemId = msg.item_id || 'current';
         if (!window._transcriptAcc) window._transcriptAcc = {};
@@ -944,6 +959,20 @@ TEXT-ONLY MODE NOTE:
         if (msg.item && msg.item.type === 'message' && msg.item.role === 'user') {
           // El usuario acaba de enviar un mensaje de voz
           console.log('[AGENTE] Mensaje de voz detectado');
+
+          // Loguear lo que el usuario pidió (interpretado por OpenAI)
+          if (msg.item.content && Array.isArray(msg.item.content)) {
+            const textContent = msg.item.content.find(c => c.type === 'input_text' || c.type === 'text');
+            if (textContent && textContent.text) {
+              const userInput = textContent.text.trim();
+              if (userInput) {
+                console.log('[AGENTE] Input del usuario detectado:', userInput);
+                logChatMessage('user', userInput, 'voz_transcripcion').catch(err => {
+                  console.error('[AGENTE] Error loguando input:', err);
+                });
+              }
+            }
+          }
 
           // Verificar si está bloqueado ANTES de registrar
           const now = Date.now();
@@ -998,6 +1027,38 @@ TEXT-ONLY MODE NOTE:
           args = JSON.parse(fnAcc[id]?.args || '{}');
         } catch { }
         log('fn', 'args.done', name + ' ' + JSON.stringify(args));
+
+        // Loguear qué pidió el usuario basado en la función que se ejecuta
+        let userRequest = null;
+        if (name === 'consultar_precio_producto_roelplant' && args.nombre) {
+          userRequest = `Buscando ${args.tipo ? args.tipo.toLowerCase() + ' de ' : ''}${args.nombre}`;
+        } else if (name === 'carrito_operar') {
+          if (args.action === 'add_by_name' && args.name) {
+            userRequest = `Agregar ${args.qty || 1}x ${args.name} al carrito`;
+          } else if (args.action === 'add' && args.code) {
+            userRequest = `Agregar ${args.qty || 1} unidades al carrito (código: ${args.code})`;
+          } else if (args.action === 'clear') {
+            userRequest = 'Vaciar carrito';
+          } else if (args.action === 'summary') {
+            userRequest = 'Ver carrito';
+          }
+        } else if (name === 'consultar_disponibles_roelplant') {
+          userRequest = 'Ver productos disponibles';
+        } else if (name === 'consultar_disponibles_por_tipo_roelplant' && args.tipo) {
+          userRequest = `Ver ${args.tipo.toLowerCase()} disponibles`;
+        } else if (name === 'seleccionar_producto_de_opciones') {
+          const desc = args.description || `opción ${args.index || 1}`;
+          userRequest = `Seleccionar ${desc} ${args.qty ? `(${args.qty}x)` : ''}`;
+        } else if (name === 'agregar_multiples_del_selector' && args.selections) {
+          userRequest = `Agregar ${args.selections.length} productos al carrito`;
+        }
+
+        if (userRequest) {
+          console.log('[AGENTE] Pedido del usuario: ' + userRequest);
+          logChatMessage('user', userRequest, 'voz_transcripcion').catch(err => {
+            console.error('[AGENTE] Error loguando pedido:', err);
+          });
+        }
 
         if (name === 'consultar_precio_producto_roelplant') {
           const searchTerm = String(args.nombre || '').trim();
@@ -2435,6 +2496,71 @@ TEXT-ONLY MODE NOTE:
     return m ? m[0] : null;
   };
 
+  // ===== CHAT LOGGING =====
+  async function startChatSession(modo = 'texto') {
+    if (!currentChatSessionId) {
+      console.log('[CHAT_LOG] Iniciando sesión:', modo);
+      currentChatMode = modo;
+
+      try {
+        const res = await fetch(CHAT_SESSION_START_EP, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modo: modo })
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          currentChatSessionId = data.session_id;
+          console.log('[CHAT_LOG] Sesión iniciada:', currentChatSessionId);
+        } else {
+          console.error('[CHAT_LOG] Error iniciando sesión:', data.error);
+        }
+      } catch (err) {
+        console.error('[CHAT_LOG] Error:', err);
+      }
+    }
+  }
+
+  async function logChatMessage(role, contenido, tipo = 'texto') {
+    if (!currentChatSessionId) return;
+
+    console.log('[CHAT_LOG] Loguando mensaje:', role, contenido.substring(0, 50) + '...');
+
+    try {
+      await fetch(CHAT_MESSAGE_LOG_EP, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentChatSessionId,
+          role: role,
+          contenido: contenido,
+          tipo: tipo
+        })
+      });
+    } catch (err) {
+      console.error('[CHAT_LOG] Error loguando mensaje:', err);
+    }
+  }
+
+  async function endChatSession() {
+    if (currentChatSessionId) {
+      console.log('[CHAT_LOG] Cerrando sesión:', currentChatSessionId);
+
+      try {
+        await fetch(CHAT_SESSION_END_EP, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: currentChatSessionId })
+        });
+      } catch (err) {
+        console.error('[CHAT_LOG] Error cerrando sesión:', err);
+      }
+
+      currentChatSessionId = null;
+    }
+  }
+
   // Extraer nombre de producto de forma inteligente
   function extractProductName(text) {
     const clean = text.replace(/[?!.]/g, '').toLowerCase().trim();
@@ -2687,6 +2813,10 @@ TEXT-ONLY MODE NOTE:
     console.log('[AGENTE-WIDGET] start() llamado, textModeOnly:', textModeOnly);
     if (overlay) overlay.style.display = 'none';
     if (btnIniciar) btnIniciar.style.display = 'none';
+
+    // Iniciar sesión de chat para logging
+    const modo = textModeOnly ? 'texto' : 'voz';
+    startChatSession(modo);
 
     // Si está en modo texto, iniciar sin WebRTC/avatar
     if (textModeOnly) {
