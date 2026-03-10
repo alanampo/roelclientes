@@ -346,14 +346,21 @@ TEXT-ONLY MODE NOTE:
 
   // ========== ANTI-FLOOD ==========
   const FLOOD_LIMIT_TEXT = 8; // máximo mensajes de texto por minuto
-  const FLOOD_LIMIT_VOICE = 15; // máximo mensajes de voz por minuto (más permisivo)
+  const FLOOD_LIMIT_VOICE = 25; // máximo mensajes de voz por minuto (más permisivo)
   const FLOOD_WINDOW = 60000; // 60 segundos en ms
   const FLOOD_COOLDOWN = 30000; // 30 segundos de bloqueo
-  const VOICE_THROTTLE_MS = 500; // mínimo tiempo entre mensajes de voz
+  const VOICE_THROTTLE_MS = 300; // mínimo tiempo entre mensajes de voz (menos restrictivo)
   let messageTimestamps = [];
   let floodBlocked = false;
   let floodBlockedUntil = 0;
   let lastVoiceMessageTime = 0;
+
+  // ========== LÍMITE DE SESIÓN DE VOZ ==========
+  const SESSION_VOICE_LIMIT = 10 * 60 * 1000; // 10 minutos en ms
+  const SESSION_COOLDOWN = 3 * 60 * 1000; // 3 minutos de cool down
+  let sessionStartTime = 0;
+  let sessionVoiceExpired = false;
+  let lastVoiceSessionEnd = 0; // Timestamp de cuándo finalizó la última sesión de voz
 
   function setSilentMode(silent) {
     silentMode = silent;
@@ -756,6 +763,21 @@ TEXT-ONLY MODE NOTE:
       console.log('[AGENTE-WIDGET] Ya existe conexión activa');
       return;
     }
+
+    // Verificar si estamos en período cool down de 3 minutos después de límite de sesión de voz
+    if (lastVoiceSessionEnd > 0) {
+      const timeSinceEnd = Date.now() - lastVoiceSessionEnd;
+      if (timeSinceEnd < SESSION_COOLDOWN) {
+        const secsLeft = Math.ceil((SESSION_COOLDOWN - timeSinceEnd) / 1000);
+        console.log('[AGENTE] 🔒 Cool down de sesión de voz activo por ' + secsLeft + 's - forzando modo texto');
+        textModeOnly = true;
+        addText('assistant', `🔒 Modo texto forzado por ${secsLeft}s después de límite de sesión de voz.`);
+      } else {
+        // Cool down expiró, resetear
+        lastVoiceSessionEnd = 0;
+      }
+    }
+
     isConnecting = true;
     setConn('connecting');
     log('rtc', 'connect()');
@@ -930,6 +952,13 @@ TEXT-ONLY MODE NOTE:
       // Mecanismo de inactividad: desconectar si pasan 3+ minutos sin actividad real
       lastActivityTime = Date.now();
 
+      // Iniciar timer de sesión de voz (10 minutos máximo)
+      // Solo si no está en modo texto forzado (cool down)
+      if (!textModeOnly) {
+        sessionStartTime = Date.now();
+        sessionVoiceExpired = false;
+      }
+
       window.updateActivityTime = () => {
         lastActivityTime = Date.now();
       };
@@ -1061,7 +1090,29 @@ TEXT-ONLY MODE NOTE:
             return;
           }
 
-          // Throttle agresivo para voz: detectar dos mensajes en <500ms
+          // Verificar límite de sesión de voz (10 minutos máximo)
+          if (!sessionVoiceExpired && sessionStartTime > 0) {
+            const sessionElapsed = now - sessionStartTime;
+            if (sessionElapsed > SESSION_VOICE_LIMIT) {
+              sessionVoiceExpired = true;
+              lastVoiceSessionEnd = now; // Guardar timestamp de desconexión
+              console.log('[AGENTE] ⏱️ Límite de sesión de voz alcanzado (10 minutos) - DESCONECTANDO');
+              addText('assistant', '⏱️ Límite de sesión de voz alcanzado (10 minutos máximo). Desconectado. Prueba modo texto por 3 minutos.');
+
+              // Cancelar respuesta en curso
+              if (dc && dc.readyState === 'open') {
+                dc.send(JSON.stringify({ type: 'response.cancel' }));
+              }
+
+              // Desconectar completamente (como STOP)
+              setTimeout(() => {
+                cleanup();
+              }, 500);
+              return;
+            }
+          }
+
+          // Throttle agresivo para voz: detectar dos mensajes en <300ms
           if (now - lastVoiceMessageTime < VOICE_THROTTLE_MS) {
             console.log('[AGENTE] ⚠️ Throttle de voz activado - muy rápido');
             floodBlocked = true;
@@ -1087,8 +1138,8 @@ TEXT-ONLY MODE NOTE:
             return;
           }
 
-          // Advertencia si está cerca del límite
-          if (messageTimestamps.length === 13) {
+          // Advertencia si está cerca del límite (cuando faltan 2 mensajes)
+          if (messageTimestamps.length === 23) {
             addText('assistant', '⚠️ Vas muy rápido. Solo 2 mensajes más en este minuto.');
           }
 
