@@ -317,14 +317,19 @@ TEXT-ONLY MODE NOTE:
   let silentMode = false;
   let pc = null;
   let dc = null;
+  let inactivityInterval = null;
+  let lastActivityTime = 0;
 
   // ========== ANTI-FLOOD ==========
-  const FLOOD_LIMIT = 8; // máximo mensajes por ventana
+  const FLOOD_LIMIT_TEXT = 8; // máximo mensajes de texto por minuto
+  const FLOOD_LIMIT_VOICE = 15; // máximo mensajes de voz por minuto (más permisivo)
   const FLOOD_WINDOW = 60000; // 60 segundos en ms
   const FLOOD_COOLDOWN = 30000; // 30 segundos de bloqueo
+  const VOICE_THROTTLE_MS = 500; // mínimo tiempo entre mensajes de voz
   let messageTimestamps = [];
   let floodBlocked = false;
   let floodBlockedUntil = 0;
+  let lastVoiceMessageTime = 0;
 
   function setSilentMode(silent) {
     silentMode = silent;
@@ -898,6 +903,9 @@ TEXT-ONLY MODE NOTE:
       isConnecting = false;
       console.log('[AGENTE] DataChannel abierto - isConnecting = false');
 
+      // Iniciar chequeo de inactividad
+      startInactivityCheck();
+
       // Saludo de voz solo en la primera apertura de la sesión
       if (!window._agenteHasVoiceGreeted && !textModeOnly) {
         window._agenteHasVoiceGreeted = true;
@@ -915,6 +923,40 @@ TEXT-ONLY MODE NOTE:
           }
         }, 500);
       }
+
+      // Mecanismo de inactividad: desconectar si pasan 3+ minutos sin actividad real
+      lastActivityTime = Date.now();
+
+      const updateActivityTime = () => {
+        lastActivityTime = Date.now();
+      };
+
+      const startInactivityCheck = () => {
+        if (inactivityInterval) clearInterval(inactivityInterval);
+        inactivityInterval = setInterval(() => {
+        const inactiveTime = Date.now() - lastActivityTime;
+        const THREE_MINUTES = 3 * 60 * 1000;
+
+        if (inactiveTime > THREE_MINUTES && !textModeOnly) {
+          console.log('[AGENTE] ⏰ Inactividad detectada (' + Math.round(inactiveTime / 1000) + 's), ejecutando STOP automático');
+          addText('assistant', '⏰ Desconectado por inactividad (3+ minutos sin actividad).');
+
+          // Cancelar respuesta en curso
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+          }
+
+          // Detener micrófono
+          if (micStream) {
+            micStream.getTracks().forEach(track => track.stop());
+            micStream = null;
+          }
+
+          // Detener intervalo
+          clearInterval(inactivityInterval);
+          inactivityInterval = null;
+        }
+      }, 30 * 1000); // Chequear cada 30 segundos
     };
 
     const fnAcc = {};
@@ -986,27 +1028,40 @@ TEXT-ONLY MODE NOTE:
             return;
           }
 
-          // Limpiar mensajes antiguos y verificar límite
-          cleanOldMessages();
-          if (messageTimestamps.length >= FLOOD_LIMIT) {
+          // Throttle agresivo para voz: detectar dos mensajes en <500ms
+          if (now - lastVoiceMessageTime < VOICE_THROTTLE_MS) {
+            console.log('[AGENTE] ⚠️ Throttle de voz activado - muy rápido');
             floodBlocked = true;
             floodBlockedUntil = now + FLOOD_COOLDOWN;
-            console.log('[AGENTE] Límite alcanzado, bloqueando');
             if (dc && dc.readyState === 'open') {
               dc.send(JSON.stringify({ type: 'response.cancel' }));
             }
-            addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT} mensajes/minuto). Bloqueado por 30 segundos.`);
+            addText('assistant', '🚫 Demasiado rápido. Respira y habla más lentamente.');
+            return;
+          }
+          lastVoiceMessageTime = now;
+
+          // Limpiar mensajes antiguos y verificar límite (15 para voz, más permisivo)
+          cleanOldMessages();
+          if (messageTimestamps.length >= FLOOD_LIMIT_VOICE) {
+            floodBlocked = true;
+            floodBlockedUntil = now + FLOOD_COOLDOWN;
+            console.log('[AGENTE] Límite de voz alcanzado, bloqueando');
+            if (dc && dc.readyState === 'open') {
+              dc.send(JSON.stringify({ type: 'response.cancel' }));
+            }
+            addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT_VOICE} mensajes/minuto). Bloqueado por 30 segundos.`);
             return;
           }
 
           // Advertencia si está cerca del límite
-          if (messageTimestamps.length === 6) {
-            addText('assistant', '⚠️ Vas rápido. Solo 2 mensajes más en este minuto.');
+          if (messageTimestamps.length === 13) {
+            addText('assistant', '⚠️ Vas muy rápido. Solo 2 mensajes más en este minuto.');
           }
 
           // Registrar el mensaje
           recordMessage();
-          console.log('[AGENTE] Mensaje registrado, total:', messageTimestamps.length);
+          console.log('[AGENTE] Mensaje de voz registrado, total:', messageTimestamps.length);
         }
         return;
       }
@@ -1055,6 +1110,7 @@ TEXT-ONLY MODE NOTE:
 
         if (userRequest) {
           console.log('[AGENTE] Pedido del usuario: ' + userRequest);
+          updateActivityTime(); // Actualizar timestamp de actividad
           logChatMessage('user', userRequest, 'voz_transcripcion').catch(err => {
             console.error('[AGENTE] Error loguando pedido:', err);
           });
@@ -1488,6 +1544,12 @@ TEXT-ONLY MODE NOTE:
 
   function cleanup() {
     console.log('[AGENTE-WIDGET] Ejecutando cleanup...');
+
+    // Detener chequeo de inactividad
+    if (inactivityInterval) {
+      clearInterval(inactivityInterval);
+      inactivityInterval = null;
+    }
 
     // Cerrar DataChannel
     try {
@@ -2466,16 +2528,16 @@ TEXT-ONLY MODE NOTE:
 
     const count = messageTimestamps.length;
 
-    // Advertencia suave (7 mensajes)
+    // Advertencia suave (6 mensajes de texto)
     if (count === 6) {
       addText('assistant', '⚠️ Vas rápido. Solo 2 mensajes más en este minuto.');
     }
 
-    // Bloqueo (8+ mensajes)
-    if (count >= FLOOD_LIMIT) {
+    // Bloqueo (8+ mensajes de texto)
+    if (count >= FLOOD_LIMIT_TEXT) {
       floodBlocked = true;
       floodBlockedUntil = now + FLOOD_COOLDOWN;
-      addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT} mensajes/minuto). Bloqueado por 30 segundos.`);
+      addText('assistant', `🚫 Límite alcanzado (${FLOOD_LIMIT_TEXT} mensajes/minuto). Bloqueado por 30 segundos.`);
       return false;
     }
 
