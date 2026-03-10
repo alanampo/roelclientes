@@ -146,4 +146,4 @@ $usuarioSesion = [
 </script>
 
 <!-- Agente Widget Script -->
-<script src="../agente-widget.js" type="module"></script>
+<script src="../agente-widget.js?v=123" type="module"></script>
