@@ -1184,13 +1184,13 @@ $secciones=[
       }
 
       // RESTRICCIÓN: Solo accesible por "alitan@gmail.com"
-      const userEmail = (API.me.email || "").toLowerCase().trim();
-      if (userEmail !== "alitan@gmail.com") {
-        console.log('[AGENTE] Acceso restringido para:', userEmail);
+      // const userEmail = (API.me.email || "").toLowerCase().trim();
+      // if (userEmail !== "alitan@gmail.com") {
+      //   console.log('[AGENTE] Acceso restringido para:', userEmail);
         
-        alert('¡Disponible próximamente!');
-        return;
-      }
+      //   alert('¡Disponible próximamente!');
+      //   return;
+      // }
 
       // Usuario autenticado y autorizado → abrir modal del agente
       console.log('[AGENTE] Usuario autorizado, abriendo agente IA...');
