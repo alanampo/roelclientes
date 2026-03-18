@@ -663,8 +663,8 @@ foreach($all as $p){
     <button class="cart-pill" id="btnCart" type="button" onclick="openCartModal()">
       Carrito <span class="badge" id="cartCount">0</span>
     </button>
-    <a class="btn-top" id="btnAccount" href="profile.php" style="display:none">Mi perfil</a>
-    <a class="btn-top" id="btnOrders" href="my_orders.php" style="display:none">Mis pedidos</a>
+    <a class="btn-top" id="btnAccount" href="<?php echo htmlspecialchars(buildUrl('profile.php'), ENT_QUOTES, 'UTF-8'); ?>" style="display:none">Mi perfil</a>
+    <a class="btn-top" id="btnOrders" href="<?php echo htmlspecialchars(buildUrl('my_orders.php'), ENT_QUOTES, 'UTF-8'); ?>" style="display:none">Mis pedidos</a>
     <button class="btn-top primary" id="btnAuth" type="button" onclick="openAuthModal()">Ingresar / Registrarse</button>
     <button class="btn-top danger" id="btnLogout" type="button" style="display:none" onclick="doLogout()">Salir</button>
   </div>

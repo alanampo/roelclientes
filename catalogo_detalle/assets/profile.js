@@ -53,8 +53,19 @@ function fillComunas(regionName, selected){
     sel.disabled = false;
   }
 
+  // Cargar mapa de comunas -> ciudades desde la BD
+  let comunasCiudades = {};
+  async function loadComunasCiudades() {
+    const res = await fetchJson(buildApiUrl('locations.php'), {method:'GET'});
+    if (res.ok && res.comunas_ciudades) {
+      comunasCiudades = res.comunas_ciudades;
+    }
+  }
+
   async function init(){
     hideAlert();
+    await loadComunasCiudades();
+
     const me = await fetchJson(buildApiUrl('me.php'), {method:'GET'});
     if(!me.ok || !me.logged){
       location.href = buildUrl('index.php?openAuth=1');
@@ -78,6 +89,9 @@ function fillComunas(regionName, selected){
     $('pEmail').value = c.email || '';
     $('pNombre').value = c.nombre || '';
     $('pTelefono').value = c.telefono || '';
+    $('pDomicilio').value = c.domicilio || '';
+    $('pCiudad').value = c.ciudad || '';
+    $('pProvincia').value = c.provincia || '';
 
     // Cargar regiones y seleccionar la del cliente
     fillRegiones(c.region || '');
@@ -88,13 +102,25 @@ function fillComunas(regionName, selected){
     }
 
     $('pRegion').onchange = ()=>{ fillComunas(($('pRegion').value||''), ''); };
+    $('pComuna').onchange = ()=>{
+      // Al seleccionar comuna, actualizar ciudad automáticamente desde BD
+      const comunaNombre = $('pComuna').value || '';
+      if (comunaNombre && comunasCiudades[comunaNombre]) {
+        $('pCiudad').value = comunasCiudades[comunaNombre];
+      } else {
+        $('pCiudad').value = '';
+      }
+    };
 
     $('btnSave').onclick = async ()=>{
       hideAlert();
       const payload = {
         nombre: ($('pNombre').value||'').trim(),
         telefono: ($('pTelefono').value||'').trim(),
+        domicilio: ($('pDomicilio').value||'').trim(),
         region: ($('pRegion').value||'').trim(),
+        provincia: ($('pProvincia').value||'').trim(),
+        ciudad: ($('pCiudad').value||'').trim(),
         comuna: ($('pComuna').value||'').trim(),
         current_password: ($('pCurrentPass').value||''),
         new_password: ($('pNewPass').value||'')

@@ -15,7 +15,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <title>Roelplant - Iniciar Sesión</title>
     <?php include "./class_lib/scripts.php"; ?>
     <?php include "./class_lib/links.php"; ?>
-    <script src="dist/js/login.js?v=5"></script>
+    <script src="dist/js/login.js?v=6"></script>
     <?php
       session_start();
       if (

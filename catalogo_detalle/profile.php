@@ -59,6 +59,11 @@ header('Content-Type: text/html; charset=utf-8');
           <input class="inp" id="pTelefono" placeholder="Ej: +56912345678">
         </div>
 
+        <div class="span2">
+          <label for="pDomicilio" style="display:block;margin-bottom:6px;font-weight:600;font-size:14px">Dirección</label>
+          <input class="inp" id="pDomicilio" placeholder="Ingresa tu dirección completa">
+        </div>
+
         <div>
           <label for="pRegion" style="display:block;margin-bottom:6px;font-weight:600;font-size:14px">Región</label>
           <select class="inp" id="pRegion"><option value="">Selecciona Región</option></select>
@@ -66,6 +71,15 @@ header('Content-Type: text/html; charset=utf-8');
         <div>
           <label for="pComuna" style="display:block;margin-bottom:6px;font-weight:600;font-size:14px">Comuna</label>
           <select class="inp" id="pComuna" disabled><option value="">Selecciona Comuna</option></select>
+        </div>
+        <div>
+          <label for="pCiudad" style="display:block;margin-bottom:6px;font-weight:600;font-size:14px">Ciudad</label>
+          <input class="inp" id="pCiudad" placeholder="Ciudad" disabled>
+        </div>
+
+        <div class="span2">
+          <label for="pProvincia" style="display:block;margin-bottom:6px;font-weight:600;font-size:14px">Provincia (opcional)</label>
+          <input class="inp" id="pProvincia" placeholder="Provincia">
         </div>
 
         <div class="span2 muted2" style="margin-top:6px;font-weight:600">Cambio de contraseña (opcional)</div>
@@ -87,6 +101,6 @@ header('Content-Type: text/html; charset=utf-8');
   </main>
 
   <script src="<?php echo htmlspecialchars(buildUrl('assets/locations_cl.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
-  <script src="<?php echo htmlspecialchars(buildUrl('assets/profile.js?v=5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/profile.js?v=6'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </body>
 </html>

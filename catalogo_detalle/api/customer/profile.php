@@ -9,7 +9,7 @@ $cid = require_auth();
 $db  = db();
 
 // Obtener datos del cliente desde tabla unificada clientes
-$q = "SELECT id_cliente, rut, mail as email, nombre, telefono, region, ciudad, domicilio, domicilio2, comuna FROM clientes WHERE id_cliente=? LIMIT 1";
+$q = "SELECT id_cliente, rut, mail as email, nombre, telefono, region, provincia, ciudad, domicilio, domicilio2, comuna FROM clientes WHERE id_cliente=? LIMIT 1";
 $st = $db->prepare($q);
 if (!$st) {
   json_out(['ok' => false, 'error' => 'No se pudo preparar consulta de cliente'], 500);
@@ -50,8 +50,9 @@ json_out([
     'telefono' => (string)$row['telefono'],
     'domicilio' => (string)$row['domicilio'],
     'domicilio2' => (string)($row['domicilio2'] ?? ''),
-    'ciudad' => (string)$row['ciudad'],
     'region' => (string)$row['region'],
+    'provincia' => (string)($row['provincia'] ?? ''),
+    'ciudad' => (string)$row['ciudad'],
     'comuna' => (string)$comunaName,
   ],
 ]);

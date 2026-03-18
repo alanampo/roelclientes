@@ -79,11 +79,15 @@
   const CHAT_SESSION_START_EP = '/server/chat_session_start.php';
   const CHAT_MESSAGE_LOG_EP = '/server/chat_message_log.php';
   const CHAT_SESSION_END_EP = '/server/chat_session_end.php';
+  const USER_CONTEXT_EP = '/server/user_context.php';
 
   // Usar API del catálogo para el carrito (integración completa)
   const CATALOG_CART_ADD = '/catalogo_detalle/api/cart/add.php';
   const CATALOG_CART_GET = '/catalogo_detalle/api/cart/get.php';
   const CATALOG_CART_REMOVE = '/catalogo_detalle/api/cart/remove.php';
+
+  // Contexto del usuario (datos personales y órdenes)
+  let userContext = null;
 
   // Flag para controlar saludo de voz (persiste toda la sesión de página)
   if (typeof window._agenteHasVoiceGreeted === 'undefined') {
@@ -835,10 +839,44 @@ TEXT-ONLY MODE NOTE:
     dc = pc.createDataChannel('oai-events');
     dc.onopen = async () => {
       log('dc', 'open');
+
+      // Agregar contexto del usuario al prompt si está disponible
+      let userContextPrompt = '';
+      if (userContext && userContext.ok && userContext.user) {
+        const u = userContext.user;
+        const s = userContext.stats;
+
+        // Construir dirección completa de forma legible
+        let direccion = [];
+        if (u.domicilio) direccion.push(u.domicilio);
+        if (u.comuna) direccion.push(u.comuna);
+        if (u.ciudad && u.ciudad !== u.comuna) direccion.push(u.ciudad);
+        if (u.region) direccion.push(u.region);
+        const direccionStr = direccion.length > 0 ? direccion.join(', ') : 'No disponible';
+
+        userContextPrompt = `\n\n=== INFORMACIÓN DEL CLIENTE ===
+Nombre completo: ${u.nombre_completo || u.nombre || 'No disponible'}
+Email: ${u.email || 'No disponible'}
+Teléfono: ${u.telefono || 'No disponible'}
+Dirección: ${direccionStr}
+RUT: ${u.rut || 'No disponible'}
+
+Estadísticas de compra:
+- Total de pedidos: ${s.total_orders || 0}
+- Gasto total: $${(s.total_spent_clp || 0).toLocaleString('es-CL')} CLP
+- Último pedido: ${s.last_order_at || 'Sin pedidos previos'}
+
+IMPORTANTE:
+- Cuando saludas, usa el nombre del cliente: "${u.nombre ? 'Hola ' + u.nombre + ', ¿' : 'Hola, ¿'}en qué te puedo ayudar?"
+- Si te preguntan sobre su información personal (dirección, teléfono, email, etc.), usa EXACTAMENTE estos datos
+- Si te preguntan sobre pedidos anteriores, menciona que tiene ${s.total_orders || 0} pedidos y ofrécele ir a "Mis Compras" para ver el detalle
+===========================\n`;
+      }
+
       // Determinar instrucciones según modo
       const sessionInstructions = textModeOnly
-        ? SYSTEM_PROMPT + `\n\nTEXT-ONLY MODE: You are in text-only mode. Only respond with text. Do NOT generate audio. Keep responses concise and clear. No voice interaction is available.`
-        : SYSTEM_PROMPT;
+        ? SYSTEM_PROMPT + userContextPrompt + `\n\nTEXT-ONLY MODE: You are in text-only mode. Only respond with text. Do NOT generate audio. Keep responses concise and clear. No voice interaction is available.`
+        : SYSTEM_PROMPT + userContextPrompt;
 
       dc.send(JSON.stringify({
         type: 'session.update',
@@ -935,6 +973,16 @@ TEXT-ONLY MODE NOTE:
                 required: ['selections'],
                 additionalProperties: false
               }
+            },
+            {
+              type: 'function',
+              name: 'ver_mis_pedidos',
+              description: 'Cuando el usuario pregunta por sus pedidos anteriores, compras pasadas, historial de compras, etc. Muestra un resumen y ofrece redirigir a "Mis Compras"',
+              parameters: {
+                type: 'object',
+                properties: {},
+                additionalProperties: false
+              }
             }
           ]
         }
@@ -1001,11 +1049,17 @@ TEXT-ONLY MODE NOTE:
         // Esperar un momento para que todo esté listo, luego enviar el saludo
         setTimeout(() => {
           if (dc && dc.readyState === 'open') {
+            // Saludo personalizado con nombre del usuario si está disponible
+            const userName = (userContext && userContext.user && userContext.user.nombre) ? userContext.user.nombre : null;
+            const greeting = userName
+              ? `Saluda diciendo exactamente: "Hola ${userName}, ¿en qué te puedo ayudar?" No digas nada más.`
+              : 'Saluda diciendo exactamente: "Hola, ¿en qué te puedo ayudar?" No digas nada más.';
+
             dc.send(JSON.stringify({
               type: 'response.create',
               response: {
                 modalities: ['audio', 'text'],
-                instructions: 'Saluda diciendo exactamente: "Hola, ¿en qué te puedo ayudar?" No digas nada más.'
+                instructions: greeting
               }
             }));
           }
@@ -1367,6 +1421,38 @@ TEXT-ONLY MODE NOTE:
             dc.send(JSON.stringify({
               type: 'conversation.item.create',
               item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok' }) }
+            }));
+          }
+        } else if (name === 'ver_mis_pedidos') {
+          console.log('[AGENTE] Ver mis pedidos solicitado');
+
+          let summary = '';
+          if (userContext && userContext.ok && userContext.stats) {
+            const s = userContext.stats;
+            const orders = userContext.recent_orders || [];
+
+            summary = `Tienes ${s.total_orders} pedidos registrados por un total de $${(s.total_spent_clp || 0).toLocaleString('es-CL')} CLP.\n\n`;
+
+            if (orders.length > 0) {
+              summary += `Últimos ${orders.length} pedidos:\n`;
+              orders.forEach((o, i) => {
+                summary += `${i + 1}. ${o.order_code} - ${o.fecha} - $${(o.total_clp || 0).toLocaleString('es-CL')} - ${o.status}\n`;
+              });
+              summary += `\n¿Quieres ver el detalle completo? Di "ir a mis compras" o abre el enlace en tu perfil.`;
+            } else {
+              summary += 'No tienes pedidos recientes.';
+            }
+          } else {
+            summary = 'No pude cargar tu información de pedidos. Intenta ir a "Mis Compras" desde tu perfil.';
+          }
+
+          addText('assistant', summary);
+
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify({ type: 'response.cancel' }));
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: id, output: JSON.stringify({ status: 'ok', summary: summary }) }
             }));
           }
         } else if (name === 'agregar_multiples_del_selector') {
@@ -2685,6 +2771,32 @@ TEXT-ONLY MODE NOTE:
     return m ? m[0] : null;
   };
 
+  // ===== USER CONTEXT =====
+  async function loadUserContext() {
+    try {
+      console.log('[USER_CONTEXT] Cargando contexto del usuario...');
+      const res = await fetch(USER_CONTEXT_EP, {
+        method: 'GET',
+        credentials: 'same-origin'
+      });
+
+      if (!res.ok) {
+        console.error('[USER_CONTEXT] Error HTTP:', res.status);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.ok) {
+        userContext = data;
+        console.log('[USER_CONTEXT] Contexto cargado:', data);
+      } else {
+        console.error('[USER_CONTEXT] Error en respuesta:', data.error);
+      }
+    } catch (err) {
+      console.error('[USER_CONTEXT] Error cargando contexto:', err);
+    }
+  }
+
   // ===== CHAT LOGGING =====
   async function startChatSession(modo = 'texto') {
     if (!currentChatSessionId) {
@@ -3002,6 +3114,9 @@ TEXT-ONLY MODE NOTE:
     console.log('[AGENTE-WIDGET] start() llamado, textModeOnly:', textModeOnly);
     if (overlay) overlay.style.display = 'none';
     if (btnIniciar) btnIniciar.style.display = 'none';
+
+    // Cargar contexto del usuario (datos personales, órdenes)
+    loadUserContext();
 
     // Iniciar sesión de chat para logging
     const modo = textModeOnly ? 'texto' : 'voz';
