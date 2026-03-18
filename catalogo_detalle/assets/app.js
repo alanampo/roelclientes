@@ -266,9 +266,16 @@ async function doLogin(){
 
 async function doLogout(){
   const j = await apiFetch(buildApiUrl('auth/logout.php'), {method:'POST', body:'{}'});
-  if(j.ok){ toast('Sesión cerrada'); }
-  await refreshMe();
-  document.getElementById('cartCount').textContent='0';
+  if(j.ok){
+    toast('Sesión cerrada');
+    // Recargar la página dentro del catálogo para limpiar todo el estado
+    setTimeout(() => {
+      window.location.href = buildUrl('index.php');
+    }, 500);
+  } else {
+    await refreshMe();
+    document.getElementById('cartCount').textContent='0';
+  }
 }
 
 function ensureLoggedOrAuth(pending){
