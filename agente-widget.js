@@ -6,6 +6,9 @@
   const log = window.rpLog || console.log;
 
   // ========== AUTHENTICATION (usa sesión del catálogo) ==========
+  // Solo manejar autenticación si NO estamos en el catálogo_detalle
+  const isInCatalogo = !!window.APP_BASE_URL; // Esta variable la define el catálogo
+
   const btnLogout = document.getElementById('btnLogout');
   const btnProfile = document.getElementById('btnProfile');
   const userDisplay = document.getElementById('userDisplay');
@@ -15,6 +18,9 @@
   }
 
   function updateUserDisplay() {
+    // Solo actualizar si no estamos en el catálogo (para evitar conflictos)
+    if (isInCatalogo) return;
+
     const user = getUser();
     if (user && userDisplay) {
       userDisplay.textContent = `${user.username || 'Usuario'}`;
@@ -33,7 +39,10 @@
     }
   }
 
-  if (btnLogout) btnLogout.addEventListener('click', logout);
+  // Solo añadir listener de logout si NO estamos en el catálogo
+  if (btnLogout && !isInCatalogo) {
+    btnLogout.addEventListener('click', logout);
+  }
   updateUserDisplay();
 
   window.roelAuth = {
