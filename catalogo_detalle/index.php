@@ -650,7 +650,7 @@ foreach($all as $p){
 <div class="topbar" role="banner">
   <div class="brand">
     <img src="https://roelplant.cl/assets/images/favicon-128x128.png" alt="Roelplant">
-    <strong>Roelplant · Catálogo detalle</strong>
+    <a href="https://roelplant.cl" target="_blank"><strong>Roelplant · Catálogo detalle</strong></a>
   </div>
 
   <!-- Buscador (filtra tarjetas por nombre/ref/atributos/desc) -->
