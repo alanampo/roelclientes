@@ -181,19 +181,11 @@ if ($tab === 'clientes') {
 }
 
 if ($tab === 'pedidos') {
-  // Si el estado es "cancelada", "entregada" o "en-proceso", no filtramos por payment_status en SQL
-  // (se filtran después en PHP basándose en reservas_productos.estado)
-  $filterByPaymentStatus = ($status === '' || !in_array($status, ['cancelada', 'entregada', 'en-proceso']));
-
   $sql = "SELECT r.id, r.id_cliente, r.payment_status AS status, r.subtotal_clp, r.shipping_cost_clp, r.total_clp, r.created_at,
                  c.nombre AS customer_nombre, c.mail AS customer_email, c.telefono AS customer_telefono, c.rut AS customer_rut
           FROM reservas r
           LEFT JOIN clientes c ON c.id_cliente=r.id_cliente
           WHERE (?='' OR c.nombre LIKE ? OR c.mail LIKE ? OR c.rut LIKE ? OR c.telefono LIKE ?)";
-
-  if ($filterByPaymentStatus) {
-    $sql .= " AND (?='' OR r.payment_status=?)";
-  }
 
   $sql .= " ORDER BY r.id DESC LIMIT 500";
 
@@ -202,12 +194,7 @@ if ($tab === 'pedidos') {
   $qq = $q;
   $lk = like($q);
 
-  if ($filterByPaymentStatus) {
-    $ss = $status;
-    mysqli_stmt_bind_param($st, 'sssssss', $qq, $lk, $lk, $lk, $lk, $ss, $ss);
-  } else {
-    mysqli_stmt_bind_param($st, 'sssss', $qq, $lk, $lk, $lk, $lk);
-  }
+  mysqli_stmt_bind_param($st, 'sssss', $qq, $lk, $lk, $lk, $lk);
   mysqli_stmt_execute($st);
   $rs = mysqli_stmt_get_result($st);
   while ($r = $rs->fetch_assoc()) {
@@ -245,17 +232,12 @@ if ($tab === 'pedidos') {
       }
     }
 
-    // Aplicar filtro por estado si está seleccionado
+    // Aplicar filtro por estado ERP si está seleccionado
     $shouldInclude = true;
     if ($status !== '') {
       $erpE = $r['erp_estado'] ?? null;
-      if ($status === 'cancelada' && $erpE !== -1) {
-        $shouldInclude = false;
-      } elseif ($status === 'entregada' && $erpE !== 2) {
-        $shouldInclude = false;
-      } elseif ($status === 'en-proceso' && !in_array($erpE, [0, 1], true)) {
-        $shouldInclude = false;
-      } elseif (in_array($status, ['pending', 'paid', 'failed', 'refunded']) && ($r['status'] ?? '') !== $status) {
+      $statusInt = (int)$status;
+      if ($erpE !== $statusInt) {
         $shouldInclude = false;
       }
     }
@@ -328,13 +310,14 @@ $adminName = (string)($_SESSION['bo_admin']['name'] ?? 'Admin');
             <?php if ($tab === 'pedidos'): ?>
               <select class="inp" style="max-width:180px" name="status">
                 <option value="">Todos los estados</option>
-                <option value="pending" <?= $status==='pending'?'selected':'' ?>>Pendiente</option>
-                <option value="paid" <?= $status==='paid'?'selected':'' ?>>Pago aceptado</option>
-                <option value="failed" <?= $status==='failed'?'selected':'' ?>>Rechazado</option>
-                <option value="refunded" <?= $status==='refunded'?'selected':'' ?>>Reembolsado</option>
-                <option value="en-proceso" <?= $status==='en-proceso'?'selected':'' ?>>En proceso</option>
-                <option value="entregada" <?= $status==='entregada'?'selected':'' ?>>Entregada</option>
-                <option value="cancelada" <?= $status==='cancelada'?'selected':'' ?>>Cancelada</option>
+                <option value="0" <?= $status==='0'?'selected':'' ?>>Pago aceptado</option>
+                <option value="1" <?= $status==='1'?'selected':'' ?>>En proceso</option>
+                <option value="2" <?= $status==='2'?'selected':'' ?>>Entregada</option>
+                <option value="3" <?= $status==='3'?'selected':'' ?>>Revisar stock</option>
+                <option value="4" <?= $status==='4'?'selected':'' ?>>Listo para picking</option>
+                <option value="5" <?= $status==='5'?'selected':'' ?>>Listo para packing</option>
+                <option value="6" <?= $status==='6'?'selected':'' ?>>En transporte</option>
+                <option value="-1" <?= $status==='-1'?'selected':'' ?>>Cancelada</option>
               </select>
             <?php endif; ?>
             <button class="btn" type="submit">Filtrar</button>
