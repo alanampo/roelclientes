@@ -68,7 +68,6 @@ if (!$row) {
 }
 
 // Invalidar tokens anteriores para este email
-$db->prepare("DELETE FROM password_reset_tokens WHERE email=?")->execute([$email] );
 $stDel = $db->prepare("DELETE FROM password_reset_tokens WHERE email=?");
 $stDel->bind_param('s', $email);
 $stDel->execute();
