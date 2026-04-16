@@ -120,7 +120,8 @@ try {
   $mail->send();
   json_out(['ok' => true, 'message' => 'Si el email está registrado, recibirás un correo.']);
 } catch (Exception $e) {
-  // Log interno, respuesta genérica al cliente
-  error_log('[forgot_password] Mailer error: ' . $mail->ErrorInfo);
-  json_out(['ok' => false, 'error' => 'No se pudo enviar el correo. Intenta más tarde.'], 500);
+  $errDetail = $mail->ErrorInfo ?: $e->getMessage();
+  error_log('[forgot_password] Mailer error: ' . $errDetail);
+  // En producción devuelve el detalle para poder diagnosticar; quitar luego
+  json_out(['ok' => false, 'error' => 'No se pudo enviar el correo.', 'debug' => $errDetail], 500);
 }
