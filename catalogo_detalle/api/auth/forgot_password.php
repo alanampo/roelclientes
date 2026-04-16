@@ -5,11 +5,15 @@ require __DIR__ . '/../_bootstrap.php';
 
 // Encontrar vendor/autoload.php (PHPMailer)
 $autoloadPaths = [
-  __DIR__ . '/../../../../vendor/autoload.php',
-  __DIR__ . '/../../../../../vendor/autoload.php',
+  __DIR__ . '/../../../vendor/autoload.php',   // roelclientes/vendor (desde catalogo_detalle/api/auth)
+  __DIR__ . '/../../../../vendor/autoload.php', // un nivel más arriba
 ];
+$autoloadFound = false;
 foreach ($autoloadPaths as $p) {
-  if (is_file($p)) { require $p; break; }
+  if (is_file($p)) { require $p; $autoloadFound = true; break; }
+}
+if (!$autoloadFound) {
+  json_out(['ok' => false, 'error' => 'PHPMailer no instalado.'], 500);
 }
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -97,7 +101,7 @@ try {
   $mail->Subject = 'Recuperación de contraseña – Roelplant';
   $mail->Body    = '
 <!DOCTYPE html><html><body style="font-family:sans-serif;color:#222;max-width:520px;margin:0 auto;padding:24px">
-<img src="https://roelplant.cl/assets/images/logo-fondo-negroV2.png" alt="Roelplant" style="height:48px;margin-bottom:20px">
+<img src="https://roelplant.cl/assets/images/logo-blanco-266x153.png" alt="Roelplant" style="height:60px;margin-bottom:20px;background:#166534;border-radius:8px;padding:8px 12px">
 <h2 style="margin:0 0 12px">Recuperación de contraseña</h2>
 <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta <strong>' . htmlspecialchars($email, ENT_QUOTES) . '</strong>.</p>
 <p>Haz clic en el botón para crear una nueva contraseña. El enlace es válido por <strong>1 hora</strong>.</p>
