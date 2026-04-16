@@ -1,6 +1,19 @@
 <?php
 // catalogo_detalle/api/auth/forgot_password.php
 declare(strict_types=1);
+
+// Capturar errores fatales antes de que _bootstrap pueda responder
+register_shutdown_function(function() {
+  $e = error_get_last();
+  if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+    if (!headers_sent()) {
+      http_response_code(500);
+      header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['ok' => false, 'error' => 'Fatal error', 'debug' => $e['message'] . ' in ' . $e['file'] . ':' . $e['line']]);
+  }
+});
+
 require __DIR__ . '/../_bootstrap.php';
 
 // Encontrar vendor/autoload.php (PHPMailer)
@@ -13,7 +26,7 @@ foreach ($autoloadPaths as $p) {
   if (is_file($p)) { require $p; $autoloadFound = true; break; }
 }
 if (!$autoloadFound) {
-  json_out(['ok' => false, 'error' => 'PHPMailer no instalado.'], 500);
+  json_out(['ok' => false, 'error' => 'PHPMailer no instalado — vendor/ no encontrado en: ' . implode(', ', $autoloadPaths)], 500);
 }
 
 use PHPMailer\PHPMailer\PHPMailer;
