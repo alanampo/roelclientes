@@ -57,7 +57,7 @@ Se actualizaron todas las rutas hardcodeadas en:
 
 <!-- JS relativos sin ruta base -->
 <script src="catalogo_detalle/assets/locations_cl.js?v=1"></script>
-<script src="catalogo_detalle/assets/app.js?v=5"></script>
+<script src="catalogo_detalle/assets/app.js?v=123"></script>
 ```
 
 **En assets/app.js:**
@@ -77,7 +77,7 @@ await fetchJson('catalogo_detalle/api/me.php', {...});
 
 <!-- JS dinámico usando buildUrl() -->
 <script src="<?php echo buildUrl('assets/locations_cl.js?v=1'); ?>"></script>
-<script src="<?php echo buildUrl('assets/app.js?v=5'); ?>"></script>
+<script src="<?php echo buildUrl('assets/app.js?v=123'); ?>"></script>
 ```
 
 **En assets/app.js:**

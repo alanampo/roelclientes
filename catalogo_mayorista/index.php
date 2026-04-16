@@ -695,7 +695,7 @@ $secciones=[
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="assets/locations_cl.js?v=1"></script>
-<script src="assets/app.js?v=5"></script>
+<script src="assets/app.js?v=123"></script>
 
 <!-- PATCH MAYORISTA: atributos + imagen en popup (sin depender de cambios en assets/app.js) -->
 <script>

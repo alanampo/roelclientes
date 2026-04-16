@@ -153,6 +153,8 @@ function setAuthTab(tab){
   document.getElementById('tabRegister').classList.toggle('active', tab==='register');
   document.getElementById('paneLogin').style.display = (tab==='login')?'block':'none';
   document.getElementById('paneRegister').style.display = (tab==='register')?'block':'none';
+  const pf = document.getElementById('paneForgot');
+  if(pf) pf.style.display='none';
   setErr('authErr','');
 }
 

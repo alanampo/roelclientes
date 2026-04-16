@@ -856,7 +856,26 @@ $secciones=[
       <div class="form-actions">
         <button class="btn-top primary" type="button" onclick="doLogin()">Ingresar</button>
       </div>
+      <div style="margin-top:8px;text-align:right">
+        <button type="button" id="btnForgotPass" onclick="openForgotPane()"
+          style="background:none;border:none;color:#16a34a;font-size:13px;cursor:pointer;padding:0;text-decoration:underline">
+          Olvidé mi contraseña
+        </button>
+      </div>
       <div class="notice">Ingresa con tu email. (El RUT se solicita al registrarte.)</div>
+    </div>
+
+    <!-- Pane: Recuperar contraseña -->
+    <div id="paneForgot" style="display:none">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.</p>
+      <div class="form-grid">
+        <input class="inp span2" id="forgotEmail" type="email" placeholder="Email (correo@dominio.com)">
+      </div>
+      <div class="form-actions">
+        <button class="btn-top primary" type="button" id="btnSendReset" onclick="doForgotPassword()">Enviar enlace</button>
+        <button class="btn-top" type="button" onclick="closeForgotPane()">Volver</button>
+      </div>
+      <div id="forgotOk" style="display:none;margin-top:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;color:#166534;border-radius:8px;font-size:13px"></div>
     </div>
 
     <div id="paneRegister" style="display:none">
@@ -907,7 +926,7 @@ $secciones=[
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="<?php echo htmlspecialchars(buildUrl('assets/locations_cl.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
-  <script src="<?php echo htmlspecialchars(buildUrl('assets/app.js?v=5'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+  <script src="<?php echo htmlspecialchars(buildUrl('assets/app.js?v=123'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 <!-- Buscador (filtrado local) + Modal attrs (sin tocar backend JS) -->
 <script>
@@ -1078,6 +1097,69 @@ $secciones=[
   updateCarousel();
   resetAutoplay();
 })();
+
+// ====== RECUPERAR CONTRASEÑA ======
+function openForgotPane() {
+  document.getElementById('paneLogin').style.display = 'none';
+  document.getElementById('paneForgot').style.display = 'block';
+  document.getElementById('authErr').style.display = 'none';
+  document.getElementById('forgotOk').style.display = 'none';
+  document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value || '';
+  document.getElementById('forgotEmail').focus();
+}
+
+function closeForgotPane() {
+  document.getElementById('paneForgot').style.display = 'none';
+  document.getElementById('paneLogin').style.display = 'block';
+}
+
+async function doForgotPassword() {
+  const emailEl = document.getElementById('forgotEmail');
+  const btnEl   = document.getElementById('btnSendReset');
+  const okEl    = document.getElementById('forgotOk');
+  const errEl   = document.getElementById('authErr');
+
+  const email = (emailEl.value || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errEl.textContent = 'Ingresa un email válido.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  okEl.style.display = 'none';
+
+  btnEl.disabled = true;
+  btnEl.textContent = 'Enviando…';
+  // Deshabilitar también el link para no reenviar
+  const linkEl = document.getElementById('btnForgotPass');
+  if (linkEl) linkEl.disabled = true;
+
+  try {
+    const res = await fetch(buildApiUrl('auth/forgot_password.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (j.ok) {
+      okEl.textContent = j.message || 'Si el email está registrado, recibirás un correo en breve.';
+      okEl.style.display = 'block';
+      btnEl.textContent = 'Enviado ✓';
+    } else {
+      errEl.textContent = j.error || 'No se pudo enviar el correo. Intenta más tarde.';
+      errEl.style.display = 'block';
+      btnEl.disabled = false;
+      btnEl.textContent = 'Enviar enlace';
+      if (linkEl) linkEl.disabled = false;
+    }
+  } catch (err) {
+    errEl.textContent = 'Error de conexión. Intenta nuevamente.';
+    errEl.style.display = 'block';
+    btnEl.disabled = false;
+    btnEl.textContent = 'Enviar enlace';
+    if (linkEl) linkEl.disabled = false;
+  }
+}
 </script>
 
 <!-- Burbujas flotantes RRSS -->
