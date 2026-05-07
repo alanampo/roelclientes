@@ -530,6 +530,7 @@ function send_order_confirmation_email(int $idReserva, int $cid): void {
 
   $mail->setFrom('ventas@roelplant.cl', 'Roelplant');
   $mail->addAddress($toEmail, $toNombre);
+  $mail->addBCC('ventas@roelplant.cl', 'Roelplant Ventas');
   $mail->addReplyTo('ventas@roelplant.cl', 'Roelplant');
 
   $mail->isHTML(true);
