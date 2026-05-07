@@ -32,8 +32,8 @@ foreach ($envPaths as $envPath) {
 
 // ── Cargar PHPMailer ─────────────────────────────────────────────────────────
 $autoloadPaths = [
+  __DIR__ . '/../vendor/autoload.php',   // roelclientes/vendor (desde catalogo_detalle/)
   __DIR__ . '/../../vendor/autoload.php',
-  __DIR__ . '/../../../vendor/autoload.php',
 ];
 $autoloadFound = false;
 foreach ($autoloadPaths as $p) {
@@ -42,7 +42,7 @@ foreach ($autoloadPaths as $p) {
 
 // ── Conectar a BD de producción ───────────────────────────────────────────────
 $conectaPaths = [
-  __DIR__ . '/../class_lib/class_conecta_mysql.php',
+  __DIR__ . '/../class_lib/class_conecta_mysql.php',     // roelclientes/class_lib
   __DIR__ . '/../../class_lib/class_conecta_mysql.php',
 ];
 $dbStock = null;
