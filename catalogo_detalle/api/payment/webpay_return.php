@@ -335,7 +335,7 @@ function send_order_confirmation_email(int $idReserva, int $cid): void {
 
   // Obtener reserva + email del cliente
   $stRes = $dbStock->prepare(
-    "SELECT r.subtotal_clp, r.packing_cost_clp, r.shipping_cost_clp, r.total_clp,
+    "SELECT r.subtotal_clp, r.packing_cost_clp, r.shipping_cost_clp, r.total_clp, r.paid_clp,
             r.shipping_method, r.shipping_address, r.shipping_commune,
             r.shipping_agency_name, r.shipping_agency_address, r.created_at,
             c.nombre AS customer_nombre, c.mail AS customer_email
@@ -360,7 +360,8 @@ function send_order_confirmation_email(int $idReserva, int $cid): void {
   $subtotal  = (int)($reserva['subtotal_clp'] ?? 0);
   $packing   = (int)($reserva['packing_cost_clp'] ?? 0);
   $shipping  = (int)($reserva['shipping_cost_clp'] ?? 0);
-  $total     = (int)($reserva['total_clp'] ?? 0);
+  $paidClp   = (int)($reserva['paid_clp'] ?? 0);
+  $total     = $paidClp > 0 ? $paidClp : (int)($reserva['total_clp'] ?? 0);
   $shMethod  = (string)($reserva['shipping_method'] ?? '');
   $createdAt = (string)($reserva['created_at'] ?? '');
 

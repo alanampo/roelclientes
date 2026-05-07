@@ -61,12 +61,14 @@ $dbError      = '';
 
 if ($dbStock) {
   $res = mysqli_query($dbStock,
-    "SELECT r.id, r.id_cliente, r.subtotal_clp, r.packing_cost_clp, r.shipping_cost_clp, r.total_clp,
+    "SELECT r.id, r.id_cliente, r.subtotal_clp, r.packing_cost_clp, r.shipping_cost_clp,
+            r.total_clp, r.paid_clp,
             r.shipping_method, r.shipping_address, r.shipping_commune,
             r.shipping_agency_name, r.shipping_agency_address, r.created_at,
             c.nombre AS customer_nombre, c.mail AS customer_email
      FROM reservas r
      LEFT JOIN clientes c ON c.id_cliente = r.id_cliente
+     WHERE r.total_clp > 0
      ORDER BY r.id DESC LIMIT 1"
   );
   if ($res) {
@@ -122,7 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $lastReserva) {
     $subtotal  = (int)($r['subtotal_clp'] ?? 0);
     $packing   = (int)($r['packing_cost_clp'] ?? 0);
     $shipping  = (int)($r['shipping_cost_clp'] ?? 0);
-    $total     = (int)($r['total_clp'] ?? 0);
+    $paidClp   = (int)($r['paid_clp'] ?? 0);
+    $total     = $paidClp > 0 ? $paidClp : (int)($r['total_clp'] ?? 0);
     $shMethod  = (string)($r['shipping_method'] ?? '');
     $createdAt = (string)($r['created_at'] ?? '');
     $toNombre  = (string)($r['customer_nombre'] ?? '');
